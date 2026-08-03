@@ -22,6 +22,10 @@ abstract final class PrefKeys {
   // Set once the first-run wizard completes or is skipped. Unset = show it.
   static const setupDone = 'setup_done';
 
+  // Release version the user dismissed in the update banner (owned by
+  // update_check.dart). The banner stays hidden until something newer ships.
+  static const skippedRelease = 'skipped_release';
+
   // Screen-level view preferences.
   static const homeSort = 'home_sort';
   static const homeCombineSystems = 'home_combine_systems';

@@ -10,7 +10,9 @@ import '../screens/logs_screen.dart';
 import '../screens/recommendations_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/storage_screen.dart';
+import '../services/update_check.dart';
 import '../theme/ui_tokens.dart';
+import 'update_banner.dart';
 
 /// Top-level responsive navigation shell. Holds the destinations in an
 /// IndexedStack so each keeps its state across nav switches.
@@ -24,6 +26,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   int _index = 0;
   String _version = '';
+  ReleaseUpdate? _update;
 
   @override
   void initState() {
@@ -36,14 +39,26 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   Future<void> _loadVersion() async {
+    final PackageInfo info;
     try {
-      final info = await PackageInfo.fromPlatform();
-      if (mounted) {
-        setState(() => _version = 'v${info.version}+${info.buildNumber}');
-      }
+      info = await PackageInfo.fromPlatform();
     } catch (_) {
       // PackageInfo has no platform plugin under tests, leave the label blank.
+      // The update check hangs off it deliberately: no version, no request, so
+      // the suite stays offline. Mocking PackageInfo in a test would let this
+      // reach api.github.com — inject the check instead if that day comes.
+      return;
     }
+    if (!mounted) return;
+    setState(() => _version = 'v${info.version}+${info.buildNumber}');
+
+    final update = await UpdateCheck.check(currentVersion: info.version);
+    if (mounted && update != null) setState(() => _update = update);
+  }
+
+  void _dismissUpdate() {
+    UpdateCheck.skip(_update!.version);
+    setState(() => _update = null);
   }
 
   @override
@@ -122,6 +137,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // controllers were still attached.
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final stack = IndexedStack(index: _index, children: _bodies);
+    final update = _update;
+    final banner = update == null
+        ? null
+        : UpdateBanner(update: update, onDismiss: _dismissUpdate);
     return Scaffold(
       backgroundColor: ui.background,
       body: wide
@@ -132,13 +151,22 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                     index: _index,
                     onSelect: _select,
                     version: _version),
-                Expanded(child: stack),
+                // Banner spans the body only, so the sidebar stays unbroken.
+                Expanded(
+                  child: Column(
+                    children: [
+                      ?banner,
+                      Expanded(child: stack),
+                    ],
+                  ),
+                ),
               ],
             )
           // Mobile: the bottom nav is icon-only, so name the current tab up top.
           : Column(
               children: [
                 _TopTitle(label: _dests[_index].$1),
+                ?banner,
                 Expanded(child: stack),
                 _BottomNav(dests: _dests, index: _index, onSelect: _select),
               ],
