@@ -1,0 +1,45 @@
+# Flatpak manifest for Retroachievements Rom Manager.
+#
+# This packages the PREBUILT Flutter Linux bundle (not a from-source build).
+# Run `flutter build linux --release` first, then `bash package_flatpak.sh`,
+# which stages the bundle next to this manifest and invokes flatpak-builder.
+#
+# GTK3 comes from the GNOME runtime, so we don't bundle it ourselves.
+app-id: com.georgeenglezos.rarm
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+command: rarm
+
+finish-args:
+  - --share=ipc
+  - --share=network            # RetroAchievements API + cached console art
+  - --socket=fallback-x11      # X11, or fall back to it under XWayland
+  - --socket=wayland
+  - --device=dri               # GPU access for the Flutter UI
+  # libsecret reaches the host keyring over the session bus to store the RA API
+  # key. Without this the call fails inside the sandbox and every Flatpak user
+  # silently lands on the plaintext fallback in SecretStore.
+  - --talk-name=org.freedesktop.secrets
+  # The app scans ROM folders the user picks from anywhere on disk and can
+  # reveal/trash those files, so it needs broad host filesystem access. This
+  # is why the manifest is fine for self-distribution but would be rejected by
+  # Flathub. File-manager "reveal" and "open URL" go through xdg-desktop-portal.
+  - --filesystem=host
+
+modules:
+  - name: rarm
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/bin
+      - cp -r bundle/. /app/bin/
+      - chmod +x /app/bin/rarm
+      # Staged by package_flatpak.sh, downscaled: the bundled asset is
+      # 1024x1024 and the export step rejects it as too large for this folder.
+      - install -Dm644 com.georgeenglezos.rarm.png
+          /app/share/icons/hicolor/512x512/apps/com.georgeenglezos.rarm.png
+      - install -Dm644 com.georgeenglezos.rarm.desktop
+          /app/share/applications/com.georgeenglezos.rarm.desktop
+    sources:
+      - type: dir
+        path: .

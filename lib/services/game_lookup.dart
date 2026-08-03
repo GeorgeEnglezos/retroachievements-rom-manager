@@ -1,0 +1,139 @@
+import 'package:path/path.dart' as p;
+import '../models/game_entry.dart';
+import '../models/game_metadata.dart';
+import '../models/rom_result.dart';
+import '../models/user_progress.dart';
+import 'console_map.dart';
+import 'library.dart';
+import 'ra_service.dart';
+import 'rom_name.dart';
+
+/// Maps a RetroAchievements [GameInfo] onto a [RomResult]. A null [info] means
+/// the hash was looked up but unsupported. Shared by the folder view and the
+/// storage drill-down so the mapping lives in exactly one place.
+void applyGameInfo(RomResult rom, GameInfo? info) {
+  if (info == null) {
+    rom.status = RomStatus.unsupported;
+    return;
+  }
+  rom.status = RomStatus.supported;
+  rom.gameId = info.gameId;
+  rom.gameTitle = info.title;
+  rom.consoleName = info.consoleName;
+  rom.consoleId = info.consoleId;
+  rom.achievementCount = info.achievementCount;
+  rom.imageIcon = info.imageIcon;
+  rom.imageBoxArt = info.imageBoxArt;
+  rom.imageTitle = info.imageTitle;
+  rom.imageIngame = info.imageIngame;
+  rom.publisher = info.publisher;
+  rom.developer = info.developer;
+  rom.genre = info.genre;
+  rom.released = info.released;
+  rom.setCreated = info.setCreated;
+  rom.setUpdated = info.setUpdated;
+  rom.points = info.points;
+  rom.numPlayersCasual = info.numPlayersCasual;
+  rom.numPlayersHardcore = info.numPlayersHardcore;
+}
+
+/// Maps third-party [meta] onto a [RomResult] for a display-only console. A
+/// null [meta] means the name lookup found nothing; the row stays local-only.
+/// Shared by the live fetch loop and [romFromEntry] so the mapping lives once.
+void applyMetadata(RomResult rom, GameMetadata? meta) {
+  if (meta == null) {
+    rom.status = RomStatus.localOnly;
+    return;
+  }
+  rom.status = RomStatus.metadataOnly;
+  rom.metadata = meta;
+  rom.gameTitle = meta.title;
+  rom.publisher = meta.publisher;
+  rom.developer = meta.developer;
+  rom.genre = meta.genre;
+  rom.released = meta.released;
+  rom.imageUrl = meta.imageUrl;
+  rom.lowConfidenceMatch = meta.matchConfidence < kLowConfidenceThreshold;
+}
+
+/// Applies the offline-cache [basic] entry onto [rom] so a row populates
+/// immediately after the hash matches, before the richer network fetch. Shared
+/// by the folder view's full scan and single-rom re-fetch.
+void applyBasicInfo(RomResult rom, RaGameListEntry basic) {
+  rom.status = RomStatus.supported;
+  rom.gameId = basic.gameId;
+  rom.gameTitle = basic.title;
+  rom.achievementCount = basic.achievementCount;
+  rom.imageIcon = basic.imageIcon;
+  rom.points = basic.points;
+}
+
+/// Metadata providers that were removed from the app but may have left
+/// persisted [GameEntry.metadata] behind. Their blobs are stale (raw entity
+/// ids as publishers, dead lookups) and must not gate a row out of localOnly;
+/// localOnly is what lets imported Skraper data render for it.
+const kRemovedMetadataProviders = {'wikidata'};
+
+/// Rebuilds the renderable [RomResult] for a persisted [entry]: the one
+/// mapping every screen shares. [consoleId] (when known) invalidates stale
+/// noMatch entries hashed under a different console; [consoleName] overrides
+/// the gameInfo value for screens that resolve it themselves.
+RomResult romFromEntry(GameEntry entry, {int? consoleId, String? consoleName}) {
+  final rom = RomResult(filePath: entry.filePath, fileName: entry.fileName)
+    ..fileSize = entry.fileSize
+    ..md5Hash = entry.md5
+    ..hashConsoleId = entry.hashConsoleId
+    ..gameId = entry.gameId
+    ..consoleId = consoleId;
+  if (entry.matched && entry.gameInfo != null) {
+    applyGameInfo(rom, entry.gameInfo);
+    if (consoleName != null) rom.consoleName = consoleName;
+    rom.earnedAchievements = entry.progress?.earnedAchievements;
+    rom.earnedHardcore = entry.progress?.earnedHardcore;
+    rom.lastPlayed = entry.progress?.lastPlayed;
+  } else if (entry.metadata != null &&
+      !kRemovedMetadataProviders.contains(entry.metadata!.providerId)) {
+    // Display-only console enriched by a third-party provider.
+    applyMetadata(rom, entry.metadata);
+    rom.consoleName = ConsoleMap.nameFor(consoleId) ?? consoleName;
+  } else if (!ConsoleMap.isRaSupported(consoleId)) {
+    // Console isn't on RA (or the folder is unidentified), local info only.
+    rom.status = RomStatus.localOnly;
+    rom.consoleName = ConsoleMap.nameFor(consoleId) ?? consoleName;
+  } else if (entry.noMatch &&
+      (consoleId == null || entry.hashConsoleId == consoleId)) {
+    rom.status = RomStatus.unsupported;
+  } else {
+    // A noMatch hashed under a different console id is stale; surface as
+    // notFetched so a rescan re-hashes it.
+    rom.status = RomStatus.notFetched;
+  }
+  return rom;
+}
+
+/// Reuses a persisted [saved] entry's rich game data so a rescan makes no
+/// network call. Callers must guarantee `saved.gameInfo != null`. A missing
+/// [saved.progress] is synthesized as zero-progress for [gameId].
+(GameInfo, UserProgress) reuseSavedGameData(GameEntry saved, int gameId) => (
+      saved.gameInfo!,
+      saved.progress ??
+          UserProgress(
+              gameId: gameId, earnedAchievements: 0, earnedHardcore: 0),
+    );
+
+/// Rebuilds a full [RomResult] for [filePath] from the per-system files.
+/// Null when the file has no matched game; caller falls back.
+Future<RomResult?> resolveRom(
+  String filePath, {
+  required Library library,
+}) async {
+  final summaries = await library.summaries();
+  final system =
+      summaries.where((s) => p.isWithin(s.systemPath, filePath)).firstOrNull;
+  if (system == null) return null;
+
+  final data = await library.load(system.systemPath);
+  final entry = data.games.where((g) => g.filePath == filePath).firstOrNull;
+  if (entry == null || !entry.matched || entry.gameInfo == null) return null;
+  return romFromEntry(entry);
+}

@@ -1,0 +1,15 @@
+# Run with `dart run ffigen --config ffigen.yaml`.
+name: RawHashBindings
+description: |
+  Bindings for `src/raw_hash.h`.
+
+  Regenerate bindings with `dart run ffigen --config ffigen.yaml`.
+output: 'lib/raw_hash_bindings_generated.dart'
+headers:
+  entry-points:
+    - 'src/raw_hash.h'
+  include-directives:
+    - 'src/raw_hash.h'
+comments:
+  style: any
+  length: full

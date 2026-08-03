@@ -1,0 +1,82 @@
+Console logo image sources
+==========================
+
+Each <consoleId>.png is a full-color logo downloaded from Wikimedia Commons
+(freely reusable media). Files were fetched via the Commons "Special:FilePath"
+endpoint and rasterized from the source SVG at 512px wide.
+
+URL pattern used:
+  https://commons.wikimedia.org/wiki/Special:FilePath/<FILENAME>?width=512
+
+id  console                     Wikimedia Commons file
+--  --------------------------  ---------------------------------------
+1   Mega Drive / Genesis        File:Sega genesis logo.svg
+2   Nintendo 64                 File:Nintendo 64 wordmark.svg
+3   SNES                        File:SNES logo.svg
+4   Game Boy                    File:Gameboy logo.svg
+5   Game Boy Advance            File:Game Boy Advance logo.svg
+6   Game Boy Color              File:Game Boy Color logo.svg
+7   NES                         File:NES logo.svg
+8   PC Engine / TurboGrafx-16   File:PC engine logo red.svg
+9   Sega CD                     File:Sega CD Logo (USA).svg
+10  Sega 32X                    File:Sega 32X logo.svg
+11  Master System              File:Master System Logo.svg
+12  PlayStation                 File:PlayStation logo.svg
+13  Atari Lynx                  File:Atari Lynx logo.svg
+14  Neo Geo Pocket              File:Neo Geo Pocket logo.svg
+15  Game Gear                   File:Game gear us-jp logo.svg
+16  Nintendo GameCube           File:Nintendo GameCube Official Logo.svg
+17  Atari Jaguar                File:Atari Jaguar logo.svg
+18  Nintendo DS                 File:Nintendo DS Logo.svg
+19  Nintendo Wii                File:Wii.svg
+21  PlayStation 2               File:PlayStation 2 logo.svg
+24  Pokémon mini                File:International Pokémon logo.svg  (franchise
+                                logo; no usable Pokémon mini wordmark exists)
+25  Atari 2600                  File:Atari 2600 logo.svg
+28  Virtual Boy                 File:Virtualboy logo.svg
+33  Sega SG-1000                File:SG-1000 Logo.svg
+39  Sega Saturn                 File:Sega Saturn Black Logo.svg
+40  Dreamcast                   File:Dreamcast logo.svg
+41  PSP                         File:PSP Logo.svg
+43  3DO                         File:3DO Logo.svg
+44  ColecoVision                File:COLECO VISION LOGO.svg
+45  Intellivision               File:Intellivision-logo.svg
+46  Vectrex                     File:Vectrex vector logo.svg
+49  PC-FX                       File:PC-FX textlogo.svg
+50  Atari 5200                  File:Atari 5200 logo.svg
+51  Atari 7800                  File:Atari 7800 logo.svg
+53  WonderSwan                  File:WonderSwan logo.svg
+56  Neo Geo CD                  File:NEOGEO CD logo.svg
+57  Fairchild Channel F         File:Channel F Logo.svg
+76  PC Engine CD                File:PC engine logo red.svg  (reuses PC Engine)
+77  Atari Jaguar CD             File:Atari Jaguar CD logo.svg
+62  Nintendo 3DS                File:Nintendo 3DS logo.svg
+78  Nintendo DSi                File:Nintendo DSi logo.svg
+81  Famicom Disk System         File:Family Computer Disk System logo.svg
+
+Display-only systems (unsupported/ folder, not on RetroAchievements)
+--------------------------------------------------------------
+Shown so a mixed ROM library still renders these folders; the app never hashes
+or validates them. Same Wikimedia Commons pipeline as above.
+
+file                    console            Wikimedia Commons file
+----------------------  -----------------  ---------------------------------
+switch.png              Nintendo Switch    File:Nintendo Switch Logo.svg
+wiiu.png                Nintendo Wii U     File:WiiU.svg
+ps3.png                 PlayStation 3      File:PlayStation 3 logo.svg
+ps4.png                 PlayStation 4      File:PlayStation 4 logo and wordmark.svg
+vita.png                PlayStation Vita   File:PlayStation Vita logo.svg
+xbox.png                Xbox               File:Xbox Logo 2001.svg
+xbox360.png             Xbox 360           File:Xbox 360 wordmark.svg
+generic.png             (fallback logo)    File:Video-Game-Controller-Icon-IDV-green.svg
+
+Notes
+-----
+- Cards use a single fixed light background in both themes. Logos are shown in
+  their own colors on it, except three that are light-colored and are tinted to
+  ink so they stay legible: 13 (Atari Lynx, yellow), 19 (Wii, grey) and
+  27 (Arcade).
+- 27 (Arcade) keeps the earlier white monochrome joystick icon (no brand logo
+  exists). See CREDITS.md.
+- These are brand logos, trademarks of their respective owners, used here for
+  identification of each system only.

@@ -1,0 +1,6 @@
+# Keep shell scripts and Linux packaging files LF so they run on CI runners
+# even when the repo is checked out on Windows.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+flatpak/* text eol=lf

@@ -1,0 +1,12 @@
+raw_hash is part of Retroachievements Rom Manager and is covered by the MIT
+License. See the LICENSE file at the root of this repository for the full text.
+
+The C sources under src/vendor/ are third-party and remain under their own
+licenses:
+
+  rcheevos     MIT               https://github.com/RetroAchievements/rcheevos
+  libchdr      BSD-3-Clause      https://github.com/rtissera/libchdr
+  zstd         BSD-3-Clause      bundled in libchdr/deps/zstd-1.5.7/
+  miniz        MIT               bundled in libchdr/deps/miniz-3.1.1/
+  lzma         public domain     bundled in libchdr/deps/lzma-25.01/
+  dr_flac      public domain     bundled in libchdr/include/dr_libs/

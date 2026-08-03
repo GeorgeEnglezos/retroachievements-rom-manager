@@ -1,0 +1,69 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# VS Code workspace settings are personal (colors, local launch config).
+.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Local scratch
+notes/
+spike/
+
+# Unused third-party asset dumps (not shipped by the app)
+reference/
+backups/
+
+# Collected release outputs from build_all.sh
+artifacts/
+
+# Local secrets
+.env
+.env.*
+
+# AI / agent tooling
+.claude/
+.codex/
+.codegraph/
+graphify-out/
+.superpowers/
+docs/superpowers/
+.worktrees/
+AGENTS.md
+CLAUDE.md

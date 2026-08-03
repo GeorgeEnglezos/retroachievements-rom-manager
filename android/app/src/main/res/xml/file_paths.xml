@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Whole-filesystem root so any absolute ROM path (internal, SD card) can be
+     shared to an emulator app. Safe here: the provider is not exported and only
+     grants read access per-launch via FLAG_GRANT_READ_URI_PERMISSION. -->
+<paths>
+    <root-path name="root" path="/" />
+</paths>

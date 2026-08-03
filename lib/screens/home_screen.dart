@@ -1,0 +1,1528 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:isolate';
+import 'package:flutter/foundation.dart' show setEquals;
+import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/folder_stats.dart';
+import '../services/credentials.dart';
+import '../services/folder_grouping.dart';
+import '../services/fetch_engine.dart';
+import '../services/fetch_pipeline.dart';
+import '../services/fetch_scope.dart';
+import '../widgets/fetch_tasks_dialog.dart';
+import 'folder_view.dart';
+import '../services/log_service.dart';
+import '../services/ra_cache.dart';
+import '../services/ra_service.dart';
+import '../services/console_map.dart';
+import '../services/display_name.dart';
+import '../services/library_folder.dart';
+import '../widgets/pick_library_folder.dart';
+import '../services/member_key.dart';
+import '../services/playlist_store.dart';
+import '../services/pref_keys.dart';
+import '../services/scan_settings.dart';
+import '../widgets/home_search.dart';
+import '../services/library.dart';
+import '../services/scraper/gamelist_importer.dart';
+import '../services/scraper/scraped_store.dart';
+import '../services/folder_freshness.dart';
+import '../services/incremental_scan.dart';
+import '../services/rom_file_lister.dart';
+import '../services/set_update.dart';
+import '../services/disc_decompressor.dart';
+import '../models/system_data.dart';
+import '../models/user_progress.dart';
+import '../models/rom_result.dart';
+import '../models/game_entry.dart';
+import '../widgets/folder_card.dart';
+import '../widgets/ui/console_card.dart';
+import '../widgets/ra_image.dart';
+import '../widgets/scan_progress_bar.dart';
+import '../widgets/require_credentials.dart';
+import 'playlist_view.dart';
+import 'scan_health_screen.dart';
+
+enum _HomeSort { alphabetical, size, fileCount, system }
+
+/// Set by the setup wizard to ask for a full first sweep, and cleared by
+/// whichever [HomeScreen] takes it.
+///
+/// A listenable rather than a plain flag because setup has two exits: a first
+/// run installs a fresh [HomeScreen] that picks the request up as it starts,
+/// while re-running from Settings returns to one that is already mounted and
+/// will never run `initState` again. Top-level rather than a constructor
+/// field because [AppShell] builds its bodies as a const list.
+final ValueNotifier<bool> firstScanRequest = ValueNotifier(false);
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final PlaylistStore _playlistStore = PlaylistStore();
+  final Library _lib = Library.instance;
+  List<Playlist> _playlists = [];
+
+  // Member keys the library can currently show; the playlist cards count only
+  // these, so a deleted game stops inflating the number.
+  Set<String> _liveMemberKeys = {};
+  bool _isRunning = false;
+  bool _cancelled = false;
+  int _checked = 0;
+  String? _rootPath;
+  List<Directory> _subfolders = [];
+  final Map<String, FolderStats> _stats = {};
+
+  // Titles whose RA set grew during the current sweep; summarized after it.
+  final List<String> _setUpdates = [];
+
+  // Resolved RA console id per subfolder path, used to pick its picture.
+  final Map<String, int?> _folderConsoleIds = {};
+
+  _HomeSort _homeSort = _HomeSort.alphabetical;
+  bool get _combineSystems => combineSystemsListenable.value;
+  NameMode get _nameMode => nameModeListenable.value;
+
+  // Folders whose directory is gone keep their card until the next re-listing,
+  // showing stats for something that isn't there; the library already knows
+  // which those are.
+  List<Directory> get _presentSubfolders =>
+      [for (final d in _subfolders) if (!_lib.isSystemMissing(d.path)) d];
+
+  List<Directory> get _sortedSubfolders {
+    final list = List<Directory>.from(_presentSubfolders);
+    switch (_homeSort) {
+      case _HomeSort.alphabetical:
+        list.sort((a, b) => p.basename(a.path)
+            .toLowerCase()
+            .compareTo(p.basename(b.path).toLowerCase()));
+      case _HomeSort.size:
+        list.sort((a, b) => (_stats[b.path]?.totalSizeBytes ?? 0)
+            .compareTo(_stats[a.path]?.totalSizeBytes ?? 0));
+      case _HomeSort.fileCount:
+        list.sort((a, b) => (_stats[b.path]?.totalGames ?? 0)
+            .compareTo(_stats[a.path]?.totalGames ?? 0));
+      case _HomeSort.system:
+        list.sort((a, b) {
+          final ka = ConsoleMap.manufacturerSortKey(_folderConsoleIds[a.path]);
+          final kb = ConsoleMap.manufacturerSortKey(_folderConsoleIds[b.path]);
+          if (ka != kb) return ka.compareTo(kb);
+          return p.basename(a.path)
+              .toLowerCase()
+              .compareTo(p.basename(b.path).toLowerCase());
+        });
+    }
+    return list;
+  }
+
+  // Folders grouped by console id; only used when _combineSystems is on.
+  List<({ConsoleGroup group, FolderStats agg, String label})>
+      get _combinedEntries {
+    final paths = _presentSubfolders.map((d) => d.path).toList();
+    final groups = groupFoldersByConsoleId(paths, _folderConsoleIds);
+    final entries = groups.map((g) {
+      final statsList = [
+        for (final pth in g.folderPaths) _stats[pth] ?? FolderStats(path: pth)
+      ];
+      final agg = g.consoleId != null
+          ? aggregateFolderStats(g.consoleId!, statsList)
+          : statsList.first;
+      final label = displayNameFor(
+        mode: _nameMode,
+        consoleId: g.consoleId,
+        folderPaths: g.folderPaths,
+      );
+      return (group: g, agg: agg, label: label);
+    }).toList();
+
+    switch (_homeSort) {
+      case _HomeSort.alphabetical:
+        entries.sort(
+            (a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+      case _HomeSort.size:
+        entries.sort(
+            (a, b) => b.agg.totalSizeBytes.compareTo(a.agg.totalSizeBytes));
+      case _HomeSort.fileCount:
+        entries.sort((a, b) => b.agg.totalGames.compareTo(a.agg.totalGames));
+      case _HomeSort.system:
+        entries.sort((a, b) {
+          final ka = ConsoleMap.manufacturerSortKey(a.group.consoleId);
+          final kb = ConsoleMap.manufacturerSortKey(b.group.consoleId);
+          if (ka != kb) return ka.compareTo(kb);
+          return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+        });
+    }
+    return entries;
+  }
+
+  Set<String> _enabledExtensions = {...kDefaultRomExtensions};
+  Set<String> _ignoredFolders = {};
+
+  // Busts the (stable) avatar URL cache; persisted across launches.
+  int? _raAvatarVersion;
+
+  // RA's canonical UserPic path; null until resolved from the profile API.
+  String? _raAvatarPath;
+
+  int _folderIndex = 0; // 1-based folder we're currently on
+  int _folderCount = 0; // total folders in this run
+  int _scanAllTotal = 0; // estimated total ROMs across all folders
+  String? _currentFolder;
+
+  String _scanAllLabel() {
+    final name = _currentFolder ?? '';
+    final totalPart = _scanAllTotal == 0 ? '$_checked' : '$_checked/$_scanAllTotal';
+    return 'System $_folderIndex/$_folderCount: $name  •  $totalPart';
+  }
+
+  // Mirrors progress to the app-scoped bar so it renders on any route.
+  void _publishProgress() {
+    ScanProgress.instance.publish(
+      running: _isRunning,
+      value: _scanAllTotal == 0 ? null : _checked / _scanAllTotal,
+      label: _scanAllLabel(),
+      onCancel: () {
+        if (mounted) setState(() => _cancelled = true);
+      },
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    nameModeListenable.addListener(_onDisplaySettingChanged);
+    combineSystemsListenable.addListener(_onDisplaySettingChanged);
+    libraryFolderListenable.addListener(_onLibraryFolderChanged);
+    scanFiltersListenable.addListener(_onScanFiltersChanged);
+    firstScanRequest.addListener(_consumeFirstScanRequest);
+    _lib.addListener(_onLibraryChanged);
+    _playlistStore.addListener(_onPlaylistsChanged);
+    // Warm the shared scraped-data store so game dialogs can look it up.
+    // Rebuild once loaded: tiles read it synchronously for fallback thumbnails,
+    // and a cold start would otherwise show icon placeholders until an
+    // unrelated setState.
+    ScrapedStore.instance.load().then((_) {
+      if (mounted) setState(() {});
+    });
+    _init();
+  }
+
+  @override
+  void dispose() {
+    nameModeListenable.removeListener(_onDisplaySettingChanged);
+    combineSystemsListenable.removeListener(_onDisplaySettingChanged);
+    libraryFolderListenable.removeListener(_onLibraryFolderChanged);
+    scanFiltersListenable.removeListener(_onScanFiltersChanged);
+    firstScanRequest.removeListener(_consumeFirstScanRequest);
+    _lib.removeListener(_onLibraryChanged);
+    _playlistStore.removeListener(_onPlaylistsChanged);
+    _libraryDebounce?.cancel();
+    _playlistDebounce?.cancel();
+    super.dispose();
+  }
+
+  Timer? _libraryDebounce;
+  Timer? _playlistDebounce;
+
+  // A playlist changed somewhere else: the cull deck's verdicts, a detail
+  // dialog, a bulk action. Home sits in the shell's IndexedStack, so switching
+  // back to its tab never rebuilds it and the shortcut cards would keep showing
+  // the counts from the last time it was visited.
+  void _onPlaylistsChanged() {
+    // A scan is excluded for the same reason as the library listener: it
+    // re-derives Played from the index it is still filling, and refreshes the
+    // cards itself once it finishes.
+    if (!mounted || _isRunning) return;
+    _playlistDebounce?.cancel();
+    // A single action writes several times (one per key of a disc set);
+    // coalesce, same as the library listener.
+    _playlistDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted && !_isRunning) _refreshPlaylists();
+    });
+  }
+
+  // The library changed under us: a ROM deleted from the search field, a
+  // dialog, another tab, or a file that vanished from disk. Waiting for a
+  // screen to pop isn't enough, half of those never leave this screen, so the
+  // folder cards and playlist counts would keep showing games that are gone.
+  // A scan is excluded: it feeds `_stats` live, ahead of what it has saved.
+  void _onLibraryChanged() {
+    if (!mounted || _isRunning) return;
+    _libraryDebounce?.cancel();
+    // One save per system arrives in a burst; coalesce (same as StorageScreen).
+    _libraryDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted || _isRunning) return;
+      _loadFolderStats();
+      _refreshPlaylists();
+    });
+  }
+
+  void _onDisplaySettingChanged() {
+    if (mounted) setState(() {});
+  }
+
+  // A scan filter was edited (Settings, or this screen's own ignore action):
+  // re-read it and refresh the folder cards.
+  Future<void> _onScanFiltersChanged() async {
+    final before = {..._ignoredFolders}; // copied: _loadFilters replaces it
+    await _loadFilters();
+    if (!mounted || _rootPath == null) return;
+    // Only the ignore list changes which folders exist; for an extension or
+    // excluded-file edit the counts are enough, and relisting would blank
+    // every card's stats for nothing.
+    if (setEquals(before, _ignoredFolders)) {
+      _loadFolderStats();
+    } else {
+      _loadSubfolders(_rootPath!);
+    }
+  }
+
+  void _onLibraryFolderChanged() {
+    final path = libraryFolderListenable.value;
+    if (path == _rootPath) return;
+    setState(() => _rootPath = path);
+    if (path != null) {
+      _loadSubfolders(path);
+    } else {
+      setState(() {
+        _subfolders = [];
+        _stats.clear();
+        _folderConsoleIds.clear();
+      });
+    }
+  }
+
+  Future<void> _init() async {
+    await _loadFilters();
+    await _loadHomeSortPref();
+    await _loadUsername();
+    await _restoreLastFolder();
+    await _refreshPlaylists();
+    await _refreshOnBoot();
+
+    // Covers a request made before this screen existed (the first-run exit);
+    // a request made while it is already mounted arrives via the listener.
+    _consumeFirstScanRequest();
+  }
+
+  // One-shot handoff from the setup wizard: a full first sweep, no dialog.
+  // `match` already pulls each matched game's progress, so no `progress` flag.
+  Future<void> _consumeFirstScanRequest() async {
+    if (!firstScanRequest.value) return;
+    firstScanRequest.value = false;
+    if (!mounted) return;
+    await _scanAllSystems(
+      plan: const FetchPlan(scope: FetchScope.all, match: true),
+    );
+  }
+
+  // Async lister (same filtering as the scan) so the walk doesn't freeze the UI.
+  Future<Map<String, int>> _currentSizesFor(String systemPath) async {
+    final files = await listRomFiles([systemPath], _enabledExtensions);
+    return {for (final f in files) f.path: f.size};
+  }
+
+  // On boot: hide gone folders, silently re-walk file lists, and offer a
+  // fetch if new files turned up.
+  Future<void> _refreshOnBoot() async {
+    await _lib.refreshMissingSystems();
+    final diff = await _refreshFiles();
+    if (!mounted || diff.newUnmatched == 0) return;
+    final n = diff.newUnmatched;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('$n new file${n == 1 ? '' : 's'} found since the last scan.'),
+      action: _isRunning
+          ? null
+          : SnackBarAction(label: 'Fetch', onPressed: _scanAllSystems),
+      duration: const Duration(seconds: 6),
+    ));
+  }
+
+
+  // Re-walks folders for added/removed files, no hashing, no RA calls.
+  // Never-scanned folders are skipped so a fresh library isn't one giant
+  // "new files" batch.
+  Future<({int added, int removed, int newUnmatched})> _refreshFiles() async {
+    var added = 0;
+    var removed = 0;
+    var newUnmatched = 0;
+    for (final dir in List<Directory>.from(_subfolders)) {
+      final data = await _lib.load(dir.path);
+      final consoleId = await ScanSettings.consoleIdForFolder(dir.path);
+      final raSupported = ConsoleMap.isRaSupported(consoleId);
+      // A never-scanned RA folder waits for a full hash scan (Update library);
+      // diffing an empty one would flag every file as new-to-fetch. Non-RA /
+      // unknown folders are never hashed, so bootstrap their size-only entries
+      // here instead (otherwise they'd stay empty forever).
+      if (data.games.isEmpty && raSupported) continue;
+      final files = await listRomFiles([dir.path], _enabledExtensions);
+      final byPath = {for (final g in data.games) g.filePath: g};
+      final currentPaths = {for (final f in files) f.path};
+
+      final removedHere =
+          data.games.where((g) => !currentPaths.contains(g.filePath)).length;
+      final games = <GameEntry>[];
+      var addedHere = 0;
+      for (final f in files) {
+        final existing = byPath[f.path];
+        if (existing != null) {
+          games.add(existing);
+          continue;
+        }
+        addedHere++;
+        games.add(GameEntry.unscanned(f.path, fileSize: f.size));
+      }
+      if (addedHere == 0 && removedHere == 0) continue;
+      added += addedHere;
+      removed += removedHere;
+      // Only RA-supported folders have anything to fetch; don't prompt for the rest.
+      if (raSupported) newUnmatched += addedHere;
+
+      await _lib.save(data.copyWith(games: games, consoleId: consoleId));
+    }
+    if (added > 0 || removed > 0) await _loadFolderStats();
+    return (added: added, removed: removed, newUnmatched: newUnmatched);
+  }
+
+  Future<void> _loadHomeSortPref() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = _HomeSort.values.asNameMap()[prefs.getString(PrefKeys.homeSort)];
+    if (v != null && mounted) setState(() => _homeSort = v);
+  }
+
+  Future<void> _loadUsername() async {
+    final prefs = await SharedPreferences.getInstance();
+    final name = prefs.getString(PrefKeys.raUsername) ?? '';
+    final version = prefs.getInt(PrefKeys.raAvatarVersion);
+    final avatarPath = prefs.getString(PrefKeys.raAvatarPath);
+    if (mounted) {
+      setState(() {
+        _raAvatarVersion = version;
+        _raAvatarPath = avatarPath;
+      });
+    }
+    // Cached picture shows immediately; refresh happens in the background.
+    if (name.isNotEmpty) _refreshAvatar();
+  }
+
+  // Resolve the avatar from RA's authoritative UserPic path; the media host is
+  // case-sensitive, so a URL built from the typed username can serve a stale
+  // legacy image. The path is stable, so a version param busts a changed avatar.
+  // A failed fetch keeps the last-known picture.
+  Future<void> _refreshAvatar() async {
+    final prefs = await SharedPreferences.getInstance();
+    final username = prefs.getString(PrefKeys.raUsername) ?? '';
+    final apiKey = await readApiKey();
+    if (username.isEmpty || apiKey.isEmpty) return;
+    try {
+      final path =
+          await RaService(username: username, apiKey: apiKey).getUserPicPath();
+      final version = DateTime.now().millisecondsSinceEpoch;
+      await DefaultCacheManager()
+          .downloadFile(raAvatarUrl(path, version: version));
+      await prefs.setString(PrefKeys.raAvatarPath, path);
+      await prefs.setInt(PrefKeys.raAvatarVersion, version);
+      if (mounted) {
+        setState(() {
+          _raAvatarPath = path;
+          _raAvatarVersion = version;
+        });
+      }
+    } catch (_) {
+      // Keep the previously cached avatar.
+    }
+  }
+
+  // Re-derives Played from progress, and re-reads which member keys the library
+  // can still show so the playlist cards stop counting deleted games. Both come
+  // off the same index a playlist view lists from, so a card's count and its
+  // contents can't disagree.
+  Future<void> _refreshPlaylists() async {
+    final rows = await _lib.searchIndex();
+    final live = <String>{};
+    final played = <String>{};
+    for (final r in rows) {
+      final key = memberKeyFor(gameId: r.gameId, filePath: r.filePath);
+      live.add(key);
+      if ((r.earnedAchievements ?? 0) > 0) played.add(key);
+    }
+    await _playlistStore.setMembers(playedId, played);
+    _playlists = await _playlistStore.all();
+    if (mounted) setState(() => _liveMemberKeys = live);
+  }
+
+  Future<void> _loadFilters() async {
+    final extensions = await ScanSettings.enabledExtensions();
+    final ignored = await ScanSettings.ignoredFolders();
+    if (!mounted) return;
+    setState(() {
+      _enabledExtensions = extensions;
+      _ignoredFolders = ignored.map((e) => e.toLowerCase()).toSet();
+    });
+  }
+
+  Future<void> _restoreLastFolder() async {
+    final last = libraryFolderListenable.value;
+    if (last != null && Directory(last).existsSync()) {
+      setState(() => _rootPath = last);
+      _loadSubfolders(last);
+    }
+  }
+
+  void _loadSubfolders(String path) {
+    // The root can be an unmounted drive; keep the cached cards rather than
+    // throwing out of whichever listener triggered this.
+    if (!Directory(path).existsSync()) return;
+    final subs = Directory(path)
+        .listSync()
+        .whereType<Directory>()
+        .where((d) => !ScanSettings.isFolderIgnored(d.path, _ignoredFolders))
+        .toList();
+    setState(() {
+      _subfolders = subs;
+      _stats.clear();
+      _folderConsoleIds.clear();
+    });
+    _loadFolderConsoleIds();
+    _loadFolderStats();
+  }
+
+  // Re-reads the root for added/removed subfolders AND re-walks file lists,
+  // then reports the combined diff.
+  Future<void> _refreshFolders() async {
+    final root = _rootPath;
+    if (root == null) return;
+    if (!Directory(root).existsSync()) {
+      setState(() {
+        _rootPath = null;
+        _subfolders = [];
+        _stats.clear();
+        _folderConsoleIds.clear();
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Folder no longer exists. Pick a new one.')),
+        );
+      }
+      return;
+    }
+    final before = _subfolders.map((d) => d.path).toSet();
+    _loadSubfolders(root);
+    final after = _subfolders.map((d) => d.path).toSet();
+    final foldersAdded = after.difference(before).length;
+    final foldersRemoved = before.difference(after).length;
+
+    await _lib.refreshMissingSystems();
+    final diff = await _refreshFiles();
+    if (!mounted) return;
+
+    final parts = <String>[];
+    if (foldersAdded > 0 || foldersRemoved > 0) {
+      parts.add('folders +$foldersAdded / −$foldersRemoved');
+    }
+    parts.add('files +${diff.added} / −${diff.removed}');
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Refreshed: ${parts.join('  ·  ')}'),
+      action: diff.newUnmatched > 0 && !_isRunning
+          ? SnackBarAction(label: 'Fetch', onPressed: _scanAllSystems)
+          : null,
+      duration: const Duration(seconds: 5),
+    ));
+  }
+
+  // Resolves console ids for the grid pictures. Best-effort, cosmetic.
+  Future<void> _loadFolderConsoleIds() async {
+    final dirs = List<Directory>.from(_subfolders);
+    for (final dir in dirs) {
+      final id = await ScanSettings.consoleIdForFolder(dir.path);
+      if (!mounted) return;
+      setState(() => _folderConsoleIds[dir.path] = id);
+    }
+  }
+
+  // Summaries come from the home index; no disk walk here.
+  Future<void> _loadFolderStats() async {
+    final summaries = await _lib.summaries();
+    if (!mounted) return;
+    setState(() {
+      for (final s in summaries) {
+        _stats[s.systemPath] = FolderStats(
+          path: s.systemPath,
+          totalGames: s.totalGames,
+          totalSizeBytes: s.totalSizeBytes,
+          gamesScanned: s.gamesScanned,
+          gamesWithAchievements: s.gamesWithAchievements,
+          lastScanned: s.lastScanned,
+        );
+        if (s.consoleId != null) _folderConsoleIds[s.systemPath] = s.consoleId;
+      }
+    });
+  }
+
+  Future<void> _pickFolder() => pickLibraryFolder(context);
+
+  // Pushes a folder view and refreshes stats + the playlists on return.
+  void _openFolderView(FolderView view) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => view)).then((_) {
+      if (_rootPath != null) _loadFolderStats();
+      _refreshPlaylists();
+    });
+  }
+
+  void _openSubfolder(String dirPath) => _openFolderView(FolderView(
+        folderPaths: [dirPath],
+        title: displayNameFor(
+          mode: _nameMode,
+          consoleId: _folderConsoleIds[dirPath],
+          folderPaths: [dirPath],
+        ),
+        enabledExtensions: _enabledExtensions,
+      ));
+
+  void _openCombined(ConsoleGroup group, String label) =>
+      _openFolderView(FolderView(
+        folderPaths: group.folderPaths,
+        title: label,
+        consoleId: group.consoleId,
+        enabledExtensions: _enabledExtensions,
+      ));
+
+  Future<void> _showFolderMenu(Offset position, String dirPath) async {
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+    final name = p.basename(dirPath);
+    final choice = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        position & const Size(40, 40),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'ignore',
+          child: Row(
+            children: [
+              const Icon(Icons.visibility_off, size: 18),
+              const SizedBox(width: 8),
+              Flexible(child: Text('Ignore "$name"')),
+            ],
+          ),
+        ),
+      ],
+    );
+    if (choice == 'ignore') await _ignoreFolder(name);
+  }
+
+  // The cards refresh through the scanFiltersListenable listener.
+  Future<void> _ignoreFolder(String name) async {
+    await ScanSettings.addIgnoredFolder(name);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ignoring "$name". Manage the list in Settings.'),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () => _unignoreFolder(name),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _unignoreFolder(String name) async {
+    final remaining = (await ScanSettings.ignoredFolders())
+        .where((e) => e.toLowerCase() != name.toLowerCase())
+        .toList();
+    await ScanSettings.setIgnoredFolders(remaining.join(', '));
+  }
+
+  // Sweeps every subfolder in turn, updating each folder card live.
+  // [plan] pre-builds the run and skips the task dialog, used by the setup
+  // wizard's first scan. Interactive callers pass nothing and get the dialog.
+  Future<void> _scanAllSystems({FetchPlan? plan}) async {
+    plan ??= await showFetchTasksDialog(context, global: true);
+    if (plan == null || !mounted) return;
+
+    // Refresh is standalone: no RA calls, no scope.
+    if (plan.refresh) {
+      await _refreshFolders();
+      return;
+    }
+
+    final dirs = List<Directory>.from(_subfolders);
+    if (dirs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No subfolders to scan.')),
+      );
+      return;
+    }
+
+    // Credentials only needed when we hit the network.
+    (String, String)? credentials;
+    if (plan.match || plan.progress || plan.refreshLists) {
+      credentials = await requireCredentials(context);
+      if (credentials == null) return;
+    }
+
+    // Re-pull game/hash lists first so a match step in this run sees them.
+    if (plan.refreshLists && credentials != null) {
+      await _refreshRaLists(credentials);
+      if (!plan.match && !plan.progress) {
+        _notify('RA lists refreshed');
+        return;
+      }
+    }
+
+    final summaries = await _lib.summaries();
+    // Any folder still holding an unresolved game, not just an untouched one:
+    // a cancelled sweep leaves a folder part-scanned, and "only unfetched" has
+    // to be able to pick it back up.
+    final unfetched = {
+      for (final s in summaries)
+        if (s.gamesScanned < s.totalGames) s.systemPath
+    };
+    // Stored games are only needed for the `changed` scope.
+    // Loads every system file + re-walks every folder serially to
+    // build the diff; fine at current library sizes, parallelize if it drags.
+    final changedScanCache = <String, List<GameEntry>>{};
+    final currentSizesCache = <String, Map<String, int>>{};
+    if (plan.scope == FetchScope.changedFolders) {
+      for (final s in summaries) {
+        changedScanCache[s.systemPath] =
+            (await _lib.load(s.systemPath)).games;
+        currentSizesCache[s.systemPath] = await _currentSizesFor(s.systemPath);
+      }
+    }
+    final freshness = plan.scope == FetchScope.changedFolders
+        ? classifyFolders(
+            systemPaths: summaries.map((s) => s.systemPath).toList(),
+            storedGames: (path) => changedScanCache[path] ?? const <GameEntry>[],
+            folderExists: (path) => Directory(path).existsSync(),
+            currentSizes: (path) => currentSizesCache[path] ?? const {},
+          )
+        : const FolderFreshness(gone: [], changed: []);
+    final targetPaths = resolveScopeFolders(
+      scope: plan.scope,
+      allFolders: dirs.map((d) => d.path).toList(),
+      changedFolders: freshness.changed,
+      unfetchedFolders: unfetched,
+    ).toSet();
+    final targets = dirs.where((d) => targetPaths.contains(d.path)).toList();
+    if (targets.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No folders match that scope.')),
+      );
+      return;
+    }
+
+    LogService.info('HomeScreen/scanAllSystems',
+        'Starting sweep of ${targets.length} subfolders');
+
+    final service = credentials == null
+        ? null
+        : RaService(username: credentials.$1, apiKey: credentials.$2);
+
+    final onlyUnfetched = !plan.matchReFetchAll;
+
+    // Counting walks every folder, which on a big library takes long enough
+    // that starting it without a bar reads as a hung app. Show an
+    // indeterminate one (total 0) with Cancel live, then fill the total in.
+    setState(() {
+      _cancelled = false;
+      _isRunning = true;
+      _checked = 0;
+      _folderCount = targets.length;
+      _folderIndex = 0;
+      _scanAllTotal = 0;
+    });
+    _publishProgress();
+
+    // The bar lives above the Navigator, so every exit from here has to stop
+    // it: an early return or a throw would otherwise leave it up for the rest
+    // of the session, with a Cancel button wired to a dead sweep.
+    try {
+      final total = await _sweepTotal(targets, plan, onlyUnfetched);
+      if (!mounted) return;
+      setState(() => _scanAllTotal = total);
+      _publishProgress();
+      _setUpdates.clear();
+
+      // Sweep-wide caches: one game list per console, one detail per game.
+      final raCache = RaCache();
+      final detailCache = <int, (GameInfo, UserProgress)>{};
+
+      for (final dir in targets) {
+        if (!mounted || _cancelled) break;
+        setState(() {
+          _folderIndex++;
+          _currentFolder = p.basename(dir.path);
+        });
+        _publishProgress();
+        if (plan.match) {
+          await _scanFolderStats(dir, service,
+              match: plan.match,
+              onlyUnfetched: onlyUnfetched,
+              raCache: raCache,
+              detailCache: detailCache);
+        }
+        if (plan.progress && !plan.match && service != null) {
+          await _syncFolderProgressFor(dir.path, service);
+        }
+      }
+    } finally {
+      ScanProgress.instance.stop();
+    }
+
+    if (mounted) {
+      setState(() {
+        _isRunning = false;
+        _currentFolder = null;
+      });
+      if (_setUpdates.isNotEmpty) {
+        final n = _setUpdates.length;
+        final sample = _setUpdates.take(3).join(', ');
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              '$n game${n == 1 ? '' : 's'} gained new achievements on RA: '
+              '$sample${n > 3 ? '…' : ''}'),
+          duration: const Duration(seconds: 6),
+        ));
+      }
+    }
+    // The sweep resynced progress and rebuilt each system's file list. The
+    // library listener stays out of its way while it runs, so the cards and
+    // Played are refreshed once here instead.
+    if (mounted) {
+      await _loadFolderStats();
+      await _refreshPlaylists();
+    }
+
+    LogService.info('HomeScreen/scanAllSystems',
+        'Sweep finished: $_checked ROMs checked'
+        '${_cancelled ? ' (cancelled)' : ''}');
+
+    // Offer to import Skraper data sitting alongside the ROMs.
+    final rootPath = _rootPath;
+    if (rootPath != null && !_cancelled && mounted) {
+      await _offerScrapedImport(rootPath);
+    }
+  }
+
+  // Prompts to import gamelist.xml data found under [rootPath] after a scan, so
+  // scraped artwork/details fill RA gaps for the games just scanned.
+  Future<void> _offerScrapedImport(String rootPath) async {
+    try {
+      // Detect off the UI isolate so a deep tree doesn't jank the frame.
+      final found =
+          await Isolate.run(() => findScrapeSources(Directory(rootPath)).length);
+      if (found == 0 || !mounted) return;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Scraped data found'),
+          content: Text('Found gamelist.xml for $found '
+              'folder(s). Import artwork & details to fill gaps?'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Skip')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Import')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      final scanned = await Library.instance.allRomPaths();
+      final result = await importFromDirectory(rootPath, scanned);
+      await ScrapedStore.instance.putAll(result.matched);
+    } catch (e) {
+      LogService.error(
+          'HomeScreen/offerScrapedImport', 'import failed', err: e);
+    }
+  }
+
+  void _notify(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+    );
+  }
+
+  // Re-pulls each console's game+hash list so new games match without a rescan.
+  Future<void> _refreshRaLists((String, String) creds) async {
+    final (username, apiKey) = creds;
+    final service = RaService(username: username, apiKey: apiKey);
+    final cache = RaCache();
+    final summaries = await _lib.summaries();
+    final consoleIds = <int>{
+      for (final s in summaries)
+        if (s.consoleId != null) s.consoleId!,
+    };
+    for (final consoleId in consoleIds) {
+      try {
+        await cache.refreshConsole(consoleId, service);
+      } catch (e) {
+        LogService.error('home/refreshLists', 'console $consoleId: $e');
+      }
+    }
+    _refreshAvatar(); // cheap standalone fetch; not part of the re-pull
+  }
+
+  Widget _buildSyncControls() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        FloatingActionButton(
+          heroTag: 'updateLibrary',
+          tooltip: 'Update library (rescan & sync progress)',
+          onPressed: _isRunning ? null : _scanAllSystems,
+          child: _raAvatarPath == null
+              ? const Icon(Icons.refresh)
+              : ClipOval(
+                  child: RaImage(
+                    url: raAvatarUrl(_raAvatarPath!, version: _raAvatarVersion),
+                    width: 40,
+                    height: 40,
+                    fit: BoxFit.cover,
+                    error: Image.asset('assets/ra-icon.webp',
+                        width: 40, height: 40),
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _scanFolderStats(
+      Directory dir,
+      RaService? service, {
+      required bool match,
+      required bool onlyUnfetched,
+      required RaCache raCache,
+      required Map<int, (GameInfo, UserProgress)> detailCache}) async {
+    // Async walk so a large folder doesn't freeze the UI.
+    final files = await listRomFiles([dir.path], _enabledExtensions);
+
+    final sizeByPath = <String, int>{};
+    var totalBytes = 0;
+    for (final f in files) {
+      sizeByPath[f.path] = f.size;
+      totalBytes += f.size;
+    }
+
+    final existing = await _lib.load(dir.path);
+
+    final entryByPath = {for (final g in existing.games) g.filePath: g};
+
+    FolderStats statsFor(Iterable<GameEntry> games, {DateTime? lastScanned}) =>
+        FolderStats(
+          path: dir.path,
+          totalGames: files.length,
+          totalSizeBytes: totalBytes,
+          gamesScanned: games.where((g) => g.matched || g.noMatch).length,
+          gamesWithAchievements: games.where((g) => g.matched).length,
+          lastScanned: lastScanned,
+        );
+
+    final consoleId = await ScanSettings.consoleIdForFolder(dir.path);
+    // RA can't hash unknown folders or display-only systems (Switch, PS3…):
+    // record size only, but keep the id so the folder still shows its logo.
+    if (consoleId == null || !ConsoleMap.isRaSupported(consoleId)) {
+      LogService.warning('HomeScreen/scanAllSystems',
+          'Non-RA console for folder ${p.basename(dir.path)} '
+          '(${ConsoleMap.nameFor(consoleId) ?? 'unknown'}); '
+          'recording size only (not hashed).');
+      // No hashing, record unhashed entries so counts/sizes still derive.
+      final now = DateTime.now();
+      await _lib.save(SystemData(
+        systemId: existing.systemId,
+        systemPath: dir.path,
+        games: [
+          for (final f in files)
+            GameEntry.unscanned(f.path,
+                fileSize: sizeByPath[f.path], lastScanned: now),
+        ],
+        dismissedDuplicatePairs: existing.dismissedDuplicatePairs,
+        consoleId: consoleId,
+      ));
+      if (mounted) {
+        setState(() =>
+            _stats[dir.path] = statsFor(const [], lastScanned: DateTime.now()));
+      }
+      return;
+    }
+
+    final targets = !match
+        ? <String>[]
+        : onlyUnfetched
+            ? files
+                .where((f) => !isResolvedEntry(entryByPath[f.path], consoleId))
+                .map((f) => f.path)
+                .toList()
+            : files.map((f) => f.path).toList();
+
+    void refreshLiveStats() {
+      if (!mounted) return;
+      setState(() => _stats[dir.path] = statsFor(entryByPath.values));
+    }
+
+    final dolphinToolPath = await DiscDecompressor.resolveToolPath();
+
+    final engine = FetchEngine(
+      hash: romHasher(
+          consoleId: consoleId,
+          dolphinToolPath: dolphinToolPath,
+          logContext: 'HomeScreen/scan'),
+      lookupGameId: (md5) => raCache.resolveGameId(service!, consoleId, md5),
+      isCancelled: () => !mounted || _cancelled,
+      onResult: (res) async {
+        final prev = entryByPath[res.filePath];
+        final prevCount = prev?.gameInfo?.achievementCount;
+        final detail = res.matched && res.gameId != null
+            ? await tryResolveGameDetail(
+                gameId: res.gameId!,
+                service: service!,
+                cache: detailCache,
+                saved: prev,
+                logContext: 'HomeScreen/scan')
+            : null;
+        final info = detail?.$1;
+        final progress = detail?.$2;
+        if (isSetUpdate(prevCount, info?.achievementCount)) {
+          _setUpdates
+              .add(gameDisplayName(info?.title, p.basename(res.filePath)));
+        }
+        entryByPath[res.filePath] = GameEntry(
+          filePath: res.filePath,
+          fileName: p.basename(res.filePath),
+          fileSize: sizeByPath[res.filePath],
+          md5: res.md5,
+          gameId: res.gameId,
+          matched: res.matched,
+          noMatch: res.noMatch,
+          lastScanned: DateTime.now(),
+          gameInfo: info,
+          progress: progress,
+          hashConsoleId: consoleId,
+        );
+        if (mounted) {
+          setState(() => _checked++);
+          _publishProgress();
+        }
+        refreshLiveStats();
+      },
+    );
+
+    await engine.run(targets);
+
+    // Rebuild from the current file list so removed files drop out.
+    final games = [
+      for (final f in files)
+        entryByPath[f.path] ??
+            GameEntry.unscanned(f.path, fileSize: sizeByPath[f.path]),
+    ];
+    await _lib.save(existing.copyWith(games: games, consoleId: consoleId));
+
+    if (mounted) {
+      setState(() => _stats[dir.path] = statsFor(games,
+          lastScanned: _cancelled ? null : DateTime.now()));
+    }
+  }
+
+  // How many items this sweep will actually tick off, so the progress bar's
+  // denominator matches its numerator. Counting the *files about to be
+  // processed* rather than the games a previous scan happened to record: on a
+  // first run nothing is recorded yet, which used to leave the bar reading
+  // things like "1400/53" and pinned at 100% from item 54 onward.
+  //
+  // Costs one directory walk per folder up front. That is cheap beside hashing,
+  // which reads every ROM end to end.
+  Future<int> _sweepTotal(
+      List<Directory> targets, FetchPlan plan, bool onlyUnfetched) async {
+    var total = 0;
+    for (final dir in targets) {
+      if (!mounted || _cancelled) break;
+      if (plan.match) {
+        final files = await listRomFiles([dir.path], _enabledExtensions);
+        if (!onlyUnfetched) {
+          total += files.length;
+          continue;
+        }
+        // Same filter the folder scan applies, so the two agree.
+        final consoleId = await ScanSettings.consoleIdForFolder(dir.path);
+        final stored = {
+          for (final g in (await _lib.load(dir.path)).games) g.filePath: g
+        };
+        total += files
+            .where((f) => !isResolvedEntry(stored[f.path], consoleId))
+            .length;
+      } else if (plan.progress) {
+        // The progress-only pass ticks once per game that has an RA id.
+        final stored = (await _lib.load(dir.path)).games;
+        total += stored.where((g) => g.gameId != null).length;
+      }
+    }
+    return total;
+  }
+
+  // Progress-only pass for one system; no re-hashing.
+  Future<void> _syncFolderProgressFor(String sysPath, RaService service) async {
+    final data = await _lib.load(sysPath);
+    final byPath = {for (final g in data.games) g.filePath: g};
+
+    // One sweep instead of per-game GETs; guards skip the write on
+    // failure/empty so progress is never zeroed.
+    final sweep =
+        await fetchCompletionSweep(service, 'HomeScreen/syncProgress');
+    final byGameId = sweep.byGameId;
+    if (byGameId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(sweep.userMessage!)),
+        );
+      }
+      return;
+    }
+
+    for (final g in data.games) {
+      if (!mounted || _cancelled) break;
+      if (g.gameId == null) continue;
+      final prog = byGameId[g.gameId!];
+      byPath[g.filePath] = g.copyWith(
+        lastScanned: DateTime.now(),
+        progress: UserProgress(
+          gameId: g.gameId!,
+          earnedAchievements: prog?.numAwarded ?? 0,
+          earnedHardcore: prog?.numAwardedHardcore ?? 0,
+          lastPlayed: prog?.lastPlayed,
+          achievements: g.progress?.achievements ?? const [],
+        ),
+      );
+      if (mounted) {
+        setState(() => _checked++);
+        _publishProgress();
+      }
+    }
+    final consoleId = await ScanSettings.consoleIdForFolder(sysPath);
+    await _lib.save(
+        data.copyWith(games: byPath.values.toList(), consoleId: consoleId));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final grid = _combineSystems ? _buildCombinedGrid() : _buildSubfolderGrid();
+    return Scaffold(
+      body: Column(
+        children: [
+          // Picker header shows only until a folder is chosen.
+          if (_rootPath == null) _buildHeader(),
+          Expanded(
+            child: _rootPath == null
+                ? grid
+                : HomeSearch(
+                    store: _playlistStore,
+                    onPlaylistChanged: _refreshPlaylists,
+                    idleActions: _idleActions(),
+                    idleTrailing: [_buildSortButton()],
+                    child: grid,
+                  ),
+          ),
+        ],
+      ),
+      floatingActionButton: _rootPath == null ? null : _buildSyncControls(),
+    );
+  }
+
+  // Shown beside the search bar when no query is active.
+  List<Widget> _idleActions() {
+    final style = IconButton.styleFrom(
+      minimumSize: const Size(40, 40),
+      padding: EdgeInsets.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    return [
+      // On phones the shortcuts live here as buttons instead of eating the top
+      // of the list, so the systems stay in reach.
+      if (narrow) ..._shortcutChips(),
+      // Scan health is a desktop-sized report; phones don't get the button.
+      if (!narrow)
+        IconButton(
+          style: style,
+          icon: const Icon(Icons.health_and_safety_outlined),
+          // Deliberately stays enabled during a scan; it's read-only.
+          tooltip: 'Scan health & export',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const ScanHealthScreen()),
+          ),
+        ),
+    ];
+  }
+
+  List<Widget> _shortcutChips() => [
+        if (_subfolders.isNotEmpty)
+          _shortcutButton(Icons.apps, 'All games',
+              _isRunning ? null : _openAllGames),
+        for (final pl in _playlists)
+          _shortcutButton(_playlistIcon(pl), pl.name, () => _openPlaylist(pl)),
+      ];
+
+  Widget _shortcutButton(IconData icon, String label, VoidCallback? onTap) =>
+      IconButton(
+        style: IconButton.styleFrom(
+          minimumSize: const Size(40, 40),
+          padding: EdgeInsets.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        icon: Icon(icon),
+        tooltip: label,
+        onPressed: onTap,
+      );
+
+  Widget _buildSortButton() {
+    const labels = {
+      _HomeSort.alphabetical: 'Name',
+      _HomeSort.size: 'Size',
+      _HomeSort.fileCount: 'Files',
+      _HomeSort.system: 'System',
+    };
+    return PopupMenuButton<_HomeSort>(
+      tooltip: 'Sort folders',
+      child: Container(
+        height: 40,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.sort, size: 18),
+          const SizedBox(width: 4),
+          Text(labels[_homeSort]!, style: const TextStyle(fontSize: 13)),
+        ]),
+      ),
+      onSelected: (v) async {
+        setState(() => _homeSort = v);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(PrefKeys.homeSort, v.name);
+      },
+      itemBuilder: (_) => [
+        for (final entry in labels.entries)
+          PopupMenuItem<_HomeSort>(
+            value: entry.key,
+            child: Row(children: [
+              if (_homeSort == entry.key) ...[
+                const Icon(Icons.check, size: 16),
+                const SizedBox(width: 6),
+              ] else
+                const SizedBox(width: 22),
+              Text(entry.value),
+            ]),
+          ),
+      ],
+    );
+  }
+
+  // Only rendered while no library folder is picked (so no scan can run).
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: FilledButton.icon(
+          icon: const Icon(Icons.folder_open),
+          label: const Text('Pick folder'),
+          onPressed: _pickFolder,
+        ),
+      ),
+    );
+  }
+
+  // Shared shell: leading shortcuts (All games + playlists) first, then
+  // [itemCount] folder entries. Phones get a one-column list of rows, anything
+  // wider the flip-card grid; [itemBuilder] is told which to build.
+  Widget _tiles(int itemCount, Widget Function(int i, bool narrow) itemBuilder) {
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    // Phones show the shortcuts as chips under the search bar instead.
+    final leading = <Widget>[
+      if (!narrow) ...[
+        if (_subfolders.isNotEmpty) _buildAllGamesCard(narrow),
+        for (final pl in _playlists) _buildPlaylistCard(pl, narrow),
+      ],
+    ];
+    Widget at(int i) =>
+        i < leading.length ? leading[i] : itemBuilder(i - leading.length, narrow);
+    final count = itemCount + leading.length;
+    if (narrow) {
+      return ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        itemCount: count,
+        itemBuilder: (_, i) =>
+            Padding(padding: const EdgeInsets.only(bottom: 8), child: at(i)),
+      );
+    }
+    return GridView.builder(
+      padding: const EdgeInsets.all(12),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 260,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 1.3,
+      ),
+      itemCount: count,
+      itemBuilder: (_, i) => at(i),
+    );
+  }
+
+  // One home shortcut (All games, a playlist), in whichever shape the shell is
+  // laying out.
+  Widget _shortcut({
+    required IconData icon,
+    required String label,
+    String? sub,
+    required VoidCallback? onTap,
+    required bool narrow,
+  }) {
+    if (!narrow) {
+      return ConsoleCard(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 30),
+            const SizedBox(height: 8),
+            Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            if (sub != null) ...[
+              const SizedBox(height: 4),
+              Text(sub,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ],
+        ),
+      );
+    }
+    return ConsoleCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(12),
+      // Built under ConsoleCard's light theme so the labels come out dark.
+      child: Builder(
+        builder: (context) => Row(
+          children: [
+            SizedBox(width: 76, child: Icon(icon, size: 30)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  if (sub != null)
+                    Text(sub, style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Every game across every system, in the shared folder view: classic
+  // filters, no per-system fetch actions (mixed consoles).
+  void _openAllGames() => _openFolderView(FolderView(
+        folderPaths: _subfolders.map((d) => d.path).toList(),
+        title: 'All games',
+        enabledExtensions: _enabledExtensions,
+        showActions: false,
+      ));
+
+  Widget _buildAllGamesCard(bool narrow) => _shortcut(
+        icon: Icons.apps,
+        label: 'All games',
+        onTap: _isRunning ? null : _openAllGames,
+        narrow: narrow,
+      );
+
+  Widget _buildSubfolderGrid() {
+    if (_rootPath == null) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.folder_open, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('Pick a folder to browse subfolders.'),
+          ],
+        ),
+      );
+    }
+
+    final dirs = _sortedSubfolders;
+    return _tiles(dirs.length, (i, narrow) {
+      final dir = dirs[i];
+      final displayName = displayNameFor(
+        mode: _nameMode,
+        consoleId: _folderConsoleIds[dir.path],
+        folderPaths: [dir.path],
+      );
+      final onTap = _isRunning ? null : () => _openSubfolder(dir.path);
+      return GestureDetector(
+        // Opaque: FolderCard's flip Transform can make deferToChild
+        // hit-tests miss, swallowing right-click/long-press.
+        behavior: HitTestBehavior.opaque,
+        onSecondaryTapDown: _isRunning
+            ? null
+            : (d) => _showFolderMenu(d.globalPosition, dir.path),
+        onLongPressStart: _isRunning
+            ? null
+            : (d) => _showFolderMenu(d.globalPosition, dir.path),
+        child: narrow
+            ? FolderRow(
+                name: p.basename(dir.path),
+                displayName: displayName,
+                stats: _stats[dir.path],
+                consoleId: _folderConsoleIds[dir.path],
+                onTap: onTap,
+              )
+            : FolderCard(
+                name: p.basename(dir.path),
+                displayName: displayName,
+                stats: _stats[dir.path],
+                consoleId: _folderConsoleIds[dir.path],
+                onTap: onTap,
+              ),
+      );
+    });
+  }
+
+  Widget _buildCombinedGrid() {
+    final entries = _combinedEntries;
+    return _tiles(entries.length, (i, narrow) {
+      final entry = entries[i];
+      final g = entry.group;
+      final name = displayNameFor(
+        mode: NameMode.folderName,
+        consoleId: g.consoleId,
+        folderPaths: g.folderPaths,
+      );
+      final subtitle =
+          g.folderPaths.length > 1 ? '${g.folderPaths.length} folders' : null;
+      final onTap = _isRunning ? null : () => _openCombined(g, entry.label);
+      return narrow
+          ? FolderRow(
+              name: name,
+              displayName: entry.label,
+              stats: entry.agg,
+              consoleId: g.consoleId,
+              subtitle: subtitle,
+              onTap: onTap,
+            )
+          : FolderCard(
+              name: name,
+              displayName: entry.label,
+              stats: entry.agg,
+              consoleId: g.consoleId,
+              subtitle: subtitle,
+              onTap: onTap,
+            );
+    });
+  }
+
+  Widget _buildPlaylistCard(Playlist pl, bool narrow) {
+    return GestureDetector(
+      onSecondaryTapDown: pl.builtin
+          ? null
+          : (d) => _showPlaylistMenu(d.globalPosition, pl),
+      child: _shortcut(
+        narrow: narrow,
+        icon: _playlistIcon(pl),
+        label: pl.name,
+        sub: '${visibleMemberCount(pl, _liveMemberKeys)} games',
+        onTap: () => _openPlaylist(pl),
+      ),
+    );
+  }
+
+  IconData _playlistIcon(Playlist pl) => switch (pl.id) {
+        playedId => Icons.sports_esports,
+        trashId => Icons.delete_outline,
+        favoritesId => Icons.favorite,
+        _ => Icons.playlist_play,
+      };
+
+  void _openPlaylist(Playlist pl) => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PlaylistView(
+            playlistId: pl.id,
+            playlistName: pl.name,
+            playlistStore: _playlistStore,
+          ),
+        ),
+      ).then((_) => _refreshPlaylists());
+
+  Future<void> _showPlaylistMenu(Offset position, Playlist pl) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final choice = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+          position & const Size(40, 40), Offset.zero & overlay.size),
+      items: [
+        _menuRow('rename', Icons.edit, 'Rename'),
+        _menuRow('delete', Icons.delete_outline, 'Delete'),
+      ],
+    );
+    if (!mounted) return;
+    if (choice == 'rename') {
+      final controller = TextEditingController(text: pl.name);
+      final name = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Rename playlist'),
+          content: TextField(controller: controller, autofocus: true),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                child: const Text('Save')),
+          ],
+        ),
+      );
+      controller.dispose();
+      if (name != null && name.isNotEmpty) {
+        await _playlistStore.rename(pl.id, name);
+      }
+    } else if (choice == 'delete') {
+      await _playlistStore.delete(pl.id);
+    }
+    _playlists = await _playlistStore.all();
+    if (mounted) setState(() {});
+  }
+
+  PopupMenuItem<String> _menuRow(String value, IconData icon, String label) =>
+      PopupMenuItem(
+        value: value,
+        child: Row(children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: 8),
+          Text(label),
+        ]),
+      );
+
+}

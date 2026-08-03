@@ -1,0 +1,848 @@
+name: Build Multi-Platform
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      build_windows:
+        description: 'Build the Windows job'
+        required: false
+        type: boolean
+        default: true
+      build_linux:
+        description: 'Build the Linux job (AppImage + Flatpak)'
+        required: false
+        type: boolean
+        default: true
+      build_macos:
+        description: 'Build the macOS job'
+        required: false
+        type: boolean
+        default: true
+      build_ios:
+        description: 'Build the iOS verification job'
+        required: false
+        type: boolean
+        default: true
+      build_android:
+        description: 'Build the Android APK job'
+        required: false
+        type: boolean
+        default: true
+      target:
+        description: 'Manual runs: upload the rebuilt platforms onto an existing release'
+        required: false
+        type: choice
+        options:
+          - none
+          - latest-release
+          - nightly
+        default: none
+      nightly_dry_run:
+        description: 'Nightly: preview retention/upload actions without changing the release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# Cancel superseded runs on a branch/PR; never cancel tag releases mid-flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Cross-platform correctness gate: static analysis + the Dart test suite.
+  # Everything downstream depends on this so a red test blocks all builds.
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        # Fail on errors and warnings, but not pre-existing style infos.
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run tests
+        run: flutter test
+
+  detect-nightly-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+      run_builds: ${{ steps.detect.outputs.run_builds }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: detect
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          NIGHTLY_CONTEXT="false"
+          if [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
+            NIGHTLY_CONTEXT="true"
+          fi
+
+          if [[ "${NIGHTLY_CONTEXT}" != "true" ]]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "run_builds=true" >> "$GITHUB_OUTPUT"
+            echo "Non-nightly event; builds will run."
+            exit 0
+          fi
+
+          CURRENT_SHA="${GITHUB_SHA}"
+          LAST_SHA=""
+          if gh release view nightly >/dev/null 2>&1; then
+            BODY=$(gh release view nightly --json body --jq '.body' || true)
+            LAST_SHA=$(printf '%s\n' "$BODY" | sed -nE 's/.*Commit: ([0-9a-f]{7,40}).*/\1/p' | head -n1 || true)
+          fi
+
+          if [[ -z "${LAST_SHA}" ]]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "run_builds=true" >> "$GITHUB_OUTPUT"
+            echo "No recorded nightly commit found; builds will run."
+          elif [[ "${LAST_SHA}" == "${CURRENT_SHA}" ]]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "run_builds=false" >> "$GITHUB_OUTPUT"
+            echo "No new commits since last nightly (${CURRENT_SHA}); builds will be skipped."
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "run_builds=true" >> "$GITHUB_OUTPUT"
+            echo "New commit detected: current=${CURRENT_SHA}, last-nightly=${LAST_SHA}. Builds will run."
+          fi
+
+  nightly-logic-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate nightly versioning and retention logic
+        run: |
+          set -euo pipefail
+
+          RAW_VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          BASE_VERSION=$(echo "$RAW_VERSION" | sed -E 's/\+.*$//' | sed -E 's/-.*$//')
+          TEST_DATE="20260304"
+          NIGHTLY_VERSION="${BASE_VERSION}-nightly.${TEST_DATE}.1"
+
+          [[ "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$NIGHTLY_VERSION" =~ ^${BASE_VERSION}-nightly\.[0-9]{8}\.1$ ]]
+
+          EXISTING=$(printf '%s\n' \
+            "${BASE_VERSION}-nightly.20260303.1" \
+            "${BASE_VERSION}-nightly.20260304.1" \
+            "${BASE_VERSION}-nightly.20260302.1")
+
+          PREVIOUS_VERSION=$(
+            printf '%s\n' "$EXISTING" \
+            | grep -v "^${NIGHTLY_VERSION}$" \
+            | sort -Vr \
+            | head -n1
+          )
+
+          test "$PREVIOUS_VERSION" = "${BASE_VERSION}-nightly.20260303.1"
+
+          # Mirror detect-nightly-changes release-body SHA parsing behavior.
+          BODY_WITH_SHA="Latest nightly: v${NIGHTLY_VERSION}; Commit: abcdef1234567890"
+          PARSED_SHA=$(printf '%s\n' "$BODY_WITH_SHA" | sed -nE 's/.*Commit: ([0-9a-f]{7,40}).*/\1/p' | head -n1 || true)
+          test "$PARSED_SHA" = "abcdef1234567890"
+
+          BODY_WITHOUT_SHA="Latest nightly: v${NIGHTLY_VERSION}"
+          PARSED_EMPTY=$(printf '%s\n' "$BODY_WITHOUT_SHA" | sed -nE 's/.*Commit: ([0-9a-f]{7,40}).*/\1/p' | head -n1 || true)
+          test -z "$PARSED_EMPTY"
+
+          # Skip behavior checks used by detect-nightly-changes.
+          CURRENT_SHA="abcdef1234567890"
+          LAST_SHA_SAME="abcdef1234567890"
+          LAST_SHA_DIFF="1234567abcdef1234"
+          LAST_SHA_MISSING=""
+
+          if [[ -z "${LAST_SHA_MISSING}" ]]; then HAS_CHANGES_MISSING=true; else HAS_CHANGES_MISSING=false; fi
+          if [[ "${LAST_SHA_SAME}" == "${CURRENT_SHA}" ]]; then HAS_CHANGES_SAME=false; else HAS_CHANGES_SAME=true; fi
+          if [[ "${LAST_SHA_DIFF}" == "${CURRENT_SHA}" ]]; then HAS_CHANGES_DIFF=false; else HAS_CHANGES_DIFF=true; fi
+
+          test "${HAS_CHANGES_MISSING}" = "true"
+          test "${HAS_CHANGES_SAME}" = "false"
+          test "${HAS_CHANGES_DIFF}" = "true"
+
+          echo "Nightly logic tests passed: base=$BASE_VERSION nightly=$NIGHTLY_VERSION previous=$PREVIOUS_VERSION"
+
+  build-windows:
+    needs: [analyze-and-test, detect-nightly-changes]
+    if: |
+      (github.event_name != 'workflow_dispatch' && needs.detect-nightly-changes.outputs.run_builds == 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.build_windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Regenerate launcher icons
+        run: dart run flutter_launcher_icons
+
+      - name: Build Windows
+        run: flutter build windows --release
+
+      - name: Bundle Visual C++ runtime DLLs
+        shell: pwsh
+        run: |
+          # Flutter release exes dynamically link the MSVC runtime. Ship the
+          # DLLs app-local so the app launches on machines without VC++ redist
+          # (STATUS_DLL_NOT_FOUND / 0xC0000135).
+          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $crtDir = Get-ChildItem -Path (Join-Path $vsPath 'VC\Redist\MSVC') -Recurse -Directory -Filter 'Microsoft.VC*.CRT' |
+            Where-Object { $_.FullName -like '*\x64\*' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $crtDir) { throw "Could not locate the VC++ x64 CRT redist folder under $vsPath" }
+          Write-Host "Using CRT redist: $($crtDir.FullName)"
+          $dest = 'build\windows\x64\runner\Release'
+          foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
+            Copy-Item (Join-Path $crtDir.FullName $dll) (Join-Path $dest $dll) -Force
+            Write-Host "Bundled $dll"
+          }
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          $raw = (Select-String -Path pubspec.yaml -Pattern '^version:\s*(.+)$').Matches[0].Groups[1].Value.Trim()
+          $version = ($raw -split '\+')[0] -split '-' | Select-Object -First 1
+          Write-Host "Building installer for version $version"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$version" installer.iss
+
+      - name: Archive Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: build/windows/x64/runner/Release/
+          retention-days: 1
+
+      - name: Archive Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: artifacts/windows_installer/
+          retention-days: 1
+
+  build-linux:
+    needs: [analyze-and-test, detect-nightly-changes]
+    if: |
+      (github.event_name != 'workflow_dispatch' && needs.detect-nightly-changes.outputs.run_builds == 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.build_linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ninja-build pkg-config libgtk-3-dev liblzma-dev \
+            librsvg2-common libglib2.0-bin imagemagick libsecret-1-dev
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Linux
+        run: flutter build linux --release
+
+      - name: Create Linux installation package
+        run: bash package_linux.sh
+
+      - name: Create Linux AppImage
+        run: bash package_appimage.sh
+
+      - name: Install Flatpak tooling
+        run: |
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub \
+            https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.gnome.Platform//47 org.gnome.Sdk//47
+
+      - name: Create Linux Flatpak
+        run: bash package_flatpak.sh
+
+      - name: Archive Linux Flatpak
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-flatpak
+          path: artifacts/flatpak/
+          retention-days: 1
+
+      - name: Archive Linux build
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: artifacts/linux_package/
+          retention-days: 1
+
+      - name: Archive Linux AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: artifacts/appimage/
+          retention-days: 1
+
+  build-macos:
+    needs: [analyze-and-test, detect-nightly-changes]
+    if: |
+      (github.event_name != 'workflow_dispatch' && needs.detect-nightly-changes.outputs.run_builds == 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.build_macos)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build macOS
+        run: flutter build macos --release
+
+      - name: Fix macOS app permissions and code signing
+        run: |
+          APP_NAME="rarm"
+          APP_PATH="build/macos/Build/Products/Release/${APP_NAME}.app"
+
+          # Ensure the main executable has execute permissions
+          chmod +x "${APP_PATH}/Contents/MacOS/${APP_NAME}"
+
+          # Remove resource forks and extended attributes that prevent signing
+          dot_clean -m "${APP_PATH}" || true
+          find "${APP_PATH}" -name "._*" -delete
+          xattr -cr "${APP_PATH}"
+
+          # Sign all frameworks first (don't use --deep on frameworks). This
+          # includes the bundled raw_hash.framework (rcheevos/libchdr FFI lib).
+          find "${APP_PATH}/Contents/Frameworks" -name "*.framework" -maxdepth 1 | while read framework; do
+            echo "Signing framework: ${framework}"
+            /usr/bin/codesign --force --sign - --timestamp=none "${framework}"
+          done
+
+          # Sign the main app bundle
+          echo "Signing app bundle"
+          /usr/bin/codesign --force --sign - --timestamp=none "${APP_PATH}"
+
+          # Verify the signature
+          /usr/bin/codesign --verify --verbose "${APP_PATH}"
+
+          echo "App signed successfully:"
+          ls -lh "${APP_PATH}/Contents/MacOS/"
+          du -sh "${APP_PATH}"
+
+      - name: Create DMG and installation package
+        run: |
+          APP_NAME="rarm"
+          APP_PATH="build/macos/Build/Products/Release/${APP_NAME}.app"
+          DMG_NAME="${APP_NAME}.dmg"
+
+          mkdir -p dmg_temp
+          # ditto preserves metadata, permissions, and signatures.
+          ditto "${APP_PATH}" "dmg_temp/${APP_NAME}.app"
+
+          hdiutil create -volname "${APP_NAME}" -srcfolder dmg_temp -ov -format UDZO "${DMG_NAME}"
+
+          mkdir -p macos_package
+          mv "${DMG_NAME}" macos_package/
+
+          # Create installation script (removes quarantine, installs to /Applications)
+          cat > macos_package/install.sh << 'SCRIPT_EOF'
+          #!/bin/bash
+          set -e
+
+          APP_NAME="rarm"
+          DMG_FILE="${APP_NAME}.dmg"
+          INSTALL_DIR="/Applications"
+
+          echo "======================================"
+          echo "  macOS App Installer"
+          echo "======================================"
+          echo ""
+
+          if [ ! -f "$DMG_FILE" ]; then
+              echo "Error: $DMG_FILE not found in current directory"
+              echo "Please run this script from the extracted folder"
+              exit 1
+          fi
+
+          echo "Step 1: Removing quarantine flags from DMG..."
+          xattr -cr "$DMG_FILE" 2>/dev/null || true
+          echo "✓ Quarantine removed"
+          echo ""
+
+          echo "Step 2: Mounting DMG..."
+          MOUNT_POINT=$(hdiutil attach "$DMG_FILE" | grep Volumes | awk '{print $3}')
+          if [ -z "$MOUNT_POINT" ]; then
+              echo "Error: Failed to mount DMG"
+              exit 1
+          fi
+          echo "✓ DMG mounted at: $MOUNT_POINT"
+          echo ""
+
+          echo "Step 3: Removing quarantine from app..."
+          xattr -cr "$MOUNT_POINT/${APP_NAME}.app" 2>/dev/null || true
+          echo "✓ App quarantine removed"
+          echo ""
+
+          echo "Step 4: Copying app to Applications folder..."
+          if [ -d "${INSTALL_DIR}/${APP_NAME}.app" ]; then
+              echo "Warning: App already exists in Applications. Removing old version..."
+              rm -rf "${INSTALL_DIR}/${APP_NAME}.app"
+          fi
+          cp -R "$MOUNT_POINT/${APP_NAME}.app" "$INSTALL_DIR/"
+          echo "✓ App copied to $INSTALL_DIR"
+          echo ""
+
+          echo "Step 5: Unmounting DMG..."
+          hdiutil detach "$MOUNT_POINT" -quiet
+          echo "✓ DMG unmounted"
+          echo ""
+
+          echo "======================================"
+          echo "  Installation Complete!"
+          echo "======================================"
+          echo ""
+          echo "Opening the app now..."
+          sleep 1
+          open "${INSTALL_DIR}/${APP_NAME}.app"
+          SCRIPT_EOF
+
+          chmod +x macos_package/install.sh
+
+          cat > macos_package/README.txt << 'README_EOF'
+          macOS Installation Instructions
+          ================================
+
+          EASY INSTALLATION (Recommended):
+          ---------------------------------
+          1. Open Terminal (Applications -> Utilities -> Terminal)
+          2. Type: cd ~/Downloads/    (or wherever you extracted this folder)
+          3. Type: chmod +x install.sh
+          4. Type: ./install.sh
+          5. The app will be installed and launched automatically!
+
+          MANUAL INSTALLATION:
+          --------------------
+          1. Open Terminal and run:
+             xattr -cr rarm.dmg
+          2. Double-click the DMG file
+          3. Drag the app to your Applications folder
+          4. Right-click the app -> Open (first time only)
+
+          WHY IS THIS NECESSARY?
+          ----------------------
+          This app is not signed with an Apple Developer ID certificate ($99/year).
+          macOS adds "quarantine" flags to downloaded files for security.
+          The install.sh script safely removes these flags.
+
+          This is normal for free/open-source macOS apps.
+          README_EOF
+
+          mkdir -p artifacts
+          mv macos_package artifacts/
+
+          echo "Package contents:"
+          ls -lh artifacts/macos_package/
+
+      - name: Archive macOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: artifacts/macos_package/
+          retention-days: 1
+
+  # iOS compile-only verification. There is no iOS distribution channel here;
+  # this proves the raw_hash Apple unity build (rcheevos + libchdr) links for
+  # the iOS arch. --no-codesign skips needing signing certificates.
+  build-ios:
+    needs: [analyze-and-test, detect-nightly-changes]
+    if: |
+      (github.event_name != 'workflow_dispatch' && needs.detect-nightly-changes.outputs.run_builds == 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.build_ios)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign
+
+  # Android APK build. Compiles the Kotlin storage-permission channel and the
+  # raw_hash Android NDK build (wired via the shared src/CMakeLists.txt), which
+  # are otherwise built nowhere and can break silently. No release upload; the
+  # app is sideloaded and the APK is not yet a distribution channel.
+  build-android:
+    needs: [analyze-and-test, detect-nightly-changes]
+    if: |
+      (github.event_name != 'workflow_dispatch' && needs.detect-nightly-changes.outputs.run_builds == 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.build_android)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Regenerate launcher icons
+        run: dart run flutter_launcher_icons
+
+      - name: Build Android APK
+        run: flutter build apk --release
+
+      - name: Archive Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 1
+
+  create-release:
+    needs: [build-windows, build-linux, build-macos, build-android]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release archives
+        run: |
+          # Extract version from tag (e.g., refs/tags/v1.0.0 -> 1.0.0)
+          VERSION=${GITHUB_REF#refs/tags/v}
+
+          cd artifacts
+          zip -r "../rarm-windows-v${VERSION}.zip" windows-build/
+          cp windows-installer/rarm-setup.exe "../rarm-setup-v${VERSION}.exe"
+          zip -r "../rarm-linux-v${VERSION}.zip" linux-build/
+          cp linux-appimage/rarm-x86_64.AppImage \
+            "../rarm-v${VERSION}-x86_64.AppImage"
+          cp linux-flatpak/rarm-x86_64.flatpak \
+            "../rarm-v${VERSION}-x86_64.flatpak"
+          ( cd macos-build && zip -r "../../rarm-macos-v${VERSION}.zip" . )
+          cp android-apk/app-release.apk "../rarm-android-v${VERSION}.apk"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            rarm-windows-v*.zip
+            rarm-setup-v*.exe
+            rarm-linux-v*.zip
+            rarm-v*-x86_64.AppImage
+            rarm-v*-x86_64.flatpak
+            rarm-macos-v*.zip
+            rarm-android-v*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-winget:
+    needs: [create-release]
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Submit installer update to winget
+        shell: pwsh
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v',''
+
+          # Only publish clean semantic versions; skip test/pre tags.
+          if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') {
+            Write-Host "Skipping winget: '$version' is not a clean semver release."
+            exit 0
+          }
+
+          # Requires a one-time manual first submission and a PAT secret.
+          if (-not $env:WINGET_TOKEN) {
+            Write-Host "WINGET_TOKEN secret not set; skipping winget submission."
+            exit 0
+          }
+
+          $installerUrl = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/rarm-setup-v$version.exe"
+          Write-Host "Submitting winget update for $version -> $installerUrl"
+
+          Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile wingetcreate.exe
+          .\wingetcreate.exe update GeorgeEnglezos.RaRomManager `
+            --version $version `
+            --urls $installerUrl `
+            --token $env:WINGET_TOKEN `
+            --submit
+
+  update-nightly-release:
+    needs: [detect-nightly-changes, build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    if: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Compute nightly version
+        run: |
+          RAW_VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          BASE_VERSION=$(echo "$RAW_VERSION" | sed -E 's/\+.*$//' | sed -E 's/-.*$//')
+          NIGHTLY_VERSION="${BASE_VERSION}-nightly.$(date -u +%Y%m%d).1"
+
+          echo "RAW_VERSION=$RAW_VERSION" >> "$GITHUB_ENV"
+          echo "BASE_VERSION=$BASE_VERSION" >> "$GITHUB_ENV"
+          echo "NIGHTLY_VERSION=$NIGHTLY_VERSION" >> "$GITHUB_ENV"
+
+      - name: Create nightly archives
+        run: |
+          cd artifacts
+          zip -r "../rarm-windows-v${NIGHTLY_VERSION}.zip" windows-build/
+          cp windows-installer/rarm-setup.exe "../rarm-setup-v${NIGHTLY_VERSION}.exe"
+          zip -r "../rarm-linux-v${NIGHTLY_VERSION}.zip" linux-build/
+          cp linux-appimage/rarm-x86_64.AppImage \
+            "../rarm-v${NIGHTLY_VERSION}-x86_64.AppImage"
+          ( cd macos-build && zip -r "../../rarm-macos-v${NIGHTLY_VERSION}.zip" . )
+
+      - name: Ensure nightly pre-release exists
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view nightly >/dev/null 2>&1; then
+            gh release create nightly \
+              --title "Nightly Builds" \
+              --notes "Automated nightly pre-release builds. Assets keep only the current nightly and one previous nightly." \
+              --prerelease
+          fi
+
+      - name: Keep only current + previous nightly versions, then upload current
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NIGHTLY_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.nightly_dry_run || false }}
+        run: |
+          set -euo pipefail
+
+          # Discover existing nightly versions from asset names.
+          mapfile -t EXISTING_VERSIONS < <(
+            gh release view nightly --json assets --jq '.assets[].name' \
+            | sed -nE \
+                -e 's/^rarm-(windows|linux|macos)-v(.+)\.zip$/\2/p' \
+                -e 's/^rarm-setup-v(.+)\.exe$/\1/p' \
+                -e 's/^rarm-v(.+)-x86_64\.AppImage$/\1/p' \
+            | sort -Vu
+          )
+
+          PREVIOUS_VERSION=""
+          if [ ${#EXISTING_VERSIONS[@]} -gt 0 ]; then
+            PREVIOUS_VERSION=$(
+              printf '%s\n' "${EXISTING_VERSIONS[@]}" \
+              | grep -v "^${NIGHTLY_VERSION}$" \
+              | sort -Vr \
+              | head -n1 || true
+            )
+          fi
+
+          echo "Nightly dry run: ${NIGHTLY_DRY_RUN}"
+          echo "Current nightly version: ${NIGHTLY_VERSION}"
+          echo "Previous nightly version: ${PREVIOUS_VERSION:-none}"
+
+          # Remove any nightly asset that is neither current nor previous.
+          mapfile -t EXISTING_ASSETS < <(gh release view nightly --json assets --jq '.assets[].name')
+          for asset in "${EXISTING_ASSETS[@]}"; do
+            asset_version=""
+            if [[ "$asset" =~ ^rarm-(windows|linux|macos)-v(.+)\.zip$ ]]; then
+              asset_version="${BASH_REMATCH[2]}"
+            elif [[ "$asset" =~ ^rarm-setup-v(.+)\.exe$ ]]; then
+              asset_version="${BASH_REMATCH[1]}"
+            elif [[ "$asset" =~ ^rarm-v(.+)-x86_64\.AppImage$ ]]; then
+              asset_version="${BASH_REMATCH[1]}"
+            fi
+            if [[ -n "$asset_version" ]]; then
+              if [[ "$asset_version" != "$NIGHTLY_VERSION" && "$asset_version" != "$PREVIOUS_VERSION" ]]; then
+                if [[ "${NIGHTLY_DRY_RUN}" == "true" ]]; then
+                  echo "[DRY RUN] Would delete asset: $asset"
+                else
+                  gh release delete-asset nightly "$asset" --yes || true
+                fi
+              fi
+            fi
+          done
+
+          # Upload current nightly assets (idempotent for same-day reruns).
+          if [[ "${NIGHTLY_DRY_RUN}" == "true" ]]; then
+            echo "[DRY RUN] Would upload: rarm-windows-v${NIGHTLY_VERSION}.zip"
+            echo "[DRY RUN] Would upload: rarm-setup-v${NIGHTLY_VERSION}.exe"
+            echo "[DRY RUN] Would upload: rarm-linux-v${NIGHTLY_VERSION}.zip"
+            echo "[DRY RUN] Would upload: rarm-v${NIGHTLY_VERSION}-x86_64.AppImage"
+            echo "[DRY RUN] Would upload: rarm-macos-v${NIGHTLY_VERSION}.zip"
+          else
+            gh release upload nightly "rarm-windows-v${NIGHTLY_VERSION}.zip" --clobber
+            gh release upload nightly "rarm-setup-v${NIGHTLY_VERSION}.exe" --clobber
+            gh release upload nightly "rarm-linux-v${NIGHTLY_VERSION}.zip" --clobber
+            gh release upload nightly "rarm-v${NIGHTLY_VERSION}-x86_64.AppImage" --clobber
+            gh release upload nightly "rarm-macos-v${NIGHTLY_VERSION}.zip" --clobber
+          fi
+
+          # Update release metadata each run for clarity.
+          CURRENT_BODY=$(gh release view nightly --json body --jq '.body' || true)
+          STATIC_SECTION=$(printf '%s' "$CURRENT_BODY" | tr -d '\r' | awk '/^---$/{found=1; next} found{print}' || true)
+
+          DYNAMIC_NOTES=$(printf 'Latest nightly: v%s\nPrevious nightly: %s\nSource branch: master\nCommit: %s' \
+            "${NIGHTLY_VERSION}" "${PREVIOUS_VERSION:-none}" "${GITHUB_SHA}")
+
+          if [[ -n "$STATIC_SECTION" ]]; then
+            RELEASE_NOTES=$(printf '%s\n\n---\n%s' "$DYNAMIC_NOTES" "$STATIC_SECTION")
+          else
+            RELEASE_NOTES="${DYNAMIC_NOTES}"
+          fi
+
+          if [[ "${NIGHTLY_DRY_RUN}" == "true" ]]; then
+            echo "[DRY RUN] Would edit release title/notes for nightly"
+            printf '%s\n' "$RELEASE_NOTES"
+          else
+            gh release edit nightly \
+              --title "Nightly Builds (v${NIGHTLY_VERSION})" \
+              --notes "$RELEASE_NOTES"
+          fi
+
+  patch-release:
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    # Manual-only: upload whichever platforms were built onto an existing
+    # release. always() lets it run even when some build jobs were skipped.
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.target != 'none'
+    steps:
+      - name: Download all built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Resolve target release and version
+        id: target
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ inputs.target }}" == "nightly" ]]; then
+            TAG="nightly"
+            VERSION=$(
+              gh release view nightly --json assets --jq '.assets[].name' \
+              | sed -nE 's/^rarm-(windows|linux|macos)-v(.+)\.zip$/\2/p' \
+              | sort -Vu | tail -n1
+            )
+            if [[ -z "$VERSION" ]]; then
+              echo "No existing nightly assets found to derive a version from." >&2
+              exit 1
+            fi
+          else
+            # github's "latest" release excludes drafts and pre-releases.
+            TAG=$(gh release view --json tagName --jq '.tagName')
+            VERSION="${TAG#v}"
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Targeting release '$TAG' (version $VERSION)"
+
+      - name: Package and upload built platforms
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.target.outputs.tag }}
+          VERSION: ${{ steps.target.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd artifacts
+          uploaded=0
+
+          if [[ -d windows-build ]]; then
+            zip -r "../rarm-windows-v${VERSION}.zip" windows-build/
+            gh release upload "$TAG" "../rarm-windows-v${VERSION}.zip" --clobber
+            uploaded=1
+          fi
+          if [[ -d windows-installer ]]; then
+            cp windows-installer/rarm-setup.exe "../rarm-setup-v${VERSION}.exe"
+            gh release upload "$TAG" "../rarm-setup-v${VERSION}.exe" --clobber
+            uploaded=1
+          fi
+          if [[ -d linux-build ]]; then
+            zip -r "../rarm-linux-v${VERSION}.zip" linux-build/
+            gh release upload "$TAG" "../rarm-linux-v${VERSION}.zip" --clobber
+            uploaded=1
+          fi
+          if [[ -d linux-appimage ]]; then
+            cp linux-appimage/rarm-x86_64.AppImage "../rarm-v${VERSION}-x86_64.AppImage"
+            gh release upload "$TAG" "../rarm-v${VERSION}-x86_64.AppImage" --clobber
+            uploaded=1
+          fi
+          if [[ -d linux-flatpak ]]; then
+            cp linux-flatpak/rarm-x86_64.flatpak "../rarm-v${VERSION}-x86_64.flatpak"
+            gh release upload "$TAG" "../rarm-v${VERSION}-x86_64.flatpak" --clobber
+            uploaded=1
+          fi
+          if [[ -d macos-build ]]; then
+            ( cd macos-build && zip -r "../../rarm-macos-v${VERSION}.zip" . )
+            gh release upload "$TAG" "../rarm-macos-v${VERSION}.zip" --clobber
+            uploaded=1
+          fi
+
+          if [[ "$uploaded" -eq 0 ]]; then
+            echo "No build artifacts were produced to upload." >&2
+            exit 1
+          fi
+
+          echo "Uploaded rebuilt platforms to release '$TAG'."
