@@ -209,6 +209,60 @@ void main() {
     });
   });
 
+  group('romFromEntry matched without gameInfo', () {
+    GameEntry matchedNoInfo() => GameEntry(
+          filePath: 'C:/g/dashrunner.md',
+          fileName: 'dashrunner.md',
+          fileSize: 10,
+          md5: 'abc',
+          gameId: 42,
+          matched: true,
+          noMatch: false,
+          lastScanned: DateTime(2026, 7, 1),
+          gameInfo: null,
+          progress: null,
+          hashConsoleId: 1,
+        );
+
+    // The detail fetch failed but the hash matched. The row must still read as
+    // supported, exactly as the live fetch loop rendered it, not as unscanned.
+    test('reads as supported with a placeholder title', () {
+      final rom = romFromEntry(matchedNoInfo(), consoleId: 1);
+
+      expect(rom.status, RomStatus.supported);
+      expect(rom.gameTitle, 'Game #42');
+      expect(rom.gameId, 42);
+    });
+
+    // FolderView._romToGameInfo keys on this to decide the row carries no real
+    // detail. If the placeholder ever gained a count, saving the folder would
+    // persist "Game #42" as genuine GameInfo and every later scan would treat
+    // the entry as resolved and reuse it, permanently.
+    test('carries no achievement count, so it is never persisted as real',
+        () {
+      expect(romFromEntry(matchedNoInfo(), consoleId: 1).achievementCount,
+          isNull);
+    });
+
+    test('a matched entry with no gameId is not treated as supported', () {
+      final entry = GameEntry(
+        filePath: 'C:/g/x.md',
+        fileName: 'x.md',
+        fileSize: 10,
+        md5: 'abc',
+        gameId: null,
+        matched: true,
+        noMatch: false,
+        lastScanned: DateTime(2026, 7, 1),
+        gameInfo: null,
+        progress: null,
+        hashConsoleId: 1,
+      );
+
+      expect(romFromEntry(entry, consoleId: 1).status, RomStatus.notFetched);
+    });
+  });
+
   group('resolveRom', () {
     late Directory dataDir;
     late Directory sysDir;

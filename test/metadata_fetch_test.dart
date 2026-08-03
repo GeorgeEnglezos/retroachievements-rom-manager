@@ -76,4 +76,24 @@ void main() {
     expect(results.length, 2);
     expect(results.values.every((m) => m == null), isTrue);
   });
+
+  test('stops before the next file once isCancelled flips', () async {
+    final provider = _FakeProvider(const {});
+    final seen = <String>[];
+    var cancel = false;
+
+    await runMetadataFetch(
+      files: const ['a.iso', 'b.iso', 'c.iso'],
+      consoleId: -3,
+      provider: provider,
+      cache: MetadataCache(baseDir: dir),
+      isCancelled: () => cancel,
+      onResult: (path, meta) {
+        seen.add(path);
+        cancel = true; // cancel lands after the first file
+      },
+    );
+
+    expect(seen, ['a.iso']);
+  });
 }

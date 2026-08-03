@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:rarm/screens/folder_view.dart';
 import 'package:rarm/services/library.dart';
+import 'package:rarm/widgets/fetch_fab.dart';
 
 void main() {
   testWidgets('lists ROM files from every folder path', (tester) async {
@@ -45,7 +46,7 @@ void main() {
     dataDir.deleteSync(recursive: true);
   });
 
-  testWidgets('showActions:false hides the fetch Actions button', (tester) async {
+  testWidgets('showActions:false hides the fetch entry point', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final root = Directory.systemTemp.createTempSync('fv_noact');
     final a = Directory('${root.path}/SNES')..createSync();
@@ -67,7 +68,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Blahblah (USA).sfc'), findsOneWidget); // rendered
-    expect(find.text('Actions'), findsNothing); // but no fetch button
+    expect(find.byType(FetchFab), findsNothing); // but no fetch entry point
 
     root.deleteSync(recursive: true);
     dataDir.deleteSync(recursive: true);

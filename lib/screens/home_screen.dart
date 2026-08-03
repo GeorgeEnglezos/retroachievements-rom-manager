@@ -6,12 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/fetch_plan.dart';
 import '../models/folder_stats.dart';
 import '../services/credentials.dart';
 import '../services/folder_grouping.dart';
-import '../services/fetch_engine.dart';
-import '../services/fetch_pipeline.dart';
+import '../services/fetch_run.dart';
 import '../services/fetch_scope.dart';
+import '../services/scan_run.dart';
+import '../widgets/fetch_fab.dart';
 import '../widgets/fetch_tasks_dialog.dart';
 import 'folder_view.dart';
 import '../services/log_service.dart';
@@ -32,16 +34,11 @@ import '../services/scraper/scraped_store.dart';
 import '../services/folder_freshness.dart';
 import '../services/incremental_scan.dart';
 import '../services/rom_file_lister.dart';
-import '../services/set_update.dart';
-import '../services/disc_decompressor.dart';
-import '../models/system_data.dart';
 import '../models/user_progress.dart';
-import '../models/rom_result.dart';
 import '../models/game_entry.dart';
 import '../widgets/folder_card.dart';
 import '../widgets/ui/console_card.dart';
 import '../widgets/ra_image.dart';
-import '../widgets/scan_progress_bar.dart';
 import '../widgets/require_credentials.dart';
 import 'playlist_view.dart';
 import 'scan_health_screen.dart';
@@ -74,7 +71,6 @@ class _HomeScreenState extends State<HomeScreen> {
   // these, so a deleted game stops inflating the number.
   Set<String> _liveMemberKeys = {};
   bool _isRunning = false;
-  bool _cancelled = false;
   int _checked = 0;
   String? _rootPath;
   List<Directory> _subfolders = [];
@@ -165,16 +161,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Set<String> _enabledExtensions = {...kDefaultRomExtensions};
   Set<String> _ignoredFolders = {};
 
-  // Busts the (stable) avatar URL cache; persisted across launches.
-  int? _raAvatarVersion;
-
-  // RA's canonical UserPic path; null until resolved from the profile API.
-  String? _raAvatarPath;
-
   int _folderIndex = 0; // 1-based folder we're currently on
   int _folderCount = 0; // total folders in this run
   int _scanAllTotal = 0; // estimated total ROMs across all folders
   String? _currentFolder;
+  ScanRun? _run;
 
   String _scanAllLabel() {
     final name = _currentFolder ?? '';
@@ -182,15 +173,17 @@ class _HomeScreenState extends State<HomeScreen> {
     return 'System $_folderIndex/$_folderCount: $name  •  $totalPart';
   }
 
-  // Mirrors progress to the app-scoped bar so it renders on any route.
-  void _publishProgress() {
-    ScanProgress.instance.publish(
-      running: _isRunning,
-      value: _scanAllTotal == 0 ? null : _checked / _scanAllTotal,
-      label: _scanAllLabel(),
-      onCancel: () {
-        if (mounted) setState(() => _cancelled = true);
-      },
+  // Folder card numbers, derived from what the run just saved.
+  FolderStats _statsFrom(FolderRunResult result) {
+    final games = result.saved.games;
+    return FolderStats(
+      path: result.saved.systemPath,
+      totalGames: games.length,
+      totalSizeBytes:
+          games.fold<int>(0, (sum, g) => sum + (g.fileSize ?? 0)),
+      gamesScanned: games.where((g) => g.matched || g.noMatch).length,
+      gamesWithAchievements: games.where((g) => g.matched).length,
+      lastScanned: result.cancelled ? null : DateTime.now(),
     );
   }
 
@@ -400,15 +393,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadUsername() async {
     final prefs = await SharedPreferences.getInstance();
     final name = prefs.getString(PrefKeys.raUsername) ?? '';
-    final version = prefs.getInt(PrefKeys.raAvatarVersion);
-    final avatarPath = prefs.getString(PrefKeys.raAvatarPath);
-    if (mounted) {
-      setState(() {
-        _raAvatarVersion = version;
-        _raAvatarPath = avatarPath;
-      });
-    }
-    // Cached picture shows immediately; refresh happens in the background.
+    // FetchFab reads the cached picture straight from prefs; refresh it here in
+    // the background so the next read is current.
     if (name.isNotEmpty) _refreshAvatar();
   }
 
@@ -429,12 +415,9 @@ class _HomeScreenState extends State<HomeScreen> {
           .downloadFile(raAvatarUrl(path, version: version));
       await prefs.setString(PrefKeys.raAvatarPath, path);
       await prefs.setInt(PrefKeys.raAvatarVersion, version);
-      if (mounted) {
-        setState(() {
-          _raAvatarPath = path;
-          _raAvatarVersion = version;
-        });
-      }
+      // Tell any mounted FetchFab to re-read; it cached the old prefs when it
+      // mounted, which on a first launch is before this resolves.
+      raAvatarListenable.value++;
     } catch (_) {
       // Keep the previously cached avatar.
     }
@@ -647,6 +630,10 @@ class _HomeScreenState extends State<HomeScreen> {
   // [plan] pre-builds the run and skips the task dialog, used by the setup
   // wizard's first scan. Interactive callers pass nothing and get the dialog.
   Future<void> _scanAllSystems({FetchPlan? plan}) async {
+    // A stale snackbar action (its onPressed was built before the run started)
+    // or the folder view's FAB could otherwise start a second run over the same
+    // folders; both would write the same SystemData and one would lose.
+    if (ScanRun.busy) return;
     plan ??= await showFetchTasksDialog(context, global: true);
     if (plan == null || !mounted) return;
 
@@ -732,18 +719,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final onlyUnfetched = !plan.matchReFetchAll;
 
-    // Counting walks every folder, which on a big library takes long enough
-    // that starting it without a bar reads as a hung app. Show an
-    // indeterminate one (total 0) with Cancel live, then fill the total in.
+    final run = ScanRun();
     setState(() {
-      _cancelled = false;
+      _run = run;
       _isRunning = true;
       _checked = 0;
       _folderCount = targets.length;
       _folderIndex = 0;
       _scanAllTotal = 0;
     });
-    _publishProgress();
+    // Counting walks every folder, which on a big library takes long enough
+    // that starting it without a bar reads as a hung app. Show an
+    // indeterminate one with Cancel live, then fill the total in.
+    run.start(label: _scanAllLabel());
 
     // The bar lives above the Navigator, so every exit from here has to stop
     // it: an early return or a throw would otherwise leave it up for the rest
@@ -752,40 +740,62 @@ class _HomeScreenState extends State<HomeScreen> {
       final total = await _sweepTotal(targets, plan, onlyUnfetched);
       if (!mounted) return;
       setState(() => _scanAllTotal = total);
-      _publishProgress();
+      run.addTotal(total);
       _setUpdates.clear();
 
       // Sweep-wide caches: one game list per console, one detail per game.
       final raCache = RaCache();
       final detailCache = <int, (GameInfo, UserProgress)>{};
+      final metadataProvider = await savedMetadataProvider();
 
       for (final dir in targets) {
-        if (!mounted || _cancelled) break;
+        if (!mounted || run.cancelled) break;
         setState(() {
           _folderIndex++;
           _currentFolder = p.basename(dir.path);
         });
-        _publishProgress();
-        if (plan.match) {
-          await _scanFolderStats(dir, service,
-              match: plan.match,
-              onlyUnfetched: onlyUnfetched,
-              raCache: raCache,
-              detailCache: detailCache);
+        run.relabel(_scanAllLabel());
+
+        final result = await runFolderFetch(
+          folderPath: dir.path,
+          plan: plan,
+          extensions: _enabledExtensions,
+          library: _lib,
+          run: run,
+          raCache: raCache,
+          detailCache: detailCache,
+          service: service,
+          metadataProvider: metadataProvider,
+          logContext: 'HomeScreen/scan',
+          onEntry: (_) {
+            if (!mounted) return;
+            setState(() => _checked++);
+            run.relabel(_scanAllLabel());
+          },
+        );
+        _setUpdates.addAll(result.setUpdates);
+        if (result.message != null && mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(result.message!)));
         }
-        if (plan.progress && !plan.match && service != null) {
-          await _syncFolderProgressFor(dir.path, service);
+        if (mounted) {
+          setState(() => _stats[dir.path] = _statsFrom(result));
         }
       }
     } finally {
-      ScanProgress.instance.stop();
+      run.stop();
+      // Cleared here, not after the block: a throw out of the sweep would
+      // otherwise leave _isRunning latched for the session, and every folder
+      // card stays untappable with no bar on screen to explain why.
+      if (mounted) {
+        setState(() {
+          _isRunning = false;
+          _currentFolder = null;
+        });
+      }
     }
 
     if (mounted) {
-      setState(() {
-        _isRunning = false;
-        _currentFolder = null;
-      });
       if (_setUpdates.isNotEmpty) {
         final n = _setUpdates.length;
         final sample = _setUpdates.take(3).join(', ');
@@ -807,11 +817,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     LogService.info('HomeScreen/scanAllSystems',
         'Sweep finished: $_checked ROMs checked'
-        '${_cancelled ? ' (cancelled)' : ''}');
+        '${(_run?.cancelled ?? false) ? ' (cancelled)' : ''}');
 
     // Offer to import Skraper data sitting alongside the ROMs.
     final rootPath = _rootPath;
-    if (rootPath != null && !_cancelled && mounted) {
+    if (rootPath != null && !(_run?.cancelled ?? false) && mounted) {
       await _offerScrapedImport(rootPath);
     }
   }
@@ -877,167 +887,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _refreshAvatar(); // cheap standalone fetch; not part of the re-pull
   }
 
-  Widget _buildSyncControls() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        FloatingActionButton(
-          heroTag: 'updateLibrary',
-          tooltip: 'Update library (rescan & sync progress)',
-          onPressed: _isRunning ? null : _scanAllSystems,
-          child: _raAvatarPath == null
-              ? const Icon(Icons.refresh)
-              : ClipOval(
-                  child: RaImage(
-                    url: raAvatarUrl(_raAvatarPath!, version: _raAvatarVersion),
-                    width: 40,
-                    height: 40,
-                    fit: BoxFit.cover,
-                    error: Image.asset('assets/ra-icon.webp',
-                        width: 40, height: 40),
-                  ),
-                ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _scanFolderStats(
-      Directory dir,
-      RaService? service, {
-      required bool match,
-      required bool onlyUnfetched,
-      required RaCache raCache,
-      required Map<int, (GameInfo, UserProgress)> detailCache}) async {
-    // Async walk so a large folder doesn't freeze the UI.
-    final files = await listRomFiles([dir.path], _enabledExtensions);
-
-    final sizeByPath = <String, int>{};
-    var totalBytes = 0;
-    for (final f in files) {
-      sizeByPath[f.path] = f.size;
-      totalBytes += f.size;
-    }
-
-    final existing = await _lib.load(dir.path);
-
-    final entryByPath = {for (final g in existing.games) g.filePath: g};
-
-    FolderStats statsFor(Iterable<GameEntry> games, {DateTime? lastScanned}) =>
-        FolderStats(
-          path: dir.path,
-          totalGames: files.length,
-          totalSizeBytes: totalBytes,
-          gamesScanned: games.where((g) => g.matched || g.noMatch).length,
-          gamesWithAchievements: games.where((g) => g.matched).length,
-          lastScanned: lastScanned,
-        );
-
-    final consoleId = await ScanSettings.consoleIdForFolder(dir.path);
-    // RA can't hash unknown folders or display-only systems (Switch, PS3…):
-    // record size only, but keep the id so the folder still shows its logo.
-    if (consoleId == null || !ConsoleMap.isRaSupported(consoleId)) {
-      LogService.warning('HomeScreen/scanAllSystems',
-          'Non-RA console for folder ${p.basename(dir.path)} '
-          '(${ConsoleMap.nameFor(consoleId) ?? 'unknown'}); '
-          'recording size only (not hashed).');
-      // No hashing, record unhashed entries so counts/sizes still derive.
-      final now = DateTime.now();
-      await _lib.save(SystemData(
-        systemId: existing.systemId,
-        systemPath: dir.path,
-        games: [
-          for (final f in files)
-            GameEntry.unscanned(f.path,
-                fileSize: sizeByPath[f.path], lastScanned: now),
-        ],
-        dismissedDuplicatePairs: existing.dismissedDuplicatePairs,
-        consoleId: consoleId,
-      ));
-      if (mounted) {
-        setState(() =>
-            _stats[dir.path] = statsFor(const [], lastScanned: DateTime.now()));
-      }
-      return;
-    }
-
-    final targets = !match
-        ? <String>[]
-        : onlyUnfetched
-            ? files
-                .where((f) => !isResolvedEntry(entryByPath[f.path], consoleId))
-                .map((f) => f.path)
-                .toList()
-            : files.map((f) => f.path).toList();
-
-    void refreshLiveStats() {
-      if (!mounted) return;
-      setState(() => _stats[dir.path] = statsFor(entryByPath.values));
-    }
-
-    final dolphinToolPath = await DiscDecompressor.resolveToolPath();
-
-    final engine = FetchEngine(
-      hash: romHasher(
-          consoleId: consoleId,
-          dolphinToolPath: dolphinToolPath,
-          logContext: 'HomeScreen/scan'),
-      lookupGameId: (md5) => raCache.resolveGameId(service!, consoleId, md5),
-      isCancelled: () => !mounted || _cancelled,
-      onResult: (res) async {
-        final prev = entryByPath[res.filePath];
-        final prevCount = prev?.gameInfo?.achievementCount;
-        final detail = res.matched && res.gameId != null
-            ? await tryResolveGameDetail(
-                gameId: res.gameId!,
-                service: service!,
-                cache: detailCache,
-                saved: prev,
-                logContext: 'HomeScreen/scan')
-            : null;
-        final info = detail?.$1;
-        final progress = detail?.$2;
-        if (isSetUpdate(prevCount, info?.achievementCount)) {
-          _setUpdates
-              .add(gameDisplayName(info?.title, p.basename(res.filePath)));
-        }
-        entryByPath[res.filePath] = GameEntry(
-          filePath: res.filePath,
-          fileName: p.basename(res.filePath),
-          fileSize: sizeByPath[res.filePath],
-          md5: res.md5,
-          gameId: res.gameId,
-          matched: res.matched,
-          noMatch: res.noMatch,
-          lastScanned: DateTime.now(),
-          gameInfo: info,
-          progress: progress,
-          hashConsoleId: consoleId,
-        );
-        if (mounted) {
-          setState(() => _checked++);
-          _publishProgress();
-        }
-        refreshLiveStats();
-      },
-    );
-
-    await engine.run(targets);
-
-    // Rebuild from the current file list so removed files drop out.
-    final games = [
-      for (final f in files)
-        entryByPath[f.path] ??
-            GameEntry.unscanned(f.path, fileSize: sizeByPath[f.path]),
-    ];
-    await _lib.save(existing.copyWith(games: games, consoleId: consoleId));
-
-    if (mounted) {
-      setState(() => _stats[dir.path] = statsFor(games,
-          lastScanned: _cancelled ? null : DateTime.now()));
-    }
-  }
+  Widget _buildSyncControls() => FetchFab(onPressed: _scanAllSystems);
 
   // How many items this sweep will actually tick off, so the progress bar's
   // denominator matches its numerator. Counting the *files about to be
@@ -1051,7 +901,7 @@ class _HomeScreenState extends State<HomeScreen> {
       List<Directory> targets, FetchPlan plan, bool onlyUnfetched) async {
     var total = 0;
     for (final dir in targets) {
-      if (!mounted || _cancelled) break;
+      if (!mounted || (_run?.cancelled ?? false)) break;
       if (plan.match) {
         final files = await listRomFiles([dir.path], _enabledExtensions);
         if (!onlyUnfetched) {
@@ -1073,49 +923,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
     return total;
-  }
-
-  // Progress-only pass for one system; no re-hashing.
-  Future<void> _syncFolderProgressFor(String sysPath, RaService service) async {
-    final data = await _lib.load(sysPath);
-    final byPath = {for (final g in data.games) g.filePath: g};
-
-    // One sweep instead of per-game GETs; guards skip the write on
-    // failure/empty so progress is never zeroed.
-    final sweep =
-        await fetchCompletionSweep(service, 'HomeScreen/syncProgress');
-    final byGameId = sweep.byGameId;
-    if (byGameId == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(sweep.userMessage!)),
-        );
-      }
-      return;
-    }
-
-    for (final g in data.games) {
-      if (!mounted || _cancelled) break;
-      if (g.gameId == null) continue;
-      final prog = byGameId[g.gameId!];
-      byPath[g.filePath] = g.copyWith(
-        lastScanned: DateTime.now(),
-        progress: UserProgress(
-          gameId: g.gameId!,
-          earnedAchievements: prog?.numAwarded ?? 0,
-          earnedHardcore: prog?.numAwardedHardcore ?? 0,
-          lastPlayed: prog?.lastPlayed,
-          achievements: g.progress?.achievements ?? const [],
-        ),
-      );
-      if (mounted) {
-        setState(() => _checked++);
-        _publishProgress();
-      }
-    }
-    final consoleId = await ScanSettings.consoleIdForFolder(sysPath);
-    await _lib.save(
-        data.copyWith(games: byPath.values.toList(), consoleId: consoleId));
   }
 
   @override

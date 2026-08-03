@@ -18,6 +18,10 @@ String raImageUrl(String path) =>
 /// path is the only reliable source; a URL built from a user-typed username can
 /// serve a stale legacy image. The path is stable, so pass [version] to
 /// cache-bust a changed avatar.
+/// Bumped whenever the cached avatar prefs are rewritten, so a [FetchFab]
+/// already on screen picks up a picture that resolved after it mounted.
+final ValueNotifier<int> raAvatarListenable = ValueNotifier(0);
+
 String raAvatarUrl(String userPicPath, {int? version}) =>
     'https://media.retroachievements.org$userPicPath'
     '${version == null ? '' : '?v=$version'}';

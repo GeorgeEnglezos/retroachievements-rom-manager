@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rarm/services/fetch_scope.dart';
-import 'package:rarm/widgets/fetch_tasks_dialog.dart';
+import 'package:rarm/models/fetch_plan.dart';
 
 void main() {
   const all = ['/a', '/b', '/c'];

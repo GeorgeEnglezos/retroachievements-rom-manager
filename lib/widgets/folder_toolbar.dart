@@ -3,7 +3,6 @@ import '../models/folder_sort.dart';
 import '../services/cleanup_score.dart';
 import '../services/rom_filter.dart';
 import '../theme/ui_tokens.dart';
-import 'ui/ui_button.dart';
 import 'ui/ui_chip.dart';
 import 'ui/ui_dropdown.dart';
 import 'ui/ui_search_field.dart';
@@ -12,8 +11,8 @@ import 'active_filter_chips.dart';
 import 'filter_panel.dart';
 
 /// Full-width, GB-themed two-tier folder toolbar. Owns the search field and the
-/// inline filter panel; all sort/view/duplicates/actions state lives in the
-/// parent and flows in via props + callbacks.
+/// inline filter panel; all sort/view/duplicates state lives in the parent and
+/// flows in via props + callbacks.
 class FolderToolbar extends StatefulWidget {
   final RomFilter filter;
   final FolderSort sort;
@@ -27,9 +26,6 @@ class FolderToolbar extends StatefulWidget {
   final bool showHot;
   final CleanupScoreMode cleanupMode;
   final List<({String id, String name})> playlists;
-  // The cross-system "All games" view hides the fetch/hash Actions button.
-  final bool showActions;
-  final bool actionsEnabled;
   final ValueChanged<RomFilter> onFilterChanged;
   final ValueChanged<FolderSort> onSortChanged;
   final ValueChanged<CleanupScoreMode> onCleanupModeChanged;
@@ -37,7 +33,6 @@ class FolderToolbar extends StatefulWidget {
   final VoidCallback onViewToggle;
   final ValueChanged<bool> onDuplicatesToggle;
   final ValueChanged<bool> onHotToggle;
-  final VoidCallback onRunActions;
 
   const FolderToolbar({
     super.key,
@@ -53,8 +48,6 @@ class FolderToolbar extends StatefulWidget {
     this.showHot = false,
     this.cleanupMode = CleanupScoreMode.logDampened,
     required this.playlists,
-    this.showActions = true,
-    required this.actionsEnabled,
     required this.onFilterChanged,
     required this.onSortChanged,
     this.onCleanupModeChanged = _ignoreMode,
@@ -62,7 +55,6 @@ class FolderToolbar extends StatefulWidget {
     required this.onViewToggle,
     required this.onDuplicatesToggle,
     required this.onHotToggle,
-    required this.onRunActions,
   });
 
   static void _ignoreMode(CleanupScoreMode _) {}
@@ -162,13 +154,6 @@ class _FolderToolbarState extends State<FolderToolbar> {
                 widget.onFilterChanged(widget.filter.copyWith(text: v)),
           ),
         ),
-        if (widget.showActions) ...[
-          const SizedBox(width: 8),
-          UiButton(
-            label: 'Actions',
-            onPressed: widget.actionsEnabled ? widget.onRunActions : null,
-          ),
-        ],
       ],
     );
   }

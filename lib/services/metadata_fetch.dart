@@ -13,14 +13,19 @@ typedef MetadataResultFn = void Function(String filePath, GameMetadata? meta);
 /// [cache] first, then queries [provider]; caches hits. UI-free and injectable
 /// so it's unit-testable. Per-file errors fall back to null (no match), never
 /// aborting the sweep.
+///
+/// [isCancelled] is polled before every file so a user cancel lands mid-folder,
+/// matching FetchEngine.
 Future<void> runMetadataFetch({
   required List<String> files,
   required int consoleId,
   required MetadataProvider provider,
   required MetadataCache cache,
   required MetadataResultFn onResult,
+  bool Function()? isCancelled,
 }) async {
   for (final path in files) {
+    if (isCancelled?.call() ?? false) return;
     final cleaned = cleanRomName(p.basename(path));
     GameMetadata? meta;
     try {

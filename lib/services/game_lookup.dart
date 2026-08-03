@@ -91,6 +91,13 @@ RomResult romFromEntry(GameEntry entry, {int? consoleId, String? consoleName}) {
     rom.earnedAchievements = entry.progress?.earnedAchievements;
     rom.earnedHardcore = entry.progress?.earnedHardcore;
     rom.lastPlayed = entry.progress?.lastPlayed;
+  } else if (entry.matched && entry.gameId != null) {
+    // Hash matched but the detail fetch failed, so nothing rich was stored.
+    // Still a supported game; showing it as unscanned would invite a pointless
+    // re-hash of a file we already identified.
+    rom.status = RomStatus.supported;
+    rom.gameTitle = 'Game #${entry.gameId}';
+    rom.consoleName ??= ConsoleMap.nameFor(consoleId) ?? consoleName;
   } else if (entry.metadata != null &&
       !kRemovedMetadataProviders.contains(entry.metadata!.providerId)) {
     // Display-only console enriched by a third-party provider.

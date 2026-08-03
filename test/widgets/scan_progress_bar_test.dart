@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rarm/services/scan_progress.dart';
 import 'package:rarm/widgets/scan_progress_bar.dart';
 
 void main() {

@@ -1,4 +1,4 @@
-import '../widgets/fetch_tasks_dialog.dart';
+import '../models/fetch_plan.dart';
 
 /// Maps a [FetchScope] to the folders a global run should process.
 /// ROM-level filtering (unfetched-only) is the Match sub-option's job, applied

@@ -3,15 +3,17 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/fetch_plan.dart';
 import '../models/rom_result.dart';
 import '../services/duplicate_finder.dart';
 import '../services/fetch_engine.dart';
 import '../services/fetch_pipeline.dart';
+import '../services/fetch_run.dart';
 import '../services/credentials.dart';
+import '../services/scan_run.dart';
 import '../services/game_lookup.dart';
 import '../services/log_service.dart';
 import '../services/metadata_cache.dart';
-import '../services/metadata_fetch.dart';
 import '../services/ra_cache.dart';
 import '../services/ra_service.dart';
 import '../services/scan_settings.dart';
@@ -34,6 +36,7 @@ import '../models/rom_row.dart';
 import '../models/rom_group.dart';
 import '../widgets/android_disc_hashing_dialog.dart';
 import '../widgets/folder_toolbar.dart';
+import '../widgets/fetch_fab.dart';
 import '../widgets/fetch_tasks_dialog.dart';
 import '../widgets/game_detail_dialog.dart';
 import '../widgets/row_display.dart';
@@ -102,9 +105,6 @@ class _FolderViewState extends State<FolderView> {
   // Sort override; a flag (not a FolderSort) so toggling off restores the
   // previous sort.
   bool _hot = false;
-  bool _fetching = false;
-  int _checked = 0;
-  int _toCheck = 0;
 
   List<String> get _availableGenres => availableGenres(_roms);
   List<String> get _availableTags => availableTags(_roms);
@@ -368,6 +368,11 @@ class _FolderViewState extends State<FolderView> {
 
   GameInfo? _romToGameInfo(RomResult r) {
     if (r.status != RomStatus.supported || r.gameId == null) return null;
+    // A row whose detail fetch failed reads as supported but carries only the
+    // "Game #id" placeholder. Persisting that as real GameInfo would bake the
+    // placeholder in: later scans would treat the entry as resolved and reuse
+    // it forever. Leave it null so a rescan still fetches the real thing.
+    if (r.achievementCount == null) return null;
     return GameInfo(
       gameId: r.gameId!,
       title: r.gameTitle ?? '',
@@ -389,16 +394,22 @@ class _FolderViewState extends State<FolderView> {
   }
 
   Future<void> _showTaskDialog() async {
+    // The home sweep may already own the bar; a second run would write the same
+    // SystemData from under it. The FAB disables on this too, but the dialog can
+    // outlive the press that opened it.
+    if (ScanRun.busy) return;
     final plan = await showFetchTasksDialog(context, global: false);
     if (plan == null || !mounted) return;
-    if (plan.refresh) await _refreshFiles();
-    if (plan.match) {
-      await _fetch(onlyUnfetched: !plan.matchReFetchAll);
+    if (plan.refresh) {
+      await _refreshFiles();
+      return;
     }
-    if (plan.progress && !plan.match) await _syncFolderProgress();
+    await _runFetch(plan);
   }
 
-  Future<void> _fetch({required bool onlyUnfetched}) async {
+  // One shared run across every folder this view covers. The runner owns
+  // persistence, so nothing here calls _persistAll afterwards.
+  Future<void> _runFetch(FetchPlan plan) async {
     final consoleId = await _resolveConsoleId();
     if (consoleId == null) {
       if (!mounted) return;
@@ -408,153 +419,105 @@ class _FolderViewState extends State<FolderView> {
       return;
     }
 
-    // Display-only systems have no RA hash. Fetch game metadata by name from
-    // the configured third-party provider instead.
-    if (!ConsoleMap.isRaSupported(consoleId)) {
-      await _fetchMetadata(consoleId, onlyUnfetched: onlyUnfetched);
-      return;
-    }
-
     if (!mounted) return;
-    final credentials = await requireCredentials(context);
-    if (credentials == null) return;
-    final (username, apiKey) = credentials;
-    final service = RaService(username: username, apiKey: apiKey);
-    final raCache = RaCache();
-    final byPath = {for (final r in _roms) r.filePath: r};
-    final targets = onlyUnfetched
-        ? _roms
-            .where((r) => r.status == RomStatus.notFetched)
-            .map((r) => r.filePath)
-            .toList()
-        : _roms.map((r) => r.filePath).toList();
-
-    final dolphinToolPath = await DiscDecompressor.resolveToolPath();
-
-    // Without a decompressor tool, compressed discs can't be hashed; mark and skip.
-    final unhashable = dolphinToolPath == null
-        ? targets.where((path) => DiscFormats.needsDecompression(path)).toList()
-        : <String>[];
-    if (unhashable.isNotEmpty) {
-      setState(() {
-        for (final path in unhashable) {
-          byPath[path]?.status = RomStatus.unsupportedFormat;
-        }
-      });
-      targets.removeWhere(unhashable.contains);
-      // On Android the tool is never present, so this is always a GC/Wii
-      // compressed dump; tell the user it can't be matched yet.
-      if (Platform.isAndroid && mounted) {
-        await showAndroidDiscHashingUnsupported(context);
-      }
+    RaService? service;
+    if (ConsoleMap.isRaSupported(consoleId)) {
+      final credentials = await requireCredentials(context);
+      if (credentials == null) return;
+      service = RaService(username: credentials.$1, apiKey: credentials.$2);
     }
+    if (!mounted) return;
 
-    setState(() {
-      _fetching = true;
-      _checked = 0;
-      _toCheck = targets.length;
-      for (final path in targets) {
-        byPath[path]?.status = RomStatus.checking;
-      }
-    });
+    final metadataProvider = await savedMetadataProvider();
 
-    final detailCache = <int, (GameInfo, UserProgress)>{};
-    // Saved entries by path so a rescan reuses rich info without network calls.
-    final savedByPath = <String, GameEntry>{
-      for (final data in _systemData.values)
-        for (final g in data.games)
-          if (g.gameInfo != null) g.filePath: g,
-    };
-
-    final engine = FetchEngine(
-      hash: romHasher(
-          consoleId: consoleId,
-          dolphinToolPath: dolphinToolPath,
-          logContext: 'FolderView/hash'),
-      lookupGameId: (md5) => raCache.resolveGameId(service, consoleId, md5),
-      onResult: (res) async {
-        final rom = byPath[res.filePath];
-        if (rom == null) return;
-        await applyFetchResultToRom(
-          res: res,
-          rom: rom,
-          consoleId: consoleId,
-          service: service,
-          raCache: raCache,
-          detailCache: detailCache,
-          saved: savedByPath[res.filePath],
-          logContext: 'FolderView/fetch',
-          mutate: (fn) {
-            if (mounted) setState(fn);
-          },
-        );
-        if (mounted) setState(() => _checked++);
-      },
-    );
-
-    LogService.info('FolderView/fetch',
-        'Fetching ${targets.length} ROMs in ${widget.title} '
-        '(onlyUnfetched=$onlyUnfetched)');
-    await engine.run(targets);
-
-    if (mounted) {
-      assignDuplicateGroups(_roms);
-      _applyDismissalsFromData(_roms);
-      setState(() => _fetching = false);
-    }
-    await _persistAll();
-  }
-
-  // Name-based metadata fetch for a display-only (non-RA) console.
-  Future<void> _fetchMetadata(int consoleId,
-      {required bool onlyUnfetched}) async {
-    final provider = await savedMetadataProvider();
-    if (provider == null || !provider.supports(consoleId)) {
+    // Nothing here is fetchable. Say why, rather than starting a run that does
+    // no work and ends without a word.
+    if (!ConsoleMap.isRaSupported(consoleId) &&
+        (metadataProvider == null || !metadataProvider.supports(consoleId))) {
       if (!mounted) return;
       final name = ConsoleMap.nameFor(consoleId) ?? 'This system';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(provider == null
+          content: Text(metadataProvider == null
               ? "$name isn't on RetroAchievements. Add a metadata source in "
                   'Settings to fetch game info.'
               : "$name isn't supported by the selected metadata source.")));
       return;
     }
+    // A progress-only pass over rows that were never matched has nothing to
+    // write; the sweep would burn an API call for no change.
+    if (plan.progress && !plan.match && _roms.every((r) => r.gameId == null)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No matched games to sync.')),
+      );
+      return;
+    }
 
+    final raCache = RaCache();
+    final detailCache = <int, (GameInfo, UserProgress)>{};
     final byPath = {for (final r in _roms) r.filePath: r};
-    // onlyUnfetched still re-queries no-match rows (they stay localOnly);
-    // a full re-fetch redoes everything.
-    final targets = _roms
-        .where((r) => !onlyUnfetched || r.status == RomStatus.localOnly)
-        .map((r) => r.filePath)
-        .toList();
-    if (targets.isEmpty) return;
 
-    setState(() {
-      _fetching = true;
-      _checked = 0;
-      _toCheck = targets.length;
-      for (final path in targets) {
-        byPath[path]?.status = RomStatus.checking;
+    final run = ScanRun();
+    run.start(label: widget.title);
+
+    try {
+      for (final sysPath in widget.folderPaths) {
+        if (!mounted || run.cancelled) break;
+        // Each folder is mapped on its own, so a combined view maps every row
+        // against its own system rather than the first folder's.
+        final folderConsoleId = widget.consoleId ??
+            await ScanSettings.consoleIdForFolder(sysPath);
+        final result = await runFolderFetch(
+          folderPath: sysPath,
+          plan: plan,
+          extensions: widget.enabledExtensions,
+          library: _lib,
+          run: run,
+          raCache: raCache,
+          detailCache: detailCache,
+          service: service,
+          consoleId: widget.consoleId,
+          metadataProvider: metadataProvider,
+          metadataCache: MetadataCache(),
+          logContext: 'FolderView/fetch',
+          onTargets: run.addTotal,
+          onEntry: (entry) {
+            if (!mounted) return;
+            final rom = byPath[entry.filePath];
+            if (rom == null) return;
+            final fresh = romFromEntry(entry, consoleId: folderConsoleId);
+            setState(() {
+              final i = _roms.indexOf(rom);
+              if (i != -1) _roms[i] = fresh;
+              byPath[entry.filePath] = fresh;
+            });
+          },
+        );
+        _systemData[sysPath] = result.saved;
+
+        // Compressed discs with no decompressor can never be hashed; say so on
+        // the row rather than leaving them looking unscanned.
+        for (final path in result.unhashable) {
+          byPath[path]?.status = RomStatus.unsupportedFormat;
+        }
+        // On Android the decompressor is never present, so this is always a
+        // compressed GC/Wii dump; tell the user it cannot be matched yet.
+        if (result.unhashable.isNotEmpty && Platform.isAndroid && mounted) {
+          await showAndroidDiscHashingUnsupported(context);
+        }
+        if (result.message != null && mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(result.message!)));
+        }
       }
-    });
-
-    await runMetadataFetch(
-      files: targets,
-      consoleId: consoleId,
-      provider: provider,
-      cache: MetadataCache(),
-      onResult: (path, meta) {
-        final rom = byPath[path];
-        if (rom == null || !mounted) return;
-        setState(() {
-          applyMetadata(rom, meta);
-          _checked++;
-        });
-      },
-    );
-
-    if (mounted) setState(() => _fetching = false);
-    await _persistAll();
+    } finally {
+      run.stop();
+      if (mounted) {
+        assignDuplicateGroups(_roms);
+        _applyDismissalsFromData(_roms);
+        setState(() {});
+      }
+    }
   }
 
   // Re-walks the folder; new files show as not-fetched, removed drop out.
@@ -583,59 +546,6 @@ class _FolderViewState extends State<FolderView> {
       _applyDismissalsFromData(_roms);
     });
     if (anyRemoved || added.isNotEmpty) await _persistAll();
-  }
-
-  Future<void> _syncFolderProgress() async {
-    final credentials = await requireCredentials(context);
-    if (credentials == null) return;
-
-    final targets = _roms.where((r) => r.gameId != null).toList();
-    if (targets.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No matched games to sync.')),
-      );
-      return;
-    }
-
-    final (username, apiKey) = credentials;
-    final service = RaService(username: username, apiKey: apiKey);
-
-    setState(() {
-      _fetching = true;
-      _checked = 0;
-      _toCheck = targets.length;
-    });
-
-    // One sweep instead of per-game GETs; guards skip the write on
-    // failure/empty so progress is never zeroed.
-    final sweep =
-        await fetchCompletionSweep(service, 'FolderView/syncProgress');
-    final byGameId = sweep.byGameId;
-    if (byGameId == null) {
-      if (mounted) {
-        setState(() => _fetching = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(sweep.userMessage!)),
-        );
-      }
-      return;
-    }
-
-    // Pure in-memory update, one rebuild for the whole batch.
-    for (final rom in targets) {
-      final prog = byGameId[rom.gameId!];
-      rom.earnedAchievements = prog?.numAwarded ?? 0;
-      rom.earnedHardcore = prog?.numAwardedHardcore ?? 0;
-      rom.lastPlayed = prog?.lastPlayed;
-    }
-    if (mounted) {
-      setState(() {
-        _checked = targets.length;
-        _fetching = false;
-      });
-    }
-    await _persistAll();
   }
 
   Future<void> _fetchSingleRom(RomResult rom) async {
@@ -876,14 +786,6 @@ class _FolderViewState extends State<FolderView> {
       appBar: AppBar(
         backgroundColor: ui.surface,
         title: Text(widget.title),
-        bottom: _fetching
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(4),
-                child: LinearProgressIndicator(
-                  value: _toCheck == 0 ? null : _checked / _toCheck,
-                ),
-              )
-            : null,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -904,9 +806,6 @@ class _FolderViewState extends State<FolderView> {
                   playlists: [
                     for (final pl in _playlists) (id: pl.id, name: pl.name)
                   ],
-                  showActions:
-                      widget.showActions && (_raSupported || _metadataFetchable),
-                  actionsEnabled: !_fetching,
                   onFilterChanged: (f) => setState(() => _filter = f),
                   onSortChanged: (s) async {
                     setState(() => _folderSort = s);
@@ -931,7 +830,6 @@ class _FolderViewState extends State<FolderView> {
                   onDuplicatesToggle: (on) => setState(
                       () => _filter = _filter.copyWith(onlyDuplicates: on)),
                   onHotToggle: (on) => setState(() => _hot = on),
-                  onRunActions: _showTaskDialog,
                 ),
                 Expanded(
                   child: RomListView(
@@ -972,6 +870,10 @@ class _FolderViewState extends State<FolderView> {
                 ),
               ],
             ),
+      floatingActionButton:
+          widget.showActions && (_raSupported || _metadataFetchable)
+              ? FetchFab(onPressed: _showTaskDialog)
+              : null,
     );
   }
 }
