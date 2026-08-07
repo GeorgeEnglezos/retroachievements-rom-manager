@@ -231,9 +231,11 @@ class _WelcomeStep extends StatelessWidget {
         Text('Welcome to Retroachievements Rom Manager', style: ui.display),
         const SizedBox(height: 16),
         Text(
-          'This app scans your ROM folder, works out which game each file is, '
-          'and matches it against RetroAchievements so you can see which of '
-          'your games have achievements and how far through them you are.',
+          'This app helps you clean up your ROM library. It scans your folder, '
+          'works out which game each file is, and matches it against '
+          'RetroAchievements so every keep-or-cut decision is backed by real '
+          'data: which games have achievements, how many, and how far through '
+          'them you are.',
           style: ui.body,
         ),
         const SizedBox(height: 12),

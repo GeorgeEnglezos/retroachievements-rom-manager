@@ -4,38 +4,19 @@
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Built with Flutter](https://img.shields.io/badge/built%20with-Flutter-02569B?logo=flutter)](https://flutter.dev)
 
-Point it at your ROM folders and instantly see which of your games are on
-[RetroAchievements](https://retroachievements.org/), how many achievements each
-has, and how far along you are, all in one place.
+## 🎯 Overview
 
-<!-- TODO: drop a hero screenshot here. Paste an image into this line on GitHub and it auto-uploads. -->
-<!-- <img width="2559" alt="Retroachievements Rom Manager - Library" src="..." /> -->
+RARM helps you manage and clean up your ROM library. It scans your local ROMs, identifies each game and matches it against the RetroAchievements database to retrieve all the available metadata for it. In a way it acts like a retroachievements desktop and mobile client that points to your local files. You can see which games have achievements, how popular they are, and what you have already played. RetroAchievements turns out to be the most useful resource for pruning a collection. Built with Flutter, it runs natively on Windows and Android. Linux, macOS and iOS builds exist but are untested. Testers are needed for these platforms. See [Platform Support](#-platform-support).
+
+<p align="center">
+  <img width="70%" alt="Retroachievements Rom Manager in action" src="docs/screenshots/v001/gifs/browse-a-system.gif" />
+</p>
 
 ---
 
-## 🎯 Overview
-
-RARM scans your local ROM library, fingerprints every game the same
-way RetroArch does, and matches it against the RetroAchievements database, so
-your collection and your achievement progress finally live in the same view.
-Built with Flutter, it runs natively on Windows, Linux, and Android. macOS and
-iOS builds exist but are untested; see [Platform Support](#-platform-support).
-
 ### What is RetroAchievements?
 
-[RetroAchievements](https://retroachievements.org/) adds achievements to retro
-games played through supported emulators. Each game is identified by a hash of
-its ROM, and the site tracks the achievements you've earned per game.
-
-### What does RARM add?
-
-- **Instant collection overview**: see which of *your* ROMs have achievements, at a glance
-- **Progress at a glance**: earned counts, points, and casual/hardcore status per game
-- **RA-compatible hashing**: the same scheme RetroArch uses, including compressed formats
-- **Library cleanup**: spot duplicates and misfiled ROMs across your whole collection
-- **"Play Next" picks**: ranked "what should I play next?" suggestions from your own progress
-- **Storage insight**: a treemap of exactly where your disk space is going
-- **Local-first & private**: your library and credentials never leave your device (only ROM hashes do)
+[RetroAchievements](https://retroachievements.org/) adds achievements to retro games played through supported emulators. Each game is identified by the hash of its file, and the site tracks the achievements you've earned per game.
 
 ---
 
@@ -43,16 +24,15 @@ its ROM, and the site tracks the achievements you've earned per game.
 
 ### Prerequisites
 
-- A free [RetroAchievements account](https://retroachievements.org/) and your
-  **web API key** (found under *Settings → Keys* on the RA website).
+- A free [RetroAchievements account](https://retroachievements.org/) and your **web API key** (found at [retroachievements.org/settings?tab=applications](https://retroachievements.org/settings?tab=applications)).
 - A local library of ROMs you legally own.
 
 ### Installation
 
 **Windows**: the easiest way to get started:
 
-Grab the installer from the [Releases](https://github.com/GeorgeEnglezos/retroachievements-rom-manager/releases)
-page and run it:
+Grab the installer from the [latest release](https://github.com/GeorgeEnglezos/retroachievements-rom-manager/releases/latest)
+and run it:
 
 ```
 rarm-setup-vX.X.X.exe
@@ -69,81 +49,65 @@ rarm-setup-vX.X.X.exe
 
 ### First Use
 
-1. Launch RARM
-2. Open **Settings** and enter your RA **username** and **API key**
-3. Pick the folder that holds your ROMs
-4. Hit **Scan**: the app hashes each ROM and matches it against RetroAchievements
-5. Browse your library, sorted by system, with achievement counts and progress
+On first launch RARM opens a short setup wizard:
 
-That's it. Your collection is now mapped to RetroAchievements.
+1. **Account**: enter your RetroAchievements **username** and **Web API key**, then hit **Verify** (**Get my API key** opens the right RA page)
+2. **ROM folder**: pick the folder that holds all your roms; fix any console it guessed wrong, and untick any folder you don't want scanned and displayed in the app
+3. **Scan**: start the first scan (or choose **Later** and scan from the home screen). The app hashes each ROM and matches it against RetroAchievements
+
+Then start cleaning: browse by system with RetroAchievements counts on every game, and open the Cull deck to keep or bin.
+
+That's it. Your collection is mapped to RetroAchievements and ready to prune.
 
 ---
 
 ## ✨ Key Features
 
-### 🔍 Scanning & Hashing
-
-- Recursive folder scanning across all your systems
-- RA-compatible hashing (matches RetroArch), including `.zip` and `.chd`
-- Compressed & disc formats handled via a bundled native plugin
-- Incremental rescans that skip what hasn't changed
-
-### 🏆 Achievement Tracking
-
-- Matches each ROM to its RA game and pulls achievement counts
-- Your earned progress, casual and hardcore, points, and last-played
-- Per-game detail view: box art, screenshots, badge grid, progress bar, and a link to the RA page
-
-### 🗂️ Library Organisation
-
-- Group folders by system, with combined-system views
-- Duplicate detection across your whole library
-- Wrong-folder detection for ROMs that look misfiled
-- Favorites and custom playlists
-
-### 🎮 Play Next
-
-- Ranked "what should I play next?" lists across your whole collection
-- Scores each game on your progress, hardcore status, achievement count, and community size
-- Surfaces near-mastery games and popular sets you haven't touched yet
-
-### 📊 Scan Health & Reports
-
-- A read-only dashboard that turns your scan into decision-oriented counts
-- Export the whole picture as CSV, JSON, or Markdown
-
-### 💾 Storage View
-
-- A treemap of disk usage by folder and system, so you can see where the space went
+- **🃏 Cull** - keep-or-bin deck, one game at a time, with RetroAchievements data on every card
+- **🧹 Filters & Cleanup** - filter by system, achievement status, duplicates, region, and bad dumps; flags duplicates and misfiled ROMs
+- **📤 Export** - export any system to Markdown, CSV, or PDF, plus a library health report
+- **💾 Storage View** - treemap of disk usage by folder and system
+- **🔍 Scanning & Hashing** - scans and identifies ROMs the way RetroArch does (zipped and disc-based included), then matches them against RetroAchievements
+- **🏆 Achievement Data** - per-game achievements and your progress (casual/hardcore, points, last-played)
+- **🎮 Extras** - RA-ranked "play next" picks, favorites, custom playlists, and launch ROMs into your emulator
 
 ---
-
-<!--
-Screenshots section, restored once real captures exist. To add them: paste the
-images into this file in GitHub's editor to upload them, replace each src, then
-move this block out of the comment.
 
 ## 🖼️ Screenshots
 
 <div align="center">
-   <img width="48%" alt="Library overview" src="URL" />
-   <img width="48%" alt="Game detail" src="URL" />
+  <img width="49%" alt="Home - your systems at a glance" src="docs/screenshots/v001/01-home.png" />
+  <img width="49%" alt="Library - box art, achievement counts, bad-dump flags" src="docs/screenshots/v001/07b-folder-grid.png" />
 </div>
 
 <div align="center">
-   <img width="48%" alt="Play Next recommendations" src="URL" />
-   <img width="48%" alt="Storage treemap" src="URL" />
+  <img width="49%" alt="Game detail - badges, stats, and your progress" src="docs/screenshots/v001/08-game-detail.png" />
+  <img width="49%" alt="Play Next - ranked from your own progress" src="docs/screenshots/v001/02-play-next.png" />
 </div>
--->
+
+<div align="center">
+  <img width="49%" alt="Storage - where your disk space went" src="docs/screenshots/v001/04-storage.png" />
+  <img width="49%" alt="Settings - account, library, and scan filters" src="docs/screenshots/v001/06-settings-general.png" />
+</div>
+
+### 🎬 In action
+
+<div align="center">
+  <img width="55%" alt="Culling the collection" src="docs/screenshots/v001/gifs/cull-swipe.gif" />
+  <br /><sub><b>Cull: keep or bin, one game at a time, with RetroAchievements data on every card</b></sub>
+  <br /><br />
+  <img width="55%" alt="First-run setup wizard" src="docs/screenshots/v001/gifs/setup-wizard.gif" />
+  <br /><sub><b>Guided first-run setup</b></sub>
+</div>
 
 ## 💻 Platform Support
 
 | Platform | Status | Notes |
 |----------|--------|-------|
 | Windows | ✅ Fully Supported | Windows 10/11 |
-| Linux | ✅ Fully Supported | AppImage & Flatpak |
+| Linux | ⚠️ Untested | AppImage & Flatpak |
+| Android | ⚠️ Beta | Builds run; Everything should work except Wii and GC hashing at this point |
 | macOS | ⚠️ Untested | Builds in CI but not verified on a device; the maintainer has no Apple hardware. Contributions welcome. |
-| Android | ⚠️ Beta | Builds run; folder-access flow still being verified on device |
 | iOS | ⚠️ Untested | Builds in CI but not verified on a device; the maintainer has no Apple hardware. Contributions welcome. |
 
 ---
@@ -156,22 +120,6 @@ and RA credentials all stay on your device.
 - Only the **MD5 hash** of a ROM is sent to RetroAchievements to look up its game
   ID; the ROM file itself never leaves your machine.
 - Your username and API key are used solely to fetch your own progress from the RA API.
-- No telemetry, no background sync, no phoning home. Requests are throttled to
-  respect RA's rate limits.
-
----
-
-## 🗺️ Roadmap
-
-Shipped so far: scanning & hashing (incl. GameCube/Wii discs), RA lookup &
-progress sync, per-game details, library organisation with duplicate &
-wrong-folder detection, bulk actions, incremental rescans, backup & restore,
-"Play Next" recommendations, a scan-health dashboard with CSV/JSON/Markdown
-export, an emulator "Play" button, storage view, global search, and a
-RetroAchievements-inspired theme.
-
-Coming next: reverse-gap detection, hash-fix suggestions, and improved mobile
-folder access.
 
 ---
 
@@ -205,10 +153,6 @@ RetroAchievements is a trademark of its respective owners; this is an unofficial
 community tool and is not affiliated with RetroAchievements.
 
 ---
-
-<div align="center">
-
-**Made with ❤️ for the RetroAchievements community**
 
 [⬆ Back to Top](#retroachievements-rom-manager-rarm)
 

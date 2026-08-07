@@ -1,5 +1,5 @@
 name: rarm
-description: "Scan your local ROM library and see which games have RetroAchievements, how many, and your progress."
+description: "Clean up your ROM library with RetroAchievements as your guide: scan, spot what to cut, and cull with achievement data behind every call."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: "none" # Remove this line if you wish to publish to pub.dev
