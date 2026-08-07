@@ -604,8 +604,6 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
       ('Rating', s?.rating),
       ('Set released', rom.setCreated != null ? _fmtDate(rom.setCreated!) : null),
       ('Set updated', rom.setUpdated != null ? _fmtDate(rom.setUpdated!) : null),
-      ('Game ID', rom.gameId?.toString()),
-      ('MD5', rom.md5Hash),
     ];
     return Column(
       children: [
