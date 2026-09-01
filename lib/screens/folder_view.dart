@@ -603,8 +603,7 @@ class _FolderViewState extends State<FolderView> {
 
     final dolphinToolPath = await DiscDecompressor.resolveToolPath();
 
-    if (DiscFormats.needsDecompression(rom.filePath) &&
-        dolphinToolPath == null) {
+    if (DiscFormats.needsDolphinTool(rom.filePath) && dolphinToolPath == null) {
       if (mounted) {
         setState(() => rom.status = RomStatus.unsupportedFormat);
         if (Platform.isAndroid) {

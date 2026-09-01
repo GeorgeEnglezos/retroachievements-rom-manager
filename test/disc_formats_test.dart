@@ -12,6 +12,18 @@ void main() {
       expect(DiscFormats.needsDecompression('game.ciso'), isTrue);
     });
 
+    test('CISO/WBFS/GCZ hash on-device; RVZ/WIA still need DolphinTool', () {
+      for (final ext in ['ciso', 'wbfs', 'gcz']) {
+        expect(DiscFormats.hasOnDeviceReader('game.$ext'), isTrue, reason: ext);
+        expect(DiscFormats.needsDolphinTool('game.$ext'), isFalse, reason: ext);
+      }
+      for (final ext in ['rvz', 'wia']) {
+        expect(DiscFormats.needsDolphinTool('game.$ext'), isTrue, reason: ext);
+        expect(DiscFormats.hasOnDeviceReader('game.$ext'), isFalse, reason: ext);
+      }
+      expect(DiscFormats.hasOnDeviceReader('game.iso'), isFalse);
+    });
+
     test('raw disc formats do not need decompression', () {
       expect(DiscFormats.needsDecompression('game.iso'), isFalse);
       expect(DiscFormats.needsDecompression('game.gcm'), isFalse);

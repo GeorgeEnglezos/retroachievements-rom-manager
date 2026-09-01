@@ -9,6 +9,7 @@ import 'package:raw_hash/raw_hash.dart';
 
 import 'disc_decompressor.dart';
 import 'disc_formats.dart';
+import 'disc_reader.dart';
 
 // Extensions that can live inside a zip and be hashed by rcheevos.
 const _romExtensions = {
@@ -46,7 +47,8 @@ class HashService {
       return (hash: null, log: const <String>[], unsupportedFormat: true);
     }
 
-    if (DiscFormats.needsDecompression(filePath) && dolphinToolPath == null) {
+    // RVZ/WIA still need DolphinTool; without it they can't be hashed.
+    if (DiscFormats.needsDolphinTool(filePath) && dolphinToolPath == null) {
       return (hash: null, log: const <String>[], unsupportedFormat: true);
     }
 
@@ -60,7 +62,22 @@ class HashService {
     try {
       RawHash.setLogCallback(cb.nativeFunction);
 
-      if (DiscFormats.needsDecompression(filePath)) {
+      // CISO/WBFS/GCZ: decompress on the fly in Dart and hash through a virtual
+      // filereader, so these work on Android with no DolphinTool.
+      if (DiscFormats.hasOnDeviceReader(filePath)) {
+        final reader = openDiscReader(filePath);
+        if (reader == null) {
+          return (hash: null, log: log, unsupportedFormat: true);
+        }
+        try {
+          final hash = RawHash.hashFileVirtual(filePath, reader, consoleId);
+          return (hash: hash, log: log, unsupportedFormat: false);
+        } finally {
+          reader.close();
+        }
+      }
+
+      if (DiscFormats.needsDolphinTool(filePath)) {
         final result =
             await DiscDecompressor.decompressToIso(dolphinToolPath!, filePath);
         if (result.isoPath == null) {

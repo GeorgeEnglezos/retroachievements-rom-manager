@@ -210,12 +210,12 @@ Future<FolderRunResult> runFolderFetch({
           .map((f) => f.path)
           .toList();
 
-  // Without a decompressor, compressed discs cannot be hashed at all. Skip
-  // them up front so they do not burn a slot and report them to the caller.
+  // CISO/WBFS/GCZ hash on-device now; only RVZ/WIA still need DolphinTool.
+  // Without it, skip those up front so they don't burn a slot, and report them.
   final dolphinToolPath =
       hash == null ? await DiscDecompressor.resolveToolPath() : null;
   final unhashable = (hash == null && dolphinToolPath == null)
-      ? targets.where(DiscFormats.needsDecompression).toList()
+      ? targets.where(DiscFormats.needsDolphinTool).toList()
       : const <String>[];
   targets.removeWhere(unhashable.contains);
   onTargets?.call(targets.length);
