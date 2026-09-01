@@ -18,6 +18,9 @@ class FolderToolbar extends StatefulWidget {
   final FolderSort sort;
   final bool sortAscending;
   final bool gridView;
+  // Off when play mode pins the layout, so the toggle isn't offered for a
+  // choice it can't change.
+  final bool showViewToggle;
   final List<String> availableGenres;
   final List<String> availableTags;
   final bool showProgress;
@@ -40,6 +43,7 @@ class FolderToolbar extends StatefulWidget {
     required this.sort,
     required this.sortAscending,
     required this.gridView,
+    this.showViewToggle = true,
     required this.availableGenres,
     this.availableTags = const [],
     required this.showProgress,
@@ -190,16 +194,17 @@ class _FolderToolbarState extends State<FolderToolbar> {
             if (v != widget.sortAscending) widget.onDirectionToggle();
           },
         ),
-        UiSegmented<bool>(
-          value: widget.gridView,
-          segments: const [
-            (value: false, label: '', icon: Icons.view_list),
-            (value: true, label: '', icon: Icons.grid_view),
-          ],
-          onChanged: (v) {
-            if (v != widget.gridView) widget.onViewToggle();
-          },
-        ),
+        if (widget.showViewToggle)
+          UiSegmented<bool>(
+            value: widget.gridView,
+            segments: const [
+              (value: false, label: '', icon: Icons.view_list),
+              (value: true, label: '', icon: Icons.grid_view),
+            ],
+            onChanged: (v) {
+              if (v != widget.gridView) widget.onViewToggle();
+            },
+          ),
         if (_cleanupActive) ..._buildCleanupControls(ui),
         if (widget.anyDuplicates)
           UiChip(

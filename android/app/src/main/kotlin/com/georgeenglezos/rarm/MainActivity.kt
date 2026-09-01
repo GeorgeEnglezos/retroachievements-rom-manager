@@ -35,17 +35,6 @@ class MainActivity : FlutterActivity() {
     // takePendingShortcut on startup/resume. null when nothing is pending.
     private var pendingShortcut: Map<String, Any?>? = null
 
-    // Package names of emulators we know about, surfaced first in the app picker.
-    private val knownEmulators = setOf(
-        "com.retroarch", "com.retroarch.aarch64",
-        "org.ppsspp.ppsspp", "org.ppsspp.ppssppgold",
-        "com.github.stenzek.duckstation",
-        "org.dolphinemu.dolphinemu",
-        "xyz.aethersx2.android", "xyz.aethersx2.tturnip", "xyz.aethersx2.cturnip",
-        "com.armsx2", "com.nanodata.armsx2",
-        "me.magnum.melonds", "me.magnum.melonds.dev", "me.magnum.melondualds",
-    )
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         stashShortcut(intent)
@@ -97,25 +86,22 @@ class MainActivity : FlutterActivity() {
             }
     }
 
-    // All launchable apps as [{package, label, known}], known emulators first then
-    // alphabetical. Deduped by package (an app can expose several launchers).
+    // All launchable apps as [{package, label}], deduped by package (an app can
+    // expose several launchers). Which of them are emulators, and the ordering
+    // that follows from it, is decided in Dart against EmulatorCatalog: a new
+    // emulator package should never need a native change.
     private fun installedApps(): List<Map<String, Any>> {
         val pm = packageManager
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val seen = HashSet<String>()
-        val apps = pm.queryIntentActivities(intent, 0).mapNotNull { ri ->
+        return pm.queryIntentActivities(intent, 0).mapNotNull { ri ->
             val pkg = ri.activityInfo.packageName
             if (pkg == packageName || !seen.add(pkg)) return@mapNotNull null
             mapOf(
                 "package" to pkg,
                 "label" to ri.loadLabel(pm).toString(),
-                "known" to knownEmulators.contains(pkg),
             )
         }
-        return apps.sortedWith(
-            compareByDescending<Map<String, Any>> { it["known"] as Boolean }
-                .thenBy { (it["label"] as String).lowercase() }
-        )
     }
 
     // Builds and fires a launch intent from a per-emulator spec assembled in Dart

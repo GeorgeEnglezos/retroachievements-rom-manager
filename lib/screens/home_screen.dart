@@ -6,12 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../theme/ui_tokens.dart';
 import '../models/fetch_plan.dart';
 import '../models/folder_stats.dart';
 import '../services/credentials.dart';
 import '../services/folder_grouping.dart';
 import '../services/fetch_run.dart';
 import '../services/fetch_scope.dart';
+import '../services/app_mode.dart';
 import '../services/scan_run.dart';
 import '../widgets/fetch_fab.dart';
 import '../widgets/fetch_tasks_dialog.dart';
@@ -88,9 +90,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Folders whose directory is gone keep their card until the next re-listing,
   // showing stats for something that isn't there; the library already knows
-  // which those are.
-  List<Directory> get _presentSubfolders =>
-      [for (final d in _subfolders) if (!_lib.isSystemMissing(d.path)) d];
+  // which those are. A folder we have counted and found empty is hidden too:
+  // no stats yet (null) means "not listed", not "empty", so it stays. Scans
+  // still walk `_subfolders`, so a folder that gains ROMs comes back.
+  List<Directory> get _presentSubfolders => [
+        for (final d in _subfolders)
+          if (!_lib.isSystemMissing(d.path) && _stats[d.path]?.totalGames != 0)
+            d
+      ];
 
   List<Directory> get _sortedSubfolders {
     final list = List<Directory>.from(_presentSubfolders);
@@ -946,7 +953,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      floatingActionButton: _rootPath == null ? null : _buildSyncControls(),
+      // Scanning and fetching are library maintenance; gaming mode browses
+      // what is already there.
+      floatingActionButton:
+          _rootPath == null || gamingMode ? null : _buildSyncControls(),
     );
   }
 
@@ -963,7 +973,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // of the list, so the systems stay in reach.
       if (narrow) ..._shortcutChips(),
       // Scan health is a desktop-sized report; phones don't get the button.
-      if (!narrow)
+      if (!narrow && !gamingMode)
         IconButton(
           style: style,
           icon: const Icon(Icons.health_and_safety_outlined),
@@ -1168,13 +1178,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildSubfolderGrid() {
     if (_rootPath == null) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.folder_open, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text('Pick a folder to browse subfolders.'),
+            Icon(Icons.folder_open, size: 64, color: context.ui.muted),
+            const SizedBox(height: 16),
+            const Text('Pick a folder to browse subfolders.'),
           ],
         ),
       );

@@ -6,6 +6,7 @@ import '../services/console_map.dart';
 import '../theme/ui_tokens.dart';
 import '../theme/ui_theme.dart';
 import 'ui/console_card.dart';
+import 'ui/ui_badge.dart';
 import 'ui/ui_card.dart';
 import 'ui/ui_progress_bar.dart';
 
@@ -141,19 +142,9 @@ class _FolderCardState extends State<FolderCard>
   }
 
   // Marks systems RA can't validate (Switch, PS3…, or an unidentified folder).
-  Widget _unsupportedChip(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade300,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(
-          'No RetroAchievements',
-          style: Theme.of(context)
-              .textTheme
-              .labelSmall
-              ?.copyWith(color: Colors.grey.shade800),
-        ),
+  Widget _unsupportedChip(BuildContext context) => UiBadge(
+        label: 'No RetroAchievements',
+        color: context.ui.muted,
       );
 
   Widget _back(BuildContext context) {
@@ -322,7 +313,7 @@ class _Achievements extends StatelessWidget {
             ? 'Not scanned yet'
             : 'No RetroAchievements',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Colors.grey,
+              color: context.ui.muted,
               fontStyle: FontStyle.italic,
             ),
       );

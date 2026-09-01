@@ -2,9 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../services/android_emulators.dart';
+import '../services/app_mode.dart';
 import '../services/library.dart';
 import '../services/log_service.dart';
+import '../services/play_view.dart';
 import '../screens/cull_screen.dart';
+import '../screens/dashboard_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/logs_screen.dart';
 import '../screens/recommendations_screen.dart';
@@ -101,7 +104,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   static const _dests = <(String, IconData)>[
-    ('HOME', Icons.grid_view),
+    ('HOME', Icons.home_rounded),
+    ('LIBRARY', Icons.grid_view),
     ('PLAY NEXT', Icons.recommend_outlined),
     ('CULL', Icons.style_outlined),
     ('STORAGE', Icons.pie_chart),
@@ -109,7 +113,21 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     ('SETTINGS', Icons.settings),
   ];
 
-  List<Widget> get _bodies => const [
+  // Which _dests the two modes offer. Gaming keeps browsing and playing;
+  // culling, storage and logs are maintenance. _bodies stays whole in both, so
+  // the IndexedStack keeps every screen's state across a mode flip.
+  static const _cleaningNav = [0, 1, 2, 3, 4, 5, 6];
+  static const _gamingNav = [0, 1, 2, 6];
+
+  // HOME is the cover-art dashboard; the folder/system grid and scanning moved
+  // to its own LIBRARY tab. Both stay mounted in the IndexedStack, so the
+  // library screen's boot refresh and setup-wizard first-scan handoff still run.
+  // Deliberately not const: a const child is canonicalized to the same
+  // instance every build, and Element.updateChild skips a subtree whose widget
+  // is identical. That silently swallowed every mode/play-view change, since
+  // the IndexedStack keeps these mounted rather than rebuilding them on nav.
+  List<Widget> get _bodies => [
+        DashboardScreen(onOpenLibrary: () => _select(1)),
         HomeScreen(),
         RecommendationsScreen(),
         CullScreen(),
@@ -127,8 +145,27 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   @override
-  Widget build(BuildContext context) {
+  // Both listenables rebuild the whole shell: the screens below live in an
+  // IndexedStack and are never popped, so a Settings change would otherwise not
+  // reach the listing they're about.
+  Widget build(BuildContext context) => ValueListenableBuilder<AppMode>(
+        valueListenable: appModeListenable,
+        builder: (context, mode, _) => ValueListenableBuilder<PlayView>(
+          valueListenable: playViewListenable,
+          builder: (context, _, _) => _buildShell(context, mode),
+        ),
+      );
+
+  Widget _buildShell(BuildContext context, AppMode mode) {
     final ui = context.ui;
+    final nav = mode == AppMode.gaming ? _gamingNav : _cleaningNav;
+    // Switching to gaming while sitting on a maintenance tab would otherwise
+    // strand _index on a destination the nav no longer draws. Derive the shown
+    // one instead of writing state during build; _index survives, so flipping
+    // back lands you where you were.
+    final active = nav.contains(_index) ? _index : nav.first;
+    final dests = [for (final i in nav) _dests[i]];
+    final pos = nav.indexOf(active);
     // Deliberately MediaQuery, not a LayoutBuilder: the shell's body is the
     // whole window, so the two widths agree, but a LayoutBuilder would build
     // every screen inside its layout callback. Anything that then landed a
@@ -136,7 +173,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // route) rebuilt in the wrong build scope and tore a subtree down while its
     // controllers were still attached.
     final wide = MediaQuery.sizeOf(context).width >= 900;
-    final stack = IndexedStack(index: _index, children: _bodies);
+    final stack = IndexedStack(index: active, children: _bodies);
     final update = _update;
     final banner = update == null
         ? null
@@ -147,9 +184,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           ? Row(
               children: [
                 _Sidebar(
-                    dests: _dests,
-                    index: _index,
-                    onSelect: _select,
+                    dests: dests,
+                    index: pos,
+                    onSelect: (p) => _select(nav[p]),
                     version: _version),
                 // Banner spans the body only, so the sidebar stays unbroken.
                 Expanded(
@@ -165,10 +202,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           // Mobile: the bottom nav is icon-only, so name the current tab up top.
           : Column(
               children: [
-                _TopTitle(label: _dests[_index].$1),
+                _TopTitle(label: dests[pos].$1),
                 ?banner,
                 Expanded(child: stack),
-                _BottomNav(dests: _dests, index: _index, onSelect: _select),
+                _BottomNav(
+                    dests: dests,
+                    index: pos,
+                    onSelect: (p) => _select(nav[p])),
               ],
             ),
     );
@@ -274,18 +314,32 @@ class _NavTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    final fg = selected ? ui.navSelectedFg : ui.text;
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        color: selected ? ui.navSelectedBg : Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: fg),
-            const SizedBox(width: 10),
-            Text(label, style: ui.labelCaps.copyWith(color: fg)),
-          ],
+    final fg = selected ? ui.navSelectedFg : ui.muted;
+    // Rounded pill inset from the rail edge, as the reference sidebar does.
+    // The visible Text names the destination; only the active state needs
+    // carrying, since it is otherwise conveyed by the fill alone.
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: ui.roundMd,
+          child: Container(
+            decoration: BoxDecoration(
+              color: selected ? ui.navSelectedBg : Colors.transparent,
+              borderRadius: ui.roundMd,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Icon(icon, size: 18, color: fg),
+                const SizedBox(width: 10),
+                Text(label, style: ui.labelCaps.copyWith(color: fg)),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -315,15 +369,29 @@ class _BottomNav extends StatelessWidget {
           children: [
             for (int i = 0; i < dests.length; i++)
               Expanded(
-                child: InkWell(
-                  onTap: () => onSelect(i),
-                  child: Container(
-                    color: i == index ? ui.navSelectedBg : Colors.transparent,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    child: Icon(
-                      dests[i].$2,
-                      color: i == index ? ui.navSelectedFg : ui.text,
-                      size: 22,
+                // The bar is icon-only, so the destination name exists nowhere
+                // a screen reader can reach it. Carry it in the semantics.
+                child: Semantics(
+                  container: true,
+                  button: true,
+                  selected: i == index,
+                  label: dests[i].$1,
+                  child: InkWell(
+                    onTap: () => onSelect(i),
+                    borderRadius: ui.roundMd,
+                    child: Container(
+                      margin:
+                          const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: i == index ? ui.navSelectedBg : Colors.transparent,
+                        borderRadius: ui.roundMd,
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Icon(
+                        dests[i].$2,
+                        color: i == index ? ui.navSelectedFg : ui.muted,
+                        size: 22,
+                      ),
                     ),
                   ),
                 ),

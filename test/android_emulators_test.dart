@@ -1,7 +1,48 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rarm/services/android_emulators.dart';
 
 void main() {
+  group('installedApps', () {
+    const channel = MethodChannel('rarm/emulators');
+
+    // Stands in for the native side, which returns package + label only.
+    void mockApps(List<Map<String, String>> apps) {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async => apps);
+    }
+
+    setUp(() => TestWidgetsFlutterBinding.ensureInitialized());
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+
+    test('flags emulators from the catalog and lists them first', () async {
+      mockApps([
+        {'package': 'com.whatsapp', 'label': 'WhatsApp'},
+        {'package': 'com.armsx3', 'label': 'ArmSX3'}, // pattern match
+        {'package': 'com.brave.browser', 'label': 'Brave'},
+        {'package': 'com.retroarch', 'label': 'RetroArch'}, // exact match
+      ]);
+
+      final apps = await AndroidEmulators.installedApps();
+
+      expect(apps.map((a) => a.package),
+          ['com.armsx3', 'com.retroarch', 'com.brave.browser', 'com.whatsapp']);
+      expect(apps.take(2).every((a) => a.known), isTrue);
+      expect(apps.skip(2).any((a) => a.known), isFalse);
+    });
+
+    test('a channel failure yields an empty list, not a throw', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel,
+              (call) async => throw PlatformException(code: 'boom'));
+
+      expect(await AndroidEmulators.installedApps(), isEmpty);
+    });
+  });
+
   group('buildLaunchSpec', () {
     test('melonDS standalone uses LAUNCH_ROM action + uri extra', () {
       final spec = AndroidEmulators.buildLaunchSpec(
@@ -47,6 +88,39 @@ void main() {
       expect(spec['data'], '{file.uri}');
       // Not AetherSX2's component/bootPath.
       expect(spec.containsKey('extras'), isFalse);
+    });
+
+    test('ArmSX3 reuses ArmSX2 classes on its own package', () {
+      // Verified on-device: com.armsx3 ships com.armsx2.Main with the same
+      // VIEW/content filter, so only the package differs.
+      final spec = AndroidEmulators.buildLaunchSpec(
+          'com.armsx3', 'pcsx2', 21, '/roms/game.iso');
+      expect(spec['componentPkg'], 'com.armsx3');
+      expect(spec['componentClass'], 'com.armsx2.Main');
+      expect(spec['action'], 'android.intent.action.VIEW');
+      expect(spec['data'], '{file.uri}');
+    });
+
+    test('Citra family boots EmulationActivity with a typed content URI', () {
+      // Verified on-device against Lime3DS: its VIEW filter accepts scheme
+      // content with type application/octet-stream, which is what {file.uri} is.
+      final spec = AndroidEmulators.buildLaunchSpec(
+          'io.github.lime3ds.android', 'citra', 62, '/roms/game.3ds');
+      expect(spec['componentPkg'], 'io.github.lime3ds.android');
+      expect(spec['componentClass'],
+          'org.citra.citra_emu.activities.EmulationActivity');
+      expect(spec['data'], '{file.uri}');
+      expect(spec['mimeType'], 'application/octet-stream');
+    });
+
+    test('Flycast names its activity instead of relying on setPackage', () {
+      final spec = AndroidEmulators.buildLaunchSpec(
+          'com.flycast.emulator', 'flycast', 40, '/roms/game.chd');
+      // Its manifest filter is scheme "file" only, so a setPackage VIEW intent
+      // carrying a content URI would not resolve.
+      expect(spec['componentClass'], 'com.flycast.emulator.MainActivity');
+      expect(spec['data'], '{file.uri}');
+      expect(spec.containsKey('setPackage'), isFalse);
     });
 
     test('Dolphin auto-boots via the intent data content URI', () {

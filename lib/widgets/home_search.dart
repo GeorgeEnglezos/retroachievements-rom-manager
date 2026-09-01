@@ -120,7 +120,6 @@ class _HomeSearchState extends State<HomeSearch> {
         hintText: 'Search games…',
         prefixIcon: const Icon(Icons.search),
         isDense: true,
-        border: const OutlineInputBorder(),
         suffixIcon: _searchQuery.isEmpty
             ? null
             : IconButton(
@@ -139,7 +138,6 @@ class _HomeSearchState extends State<HomeSearch> {
         hintText: 'Exclude results containing… (Enter to add)',
         prefixIcon: Icon(Icons.search_off),
         isDense: true,
-        border: OutlineInputBorder(),
       ),
       onSubmitted: _addExcludeTerm,
     );
@@ -398,6 +396,9 @@ class _HomeSearchState extends State<HomeSearch> {
       setState(() {
         applyGameInfo(hit.rom, info);
         hit.rom.earnedAchievements = progress.earnedAchievements;
+        hit.rom.earnedHardcore = progress.earnedHardcore;
+        hit.rom.highestAward = progress.highestAward;
+        hit.rom.highestAwardDate = progress.highestAwardDate;
         hit.rom.lastPlayed = progress.lastPlayed;
       });
       messenger.showSnackBar(const SnackBar(content: Text('Progress synced')));

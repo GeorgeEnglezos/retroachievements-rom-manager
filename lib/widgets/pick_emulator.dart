@@ -45,3 +45,18 @@ Future<Emulator?> pickNewEmulator(BuildContext context,
     kindId: kindId,
   );
 }
+
+/// Desktop: browses for the folder to search for emulators. Null on cancel, or
+/// when the picker fails (snackbar shown).
+Future<String?> pickEmulatorFolder(BuildContext context) async {
+  try {
+    return await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Select the folder your emulators live in');
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't open folder picker")));
+    }
+    return null;
+  }
+}

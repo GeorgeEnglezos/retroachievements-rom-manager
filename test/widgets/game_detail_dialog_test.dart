@@ -17,6 +17,18 @@ RomResult _disc(String name) =>
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  group('beatTypeLabel', () {
+    test('only the beaten-defining RA types are labelled', () {
+      // These exact strings are RA's `Type` values; the highlight keys off them.
+      expect(beatTypeLabel('win_condition'), 'Win condition');
+      expect(beatTypeLabel('progression'), 'Progression');
+      // Standard, missable, and legacy-null achievements get no marker.
+      expect(beatTypeLabel('missable'), isNull);
+      expect(beatTypeLabel(null), isNull);
+      expect(beatTypeLabel(''), isNull);
+    });
+  });
+
   testWidgets('multi-disc dialog switches the selected disc', (tester) async {
     final discs = [_disc('FF7 (Disc 1).chd'), _disc('FF7 (Disc 2).chd')];
     await tester.pumpWidget(MaterialApp(
@@ -134,5 +146,47 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: GameDetailDialog(rom: rom)));
     await tester.pump();
     expect(find.text('Unverified name match'), findsOneWidget);
+  });
+
+  testWidgets('wide window splits the dialog into two panels', (tester) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final rom = RomResult(filePath: 'psx/ff7.chd', fileName: 'ff7.chd')
+      ..status = RomStatus.supported
+      ..gameId = 123
+      ..gameTitle = 'Final Fantasy VII';
+    await tester.pumpWidget(MaterialApp(home: GameDetailDialog(rom: rom)));
+    await tester.pump();
+
+    expect(find.byKey(const Key('gameDetailPanel')), findsOneWidget);
+    expect(find.byKey(const Key('gameAchievementsPanel')), findsOneWidget);
+  });
+
+  testWidgets('narrow window keeps the dialog in one column', (tester) async {
+    final rom = RomResult(filePath: 'psx/ff7.chd', fileName: 'ff7.chd')
+      ..status = RomStatus.supported
+      ..gameId = 123
+      ..gameTitle = 'Final Fantasy VII';
+    await tester.pumpWidget(MaterialApp(home: GameDetailDialog(rom: rom)));
+    await tester.pump();
+
+    expect(find.byKey(const Key('gameAchievementsPanel')), findsNothing);
+  });
+
+  testWidgets('wide window keeps one column when there are no achievements',
+      (tester) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final rom = RomResult(filePath: 'ps3/racer.iso', fileName: 'racer.iso')
+      ..status = RomStatus.metadataOnly
+      ..gameTitle = 'Some Racer';
+    await tester.pumpWidget(MaterialApp(home: GameDetailDialog(rom: rom)));
+    await tester.pump();
+
+    expect(find.byKey(const Key('gameAchievementsPanel')), findsNothing);
   });
 }

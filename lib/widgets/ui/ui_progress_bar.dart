@@ -1,59 +1,52 @@
 import 'package:flutter/material.dart';
 import '../../theme/ui_tokens.dart';
 
-/// Retro progress bar: ink-bordered trough, red fill with 45-degree scanline
-/// texture. [value] is 0..1.
+/// Pill progress bar: ink trough, flat accent fill that animates in from the
+/// left. [value] is 0..1; [color] defaults to the palette accent, [trough] to
+/// the palette trough (override both when the bar sits on artwork/scrim, where
+/// palette inks would be the wrong contrast).
 class UiProgressBar extends StatelessWidget {
   final double value;
   final double height;
+  final Color? color;
+  final Color? trough;
 
-  const UiProgressBar({super.key, required this.value, this.height = 14});
+  const UiProgressBar({
+    super.key,
+    required this.value,
+    this.height = 8,
+    this.color,
+    this.trough,
+  });
 
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
     final clamped = value.clamp(0.0, 1.0);
-    return Container(
-      height: height,
-      decoration: BoxDecoration(
-        color: ui.trough,
-        border: Border.all(color: ui.border, width: ui.borderWidth),
-      ),
-      child: LayoutBuilder(
-        builder: (context, c) => Align(
+    return ClipRRect(
+      borderRadius: UiTokens.pill,
+      child: Container(
+        height: height,
+        color: trough ?? ui.trough,
+        child: Align(
           alignment: Alignment.centerLeft,
-          child: SizedBox(
-            width: c.maxWidth * clamped,
-            child: CustomPaint(
-              painter: _ScanlinePainter(fill: ui.accent, line: ui.background),
-              child: const SizedBox.expand(),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: clamped),
+            duration: const Duration(milliseconds: 550),
+            curve: Curves.easeOutBack,
+            builder: (context, t, _) => FractionallySizedBox(
+              widthFactor: t.clamp(0.0, 1.0),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: color ?? ui.accent,
+                  borderRadius: UiTokens.pill,
+                ),
+                child: const SizedBox.expand(),
+              ),
             ),
           ),
         ),
       ),
     );
   }
-}
-
-class _ScanlinePainter extends CustomPainter {
-  final Color fill;
-  final Color line;
-  _ScanlinePainter({required this.fill, required this.line});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = fill);
-    final stroke = Paint()
-      ..color = line.withValues(alpha: 0.25)
-      ..strokeWidth = 1.5;
-    const gap = 6.0;
-    for (double x = -size.height; x < size.width; x += gap) {
-      canvas.drawLine(
-          Offset(x, size.height), Offset(x + size.height, 0), stroke);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ScanlinePainter old) =>
-      old.fill != fill || old.line != line;
 }

@@ -251,10 +251,10 @@ class _StorageScreenState extends State<StorageScreen> {
   bool _isFile(String? path) =>
       path != null && FileSystemEntity.isFileSync(path);
 
-  // Left-gutter icon: console logo for a root system folder, the matched game's
-  // RA icon for a file. Null (blank gutter) for intermediate folders and
-  // unmatched files.
-  Widget? _leadingFor(TreemapItem it,
+  // The row's thumbnail: console logo for a root system folder, the matched
+  // game's RA icon for a file, and a plain glyph for everything else, so every
+  // row keeps the same slot filled and the titles stay on one line.
+  Widget _leadingFor(TreemapItem it,
       {required bool isRoot, required bool isFile}) {
     if (isRoot && it.path != null) return _ConsoleLogo(_consoleIds[it.path]);
     if (isFile) {
@@ -264,14 +264,13 @@ class _StorageScreenState extends State<StorageScreen> {
           rom.imageIcon != null) {
         return RaImage(
           url: raImageUrl(rom.imageIcon!),
-          width: 64,
-          height: 64,
           fit: BoxFit.cover,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: context.ui.roundMd,
         );
       }
+      return _Glyph(Icons.videogame_asset_outlined);
     }
-    return null;
+    return _Glyph(Icons.folder_outlined);
   }
 
   @override
@@ -290,7 +289,7 @@ class _StorageScreenState extends State<StorageScreen> {
     final isRoot = _stack.length == 1;
     final denom = level.total == 0 ? 1 : level.total;
     final rows = <RomRow>[];
-    final leadings = <Widget?>[];
+    final leadings = <Widget>[];
     for (final it in level.items) {
       final isFile = _isFile(it.path);
       rows.add(RomRow.fromTreemap(it,
@@ -340,10 +339,10 @@ class _StorageScreenState extends State<StorageScreen> {
                   }),
                 ),
                 if (_drilling)
-                  const Positioned.fill(
+                  Positioned.fill(
                     child: ColoredBox(
-                      color: Color(0x66000000),
-                      child: Center(child: CircularProgressIndicator()),
+                      color: context.ui.background.withValues(alpha: 0.7),
+                      child: const Center(child: CircularProgressIndicator()),
                     ),
                   ),
               ],
@@ -365,14 +364,35 @@ class _ConsoleLogo extends StatelessWidget {
   Widget build(BuildContext context) {
     final path = ConsoleImage.assetOrGeneric(consoleId);
     final tint = ConsoleImage.tintedLogos.contains(consoleId);
-    return Image.asset(
-      path,
-      width: 64,
-      height: 64,
-      fit: BoxFit.contain,
-      color: tint ? context.ui.text : null,
-      colorBlendMode: tint ? BlendMode.srcIn : null,
-      errorBuilder: (_, _, _) => const Icon(Icons.folder, size: 48),
+    return Padding(
+      padding: const EdgeInsets.all(4),
+      child: Image.asset(
+        path,
+        fit: BoxFit.contain,
+        color: tint ? context.ui.text : null,
+        colorBlendMode: tint ? BlendMode.srcIn : null,
+        errorBuilder: (_, _, _) => const Icon(Icons.folder, size: 40),
+      ),
+    );
+  }
+}
+
+/// Stand-in thumbnail for a row with no picture of its own: a glyph on the
+/// raised surface, so the slot reads as filled rather than missing.
+class _Glyph extends StatelessWidget {
+  final IconData icon;
+  const _Glyph(this.icon);
+
+  @override
+  Widget build(BuildContext context) {
+    final ui = context.ui;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: ui.surfaceAlt,
+        borderRadius: ui.roundMd,
+        border: Border.all(color: ui.border, width: ui.borderWidth),
+      ),
+      child: Icon(icon, size: 26, color: ui.muted),
     );
   }
 }

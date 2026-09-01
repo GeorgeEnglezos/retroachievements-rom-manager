@@ -3,8 +3,9 @@ import '../../theme/ui_tokens.dart';
 
 enum UiButtonVariant { primary, secondary }
 
-/// GB DMG button: ink border, plus the press translate + drop shadow when the
-/// palette sets a non-zero [UiTokens.controlShadow].
+/// Rounded button: accent fill (primary) or surface fill (secondary) behind a
+/// hairline border, plus the press translate + drop shadow when the palette
+/// sets a non-zero [UiTokens.controlShadow].
 class UiButton extends StatefulWidget {
   final String label;
   final IconData? icon;
@@ -58,6 +59,7 @@ class _ButtonState extends State<UiButton> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: bg,
+          borderRadius: ui.roundMd,
           border: Border.all(color: ui.border, width: ui.borderWidth),
           boxShadow: pressed ? const [] : ui.shadow(ui.controlShadow),
         ),

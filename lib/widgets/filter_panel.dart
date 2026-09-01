@@ -41,9 +41,10 @@ class FilterPanel extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: ui.surface,
+        borderRadius: ui.roundLg,
         border: Border.all(color: ui.border, width: ui.borderWidth),
       ),
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

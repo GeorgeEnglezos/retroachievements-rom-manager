@@ -65,7 +65,7 @@ void main() {
     expect(find.byIcon(Icons.delete_outline), findsOneWidget);
   });
 
-  testWidgets('leadings render one icon per row, left of the tile',
+  testWidgets("leadings render one icon per row, in the tile's art slot",
       (tester) async {
     useDesktopViewport(tester);
     await tester.pumpWidget(MaterialApp(
@@ -74,7 +74,8 @@ void main() {
           rows: [_row('a'), _row('b')],
           display: RowDisplay.storage,
           store: PlaylistStore(),
-          // Second entry null: the reserved gutter must not range-error or draw.
+          // Second entry null: that row must fall back to its own art rather
+          // than range-error.
           leadings: const [Icon(Icons.videogame_asset), null],
         ),
       ),

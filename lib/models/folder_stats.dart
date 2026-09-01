@@ -30,3 +30,10 @@ String formatBytes(int bytes) {
   if (bytes >= kb) return '${(bytes / kb).toStringAsFixed(1)} KB';
   return '$bytes B';
 }
+
+// Short form for large tallies (players, achievements earned): 1.2K, 3.4M.
+String compactCount(int n) {
+  if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+  if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
+  return '$n';
+}

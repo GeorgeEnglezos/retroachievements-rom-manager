@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../services/log_service.dart';
+import '../theme/ui_tokens.dart';
 
 class LogsScreen extends StatefulWidget {
   const LogsScreen({super.key});
@@ -80,13 +81,13 @@ class _LogsScreenState extends State<LogsScreen> {
   Color _levelColor(LogLevel level, BuildContext context) {
     switch (level) {
       case LogLevel.debug:
-        return Colors.grey;
+        return context.ui.muted;
       case LogLevel.info:
         return Theme.of(context).colorScheme.onSurfaceVariant;
       case LogLevel.warning:
-        return Colors.orange;
+        return context.ui.warning;
       case LogLevel.error:
-        return Colors.redAccent;
+        return Theme.of(context).colorScheme.error;
     }
   }
 
@@ -239,7 +240,7 @@ class _FileListTile extends StatelessWidget {
             color: selected
                 ? scheme.primary.withValues(alpha: 0.15)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: context.ui.roundSm,
           ),
           child: Row(
             children: [

@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/setup_wizard.dart';
+import 'services/app_mode.dart';
+import 'services/play_view.dart';
 import 'services/app_theme.dart';
 import 'services/display_name.dart';
 import 'services/library.dart';
@@ -28,6 +30,8 @@ void main() {
     await initNameMode();
     await initCombineSystems();
     await initAppTheme();
+    await initAppMode();
+    await initPlayView();
     await initLibraryFolder();
     await Library.instance.init();
     final prefs = await SharedPreferences.getInstance();

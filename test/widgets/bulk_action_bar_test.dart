@@ -30,6 +30,31 @@ void main() {
     expect(fav && del && closed, isTrue);
   });
 
+  testWidgets('close carries an accessible name', (tester) async {
+    // Every other button on the bar has visible text to name it; close is the
+    // one bare icon, so its tooltip is the only thing naming it for a screen
+    // reader. Asserted on the Tooltip rather than via find.bySemanticsLabel,
+    // which does not match a tooltip's message node.
+    useDesktopViewport(tester);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: BulkActionBar(
+          selectedCount: 1,
+          deleting: false,
+          deleteDone: 0,
+          deleteTotal: 0,
+          onDelete: () {},
+          onClose: () {},
+        ),
+      ),
+    ));
+    expect(
+      find.byWidgetPredicate(
+          (w) => w is Tooltip && w.message == 'Clear selection'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('shows progress while deleting', (tester) async {
     useDesktopViewport(tester);
     await tester.pumpWidget(MaterialApp(

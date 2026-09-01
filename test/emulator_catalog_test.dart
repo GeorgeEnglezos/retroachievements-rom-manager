@@ -31,6 +31,39 @@ void main() {
     test('unknown package falls back to custom', () {
       expect(EmulatorCatalog.detectKindFromPackage('com.georgeenglezos.notes'), 'custom');
     });
+    test('forks are matched by pattern, not by an exact package', () {
+      // Package ids the map has never seen. Only com.armsx3 is a real one
+      // (confirmed on a device); the rest are stand-ins for the shape a fork
+      // takes, since the point is that the matcher doesn't need the real id.
+      const forks = {
+        'com.armsx3': 'pcsx2',
+        'xyz.aethersx2.someotherfork': 'pcsx2',
+        'me.magnum.melonds.nightly': 'melonds',
+        'org.citra.emu': 'citra',
+        'io.github.azahar_emu.azahar': 'citra',
+        'org.dolphinemu.mmjr': 'dolphin',
+        'org.ppsspp.ppssppgold.beta': 'ppsspp',
+      };
+      for (final entry in forks.entries) {
+        expect(EmulatorCatalog.detectKindFromPackage(entry.key), entry.value,
+            reason: entry.key);
+      }
+    });
+    test('patterns are specific enough to leave ordinary apps alone', () {
+      // Ordinary words show up inside app ids, so the patterns are
+      // 'dolphinemu' and 'org.citra' rather than 'dolphin' and 'citra'.
+      // com.edenred.eq.myedenred is a real app off a test device: it's why a
+      // bare 'eden' pattern (for the Eden emulator) would be unsafe.
+      for (final pkg in [
+        'com.dolphin.browser',
+        'com.citra.bank',
+        'com.edenred.eq.myedenred',
+        'mobi.infolife.appbackup',
+      ]) {
+        expect(EmulatorCatalog.detectKindFromPackage(pkg), 'custom',
+            reason: pkg);
+      }
+    });
   });
 
   group('defaultArgsFor', () {

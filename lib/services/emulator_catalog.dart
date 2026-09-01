@@ -84,21 +84,58 @@ class EmulatorCatalog {
     'org.ppsspp.ppssppgold': 'ppsspp',
     'com.github.stenzek.duckstation': 'duckstation',
     'org.dolphinemu.dolphinemu': 'dolphin',
-    // PS2: AetherSX2 + the NetherSX2 turnip/classic forks + ArmSX2.
+    // PS2: AetherSX2 + the NetherSX2 turnip/classic forks + ArmSX2/ArmSX3.
     'xyz.aethersx2.android': 'pcsx2',
     'xyz.aethersx2.tturnip': 'pcsx2',
     'xyz.aethersx2.cturnip': 'pcsx2',
     'com.armsx2': 'pcsx2',
+    'com.armsx3': 'pcsx2',
     'com.nanodata.armsx2': 'pcsx2',
+    // Dreamcast: standalone Flycast. Console 40 still defaults to RetroArch
+    // (which runs the same core), so this one is connected by hand.
+    'com.flycast.emulator': 'flycast',
     // Nintendo DS: melonDS official, .dev and the melonDualDS dual-screen fork.
     'me.magnum.melonds': 'melonds',
     'me.magnum.melonds.dev': 'melonds',
     'me.magnum.melondualds': 'melonds',
+    // 3DS: Lime3DS, and by pattern the rest of the Citra family (Citra MMJ,
+    // Azahar). They all ship org.citra.citra_emu.* classes.
+    'io.github.lime3ds.android': 'citra',
+  };
+
+  /// Substring fallbacks, checked after [androidPackageKind]. Emulators fork
+  /// faster than a package list can be maintained (ArmSX3, melonDS .dev,
+  /// Lime3DS, Azahar, the MMJ builds), and every fork keeps the original name
+  /// in its id. Keep each pattern specific enough not to catch ordinary apps:
+  /// `dolphinemu`, not `dolphin`, or Dolphin Browser matches; `org.citra`, not
+  /// `citra`, which is a common word in other app ids.
+  static const _packagePatterns = {
+    'retroarch': 'retroarch',
+    'ppsspp': 'ppsspp',
+    'duckstation': 'duckstation',
+    'dolphinemu': 'dolphin',
+    'aethersx2': 'pcsx2',
+    'armsx': 'pcsx2',
+    'pcsx2': 'pcsx2',
+    'melonds': 'melonds',
+    'melondual': 'melonds',
+    'org.citra': 'citra',
+    'citra_emu': 'citra',
+    'lime3ds': 'citra',
+    'azahar': 'citra',
+    'flycast': 'flycast',
   };
 
   /// Emulator kind id for an Android [package]; [customKindId] if unknown.
-  static String detectKindFromPackage(String package) =>
-      androidPackageKind[package] ?? customKindId;
+  static String detectKindFromPackage(String package) {
+    final exact = androidPackageKind[package];
+    if (exact != null) return exact;
+    final lower = package.toLowerCase();
+    for (final entry in _packagePatterns.entries) {
+      if (lower.contains(entry.key)) return entry.value;
+    }
+    return customKindId;
+  }
 
   /// Best-effort emulator kind id from an exe path; [customKindId] if none match.
   static String detectKind(String exePath) {

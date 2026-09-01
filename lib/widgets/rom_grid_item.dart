@@ -2,16 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/rom_result.dart';
 import '../services/member_key.dart';
+import '../services/play_view.dart';
 import '../services/playlist_store.dart';
 import '../services/scraper/scraped_store.dart';
 import '../theme/ui_tokens.dart';
+import 'game_cover.dart';
 import 'game_detail_dialog.dart';
 import 'ui/ui_card.dart';
 import 'rom_actions.dart';
 import 'rom_badges.dart';
-import 'rom_progress.dart';
-import 'rom_thumb.dart';
 
+/// One tile in the library grid: the shared [GameCover] wrapped with the grid's
+/// own behavior (selection, context menu, favorites) and its richer meta line —
+/// the Home-style achievement numbers followed by the chips, then a muted
+/// status/size line. Progress reads the way Home shows it: a trophy or a strip
+/// on the art, no bar in the text.
 class RomGridItem extends StatelessWidget {
   final RomResult rom;
   final PlaylistStore store;
@@ -61,14 +66,14 @@ class RomGridItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    final displayTitle = gameDisplayName(rom.gameTitle, rom.fileName);
-    final badges = _badges(ui);
-    final chips = _chips();
+    final displayTitle = listingTitle(rom.gameTitle, rom.fileName);
     final isFavorite = store
         .isFavorite(memberKeyFor(gameId: rom.gameId, filePath: rom.filePath));
     // Favorite cards flip their labels to ui.favoriteText (white on the light
     // theme's black wash; unchanged on dark).
     final fg = isFavorite ? ui.favoriteText : null;
+
+    final subline = _subline(ui);
     return GestureDetector(
       onSecondaryTapDown: (d) =>
           _actions.showContextMenu(context, d.globalPosition),
@@ -77,178 +82,101 @@ class RomGridItem extends StatelessWidget {
       child: UiCard(
         padding: EdgeInsets.zero,
         color: isFavorite ? ui.favoriteHighlight : null,
-        onTap: () {
-          final ctrl = HardwareKeyboard.instance.isControlPressed;
-          final shift = HardwareKeyboard.instance.isShiftPressed;
-          if (ctrl || shift || isSelectMode) {
-            onSelectToggle?.call(isShift: shift);
-          } else if (onOpen != null) {
-            onOpen!();
-          } else if (canOpenDetail(rom)) {
-            showDialog(
-              context: context,
-              builder: (_) => GameDetailDialog(
-                rom: rom,
-                store: store,
-                onDeleted: onDeleted,
-                onPlaylistChanged: onPlaylistChanged,
-                onFetch: onFetch,
-                scraped: ScrapedStore.instance.get(rom.filePath),
-              ),
-            );
-          }
-        },
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Expanded(child: _buildLeading()),
-                  const SizedBox(height: 6),
-                  Text(
-                    displayTitle,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: fg,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
+        onTap: () => _onTap(context),
+        child: GameCover(
+          rom: rom,
+          framedArt: false,
+          foreground: fg,
+          textPadding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+          fileName: playView.fileName && displayTitle != rom.fileName
+              ? rom.fileName
+              : null,
+          artOverlays: [?discBadge(discCount, ui), ?dupBadge(rom, ui)],
+          corner: isSelectMode ? _selectionDot(ui) : null,
+          meta: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GameMetaRow(rom: rom, numberColor: fg, trailing: _chips(ui)),
+              if (subline != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text(
+                    subline,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                  ),
-                  if (displayTitle != rom.fileName)
-                    Text(
-                      rom.fileName,
-                      style: TextStyle(fontSize: 9, color: fg ?? Colors.grey),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  const SizedBox(height: 4),
-                  ..._buildGridStatus(ui, fg),
-                  if (badges.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      alignment: WrapAlignment.center,
-                      children: badges,
-                    ),
-                  ],
-                  if (chips.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      alignment: WrapAlignment.center,
-                      children: chips,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (isSelectMode)
-              Positioned(
-                top: 4,
-                right: 4,
-                child: IgnorePointer(
-                  child: Container(
-                    // Same colors as the list tile's selection dot.
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? ui.accent
-                          : ui.text.withValues(alpha: 0.5),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      isSelected
-                          ? Icons.check_circle
-                          : Icons.radio_button_unchecked,
-                      color: Colors.white,
-                      size: 22,
-                    ),
+                    style: TextStyle(
+                        fontSize: 10, color: fg ?? _sublineColor(ui)),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  List<Widget> _buildGridStatus(UiTokens ui, Color? fg) {
-    // local-only: just the size line, no RA status label above it.
-    if (rom.isLocalOnly) {
-      return [
-        if (rom.fileSizeLabel != null)
-          Text(rom.fileSizeLabel!,
-              style: TextStyle(fontSize: 9, color: fg ?? ui.muted)),
-      ];
-    }
-    if (rom.status == RomStatus.supported) {
-      final out = <Widget>[];
-      if (RomProgress.hasProgress(rom)) {
-        out.add(RomProgress(rom: rom));
-        out.add(const SizedBox(height: 3));
-      }
-      final ach = achBadge(rom, ui);
-      if (ach != null) out.add(ach);
-      if (rom.fileSizeLabel != null) {
-        out.add(
-          Text(
-            rom.fileSizeLabel!,
-            style: TextStyle(fontSize: 9, color: fg ?? ui.muted),
-          ),
-        );
-      }
-      return out;
-    }
-    final label = switch (rom.status) {
-      RomStatus.notFetched => 'Not fetched',
-      RomStatus.checking => 'Checking...',
-      RomStatus.unsupported => 'No achievements',
-      RomStatus.unsupportedFormat => 'Bad format',
-      RomStatus.error => rom.errorMessage ?? 'Error',
-      _ => '',
-    };
-    final out = <Widget>[
-      Text(
-        label,
-        style: TextStyle(
-          fontSize: 9,
-          color: fg ?? (rom.status == RomStatus.error ? ui.warning : ui.muted),
-        ),
-      ),
-    ];
-    if (rom.fileSizeLabel != null) {
-      out.add(
-        Text(
-          rom.fileSizeLabel!,
-          style: TextStyle(fontSize: 9, color: fg ?? ui.muted),
+  void _onTap(BuildContext context) {
+    final ctrl = HardwareKeyboard.instance.isControlPressed;
+    final shift = HardwareKeyboard.instance.isShiftPressed;
+    if (ctrl || shift || isSelectMode) {
+      onSelectToggle?.call(isShift: shift);
+    } else if (onOpen != null) {
+      onOpen!();
+    } else if (canOpenDetail(rom)) {
+      showDialog(
+        context: context,
+        builder: (_) => GameDetailDialog(
+          rom: rom,
+          store: store,
+          onDeleted: onDeleted,
+          onPlaylistChanged: onPlaylistChanged,
+          onFetch: onFetch,
+          scraped: ScrapedStore.instance.get(rom.filePath),
         ),
       );
     }
-    return out;
   }
 
-  Widget _buildLeading() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final size = constraints.maxHeight.isFinite
-            ? constraints.maxHeight * 0.9
-            : constraints.maxWidth * 0.9;
-        return Center(
-            child: RomThumb(rom: rom, size: size, raArt: rom.thumbArt));
-      },
-    );
+  /// The muted line under the meta row: the fetch status (only where there is
+  /// one to report) then the file size, both play-mode gated the way the list
+  /// tile gates them. Null when neither applies.
+  String? _subline(UiTokens ui) {
+    final size = playView.fileSize ? rom.fileSizeLabel : null;
+    final status = rom.isLocalOnly || rom.status == RomStatus.supported
+        ? null
+        : switch (rom.status) {
+            RomStatus.notFetched => 'Not fetched',
+            RomStatus.checking => 'Checking...',
+            RomStatus.unsupported => 'No achievements',
+            RomStatus.unsupportedFormat => 'Bad format',
+            RomStatus.error => rom.errorMessage ?? 'Error',
+            _ => null,
+          };
+    final parts = [?status, ?size];
+    return parts.isEmpty ? null : parts.join('  ·  ');
   }
 
-  List<Widget> _badges(UiTokens ui) =>
-      [?discBadge(discCount, ui), ?dupBadge(rom, ui)];
+  Color _sublineColor(UiTokens ui) =>
+      rom.status == RomStatus.error ? ui.warning : ui.muted;
 
-  List<Widget> _chips() => [
+  Widget _selectionDot(UiTokens ui) => IgnorePointer(
+        child: Container(
+          // Same colors as the list tile's selection dot.
+          decoration: BoxDecoration(
+            color: isSelected ? ui.accent : ui.text.withValues(alpha: 0.5),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
+            color: Colors.white,
+            size: 22,
+          ),
+        ),
+      );
+
+  List<Widget> _chips(UiTokens ui) => [
+    ?achBadge(rom, ui),
     ?hotBadge(rom),
     ?noAchBadge(rom),
     ...tagBadges(rom.fileName),

@@ -5,6 +5,7 @@ import '../models/rom_result.dart';
 import '../models/scraped_game.dart';
 import '../services/credentials.dart';
 import '../services/disc_grouping.dart';
+import '../services/app_mode.dart';
 import '../services/file_actions.dart';
 import '../services/library.dart';
 import '../services/console_image.dart';
@@ -16,11 +17,24 @@ import '../services/scraper/scraped_store.dart';
 import '../theme/ui_tokens.dart';
 import 'confirm_recycle_dialog.dart';
 import 'image_viewer.dart';
+import 'ui/ui_badge.dart';
+import 'ui/ui_card.dart';
 import 'ui/ui_segmented.dart';
 import 'playlist_picker.dart';
 import 'ra_image.dart';
 import 'rom_actions.dart';
 import 'rom_progress.dart';
+
+/// The label for a "beaten"-defining RetroAchievements type, or null for a
+/// standard or missable achievement. RA marks the achievements that finish a
+/// game as `progression` (steps required) plus a `win_condition` (the finale);
+/// earning all of them is what awards the "beaten" badge. Pure and top-level so
+/// the set of RA type strings that count stays unit-testable.
+String? beatTypeLabel(String? type) => switch (type) {
+      'win_condition' => 'Win condition',
+      'progression' => 'Progression',
+      _ => null,
+    };
 
 /// Whether a left click on [rom] has anything to open: an RA match, a local-only
 /// row, or imported (Skraper) extras, which live outside [RomResult.status].
@@ -240,12 +254,15 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Wrap(
             children: [
-              _actionButton('reveal', Icons.folder_open, 'Reveal in Explorer'),
-              _actionButton('copy', Icons.copy, 'Copy path'),
+              if (!gamingMode) ...[
+                _actionButton(
+                    'reveal', Icons.folder_open, 'Reveal in Explorer'),
+                _actionButton('copy', Icons.copy, 'Copy path'),
+              ],
               _actionButton('google', Icons.search, 'Search Google'),
               if (canOpenRa)
                 _actionButton('ra', Icons.open_in_new, 'Open RA page'),
-              if (showFetch)
+              if (showFetch && !gamingMode)
                 _actionButton(
                   'fetch',
                   rom.status == RomStatus.supported
@@ -273,10 +290,11 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          child: Row(children: [Expanded(child: _deleteButton())]),
-        ),
+        if (!gamingMode)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            child: Row(children: [Expanded(child: _deleteButton())]),
+          ),
       ],
     );
   }
@@ -327,12 +345,24 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     );
   }
 
+  // Achievements only exist for hash-matched games; without them a side panel
+  // would just be an empty card, so those roms keep the single column.
+  bool get _hasAchievementPanel =>
+      rom.status == RomStatus.supported && rom.gameId != null;
+
   @override
   Widget build(BuildContext context) {
+    final wide = MediaQuery.sizeOf(context).width >= 900;
+    return wide && _hasAchievementPanel
+        ? _splitLayout(context)
+        : _singleLayout(context);
+  }
+
+  Widget _singleLayout(BuildContext context) {
     return Dialog(
       backgroundColor: context.ui.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
+        borderRadius: context.ui.roundLg,
         side: BorderSide(color: context.ui.border, width: context.ui.borderWidth),
       ),
       child: ConstrainedBox(
@@ -342,65 +372,8 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildBoxArt(),
-              _buildScreenshots(),
-              _buildScrapedImages(),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                        gameDisplayName(
-                            rom.gameTitle,
-                            _multiDisc
-                                ? stripDiscToken(rom.fileName)
-                                : rom.fileName),
-                        style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: 4),
-                    if (rom.consoleName != null)
-                      Text(rom.consoleName!,
-                          style: Theme.of(context).textTheme.bodySmall),
-                    if (rom.lowConfidenceMatch)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.help_outline,
-                                size: 14, color: context.ui.muted),
-                            const SizedBox(width: 4),
-                            Text('Unverified name match',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(color: context.ui.muted)),
-                          ],
-                        ),
-                      ),
-                    if (_multiDisc) _buildDiscSwitcher(context),
-                    // Full RA stats/progress only for hash-matched games. Third-
-                    // party metadataOnly rows show the meta rows without the
-                    // achievement UI; local-only rows show neither.
-                    if (rom.status == RomStatus.supported) ...[
-                      const SizedBox(height: 16),
-                      _buildStats(context),
-                      const Divider(height: 28),
-                      _buildMetaRows(context),
-                      if (rom.earnedAchievements != null) ...[
-                        const Divider(height: 28),
-                        _buildProgressSection(context),
-                      ],
-                    ] else if (rom.status == RomStatus.metadataOnly) ...[
-                      const SizedBox(height: 16),
-                      _buildMetaRows(context),
-                    ] else if (widget.scraped != null) ...[
-                      const SizedBox(height: 16),
-                      _buildMetaRows(context),
-                    ],
-                  ],
-                ),
-              ),
+              ..._artSection(),
+              _buildInfo(context),
               const Divider(height: 1),
               _buildActions(),
               Padding(
@@ -410,6 +383,127 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // Wide screens split the modal into two cards side by side: the game on the
+  // left, your achievements on the right, each scrolling on its own.
+  Widget _splitLayout(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 940,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 5,
+              child: _panel(
+                key: const Key('gameDetailPanel'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ..._artSection(),
+                    _buildInfo(context, withProgress: false),
+                    const Divider(height: 1),
+                    _buildActions(),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 4,
+              child: _panel(
+                key: const Key('gameAchievementsPanel'),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (rom.earnedAchievements != null) ...[
+                        _buildProgressSection(context),
+                        const SizedBox(height: 16),
+                      ],
+                      _buildAchievementGrid(context, sidePanel: true),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _panel({required Key key, required Widget child}) => UiCard(
+        key: key,
+        padding: EdgeInsets.zero,
+        child: SingleChildScrollView(child: child),
+      );
+
+  List<Widget> _artSection() =>
+      [_buildBoxArt(), _buildScreenshots(), _buildScrapedImages()];
+
+  Widget _buildInfo(BuildContext context, {bool withProgress = true}) {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+              gameDisplayName(rom.gameTitle,
+                  _multiDisc ? stripDiscToken(rom.fileName) : rom.fileName),
+              style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 4),
+          if (rom.consoleName != null)
+            Text(rom.consoleName!,
+                style: Theme.of(context).textTheme.bodySmall),
+          if (rom.lowConfidenceMatch)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.help_outline, size: 14, color: context.ui.muted),
+                  const SizedBox(width: 4),
+                  Text('Unverified name match',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: context.ui.muted)),
+                ],
+              ),
+            ),
+          if (_multiDisc) _buildDiscSwitcher(context),
+          // Full RA stats/progress only for hash-matched games. Third-party
+          // metadataOnly rows show the meta rows without the achievement UI;
+          // local-only rows show neither.
+          if (rom.status == RomStatus.supported) ...[
+            const SizedBox(height: 16),
+            _buildStats(context),
+            const Divider(height: 28),
+            _buildMetaRows(context),
+            if (rom.earnedAchievements != null && withProgress) ...[
+              const Divider(height: 28),
+              _buildProgressSection(context),
+            ],
+          ] else if (rom.status == RomStatus.metadataOnly) ...[
+            const SizedBox(height: 16),
+            _buildMetaRows(context),
+          ] else if (widget.scraped != null) ...[
+            const SizedBox(height: 16),
+            _buildMetaRows(context),
+          ],
+        ],
       ),
     );
   }
@@ -667,7 +761,8 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     );
   }
 
-  Widget _buildAchievementGrid(BuildContext context) {
+  Widget _buildAchievementGrid(BuildContext context,
+      {bool sidePanel = false}) {
     if (_achievementsLoading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 16),
@@ -683,20 +778,28 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
           style: Theme.of(context)
               .textTheme
               .bodySmall
-              ?.copyWith(color: Colors.grey),
+              ?.copyWith(color: context.ui.muted),
         ),
       );
     }
 
     final list = _achievements;
-    if (list == null || list.isEmpty) return const SizedBox.shrink();
+    if (list == null || list.isEmpty) {
+      if (!sidePanel) return const SizedBox.shrink();
+      // The side panel is a card of its own, so it needs something to show.
+      return Text('No achievements in this set',
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: context.ui.muted));
+    }
 
     final effort = masteryEffort(list);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Divider(height: 28),
+        if (!sidePanel) const Divider(height: 28),
         Row(
           children: [
             Expanded(
@@ -738,6 +841,30 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     );
   }
 
+  /// The marker for a "beaten"-defining achievement: the win condition that
+  /// finishes the game, or a progression step on the way there. Null for
+  /// standard and missable achievements. The win condition borrows the same
+  /// accent as the "Beaten" badge shown elsewhere so the two read as one idea.
+  ({String label, IconData? icon, String? emoji, Color color, double ring})?
+      _beatMarker(Achievement a) {
+    final label = beatTypeLabel(a.type);
+    if (label == null) return null;
+    final ui = context.ui;
+    // The win condition finishes the game: gold (the app's mastery/completion
+    // accent), a crown, and a thicker ring so it clearly outranks the
+    // progression steps, which get a lighter flag. No Material crown glyph
+    // exists, so the crown is an emoji (gold in both themes).
+    return a.type == 'win_condition'
+        ? (label: label, emoji: '👑', icon: null, color: ui.warning, ring: 3)
+        : (
+            label: label,
+            icon: Icons.flag_outlined,
+            emoji: null,
+            color: ui.accent,
+            ring: 2,
+          );
+  }
+
   // media.retroachievements.org badge (locked variant when unearned).
   String _badgeUrl(Achievement a) =>
       'https://media.retroachievements.org/Badge/'
@@ -748,20 +875,22 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
         width: size,
         height: size,
         fit: BoxFit.cover,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: context.ui.roundSm,
         error: Container(
           width: size,
           height: size,
           decoration: BoxDecoration(
-            color: Colors.grey.shade800,
-            borderRadius: BorderRadius.circular(4),
+            color: context.ui.trough,
+            borderRadius: context.ui.roundSm,
           ),
-          child: Icon(Icons.emoji_events, size: size / 2, color: Colors.grey),
+          child: Icon(Icons.emoji_events,
+              size: size / 2, color: context.ui.muted),
         ),
       );
 
   Widget _buildBadgeRow(Achievement achievement) {
     final image = _badgeImage(achievement, 40);
+    final marker = _beatMarker(achievement);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -776,8 +905,17 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(achievement.title,
-                      style: Theme.of(context).textTheme.bodyMedium),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 2,
+                    children: [
+                      Text(achievement.title,
+                          style: Theme.of(context).textTheme.bodyMedium),
+                      if (marker != null)
+                        UiBadge(label: marker.label, color: marker.color),
+                    ],
+                  ),
                   if (achievement.description.isNotEmpty)
                     Text(achievement.description,
                         style: Theme.of(context).textTheme.bodySmall),
@@ -795,17 +933,52 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
 
   Widget _buildBadgeTile(Achievement achievement) {
     final image = _badgeImage(achievement, 48);
+    final marker = _beatMarker(achievement);
+    Widget tile =
+        achievement.isEarned ? image : Opacity(opacity: 0.5, child: image);
 
-    return Tooltip(
-      message: _tooltipText(achievement),
-      child: achievement.isEarned ? image : Opacity(opacity: 0.5, child: image),
-    );
+    if (marker != null) {
+      final ui = context.ui;
+      tile = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // A colour ring frames the beaten-defining badge so it stands out
+          // from the standard achievements around it; the win condition rings
+          // thicker in gold.
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: ui.roundSm,
+              border: Border.all(color: marker.color, width: marker.ring),
+            ),
+            child: tile,
+          ),
+          Positioned(
+            right: -4,
+            bottom: -4,
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: ui.surface,
+                shape: BoxShape.circle,
+                border: Border.all(color: marker.color, width: 1),
+              ),
+              child: marker.emoji != null
+                  ? Text(marker.emoji!, style: const TextStyle(fontSize: 11))
+                  : Icon(marker.icon, size: 12, color: marker.color),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Tooltip(message: _tooltipText(achievement), child: tile);
   }
 
   String _tooltipText(Achievement a) {
     final buf = StringBuffer();
     buf.writeln(a.title);
     if (a.description.isNotEmpty) buf.writeln(a.description);
+    if (_beatMarker(a) case final m?) buf.writeln('★ ${m.label}');
     buf.write('${a.points} pts');
     if (a.isEarned) buf.write(' · Earned ${_fmtDate(a.dateEarned!)}');
     buf.write('\n${_fmt(a.numAwarded)} players earned this');

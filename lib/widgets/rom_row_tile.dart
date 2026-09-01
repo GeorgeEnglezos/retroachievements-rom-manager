@@ -6,6 +6,7 @@ import '../models/rom_result.dart';
 import '../models/rom_row.dart';
 import '../services/disc_formats.dart';
 import '../services/member_key.dart';
+import '../services/play_view.dart';
 import '../services/playlist_store.dart';
 import '../services/scraper/scraped_store.dart';
 import '../theme/ui_tokens.dart';
@@ -20,7 +21,13 @@ import 'row_display.dart';
 /// A single list-row tile that renders any [RomRow], gating each visual element
 /// on the [RowDisplay] flag set. Decoupled from [RomResult] (it reads a
 /// [RomRow]) so the storage screen can reuse the same tile.
+///
+/// The row is three lines at most: title with its chips beside it, one mono
+/// meta line (file name, size), then progress with its read on the same line.
 class RomRowTile extends StatelessWidget {
+  /// Side of the leading thumbnail.
+  static const _art = 64.0;
+
   final RomRow row;
   final RowDisplay display;
   final PlaylistStore store;
@@ -35,11 +42,16 @@ class RomRowTile extends StatelessWidget {
   final VoidCallback? onDismissDuplicate;
   final Color? groupColor;
 
+  /// Drawn in the thumbnail slot instead of the row's own art. Storage rows use
+  /// it for the console logo / matched-game icon they resolve themselves.
+  final Widget? leading;
+
   const RomRowTile({
     super.key,
     required this.row,
     required this.display,
     required this.store,
+    this.leading,
     this.isSelected = false,
     this.isSelectMode = false,
     this.onSelectToggle,
@@ -145,7 +157,9 @@ class RomRowTile extends StatelessWidget {
             child: FractionallySizedBox(
               alignment: Alignment.centerLeft,
               widthFactor: row.sizeFraction!.clamp(0.0, 1.0),
-              child: ColoredBox(color: ui.accent.withValues(alpha: 0.25)),
+              // The trough, so the proportion reads as a filled bar behind the
+              // row rather than a coloured highlight over it.
+              child: ColoredBox(color: ui.trough),
             ),
           ),
           content,
@@ -157,23 +171,40 @@ class RomRowTile extends StatelessWidget {
   }
 
   Widget _tileContent(BuildContext context, UiTokens ui, Color? fg) {
+    final chips = display.showChips ? _chips(ui) : <Widget>[];
     final subtitle = _buildSubtitle(ui, fg);
+    final title = Text(
+      row.title,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+          fontWeight: FontWeight.w600, fontSize: 14.5, color: fg),
+    );
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           _buildLeading(ui),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  row.title,
-                  style: TextStyle(fontWeight: FontWeight.w600, color: fg),
-                ),
+                // Chips ride beside the title rather than on a line of their
+                // own; a long name pushes them to the next run instead of
+                // overflowing. Wrap bounds its children to the row width, so
+                // the title still ellipsises.
+                if (chips.isEmpty)
+                  title
+                else
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [title, ...chips],
+                  ),
                 ?subtitle,
               ],
             ),
@@ -207,36 +238,38 @@ class RomRowTile extends StatelessWidget {
   Widget _buildLeading(UiTokens ui) {
     Widget base;
     final scrapedArt = display.showBoxArt ? _scrapedThumbPath() : null;
-    if (display.showBoxArt &&
+    if (leading != null) {
+      base = SizedBox(width: _art, height: _art, child: leading);
+    } else if (display.showBoxArt &&
         (row.status == RomStatus.supported ||
             row.status == RomStatus.metadataOnly) &&
         row.imageIcon != null) {
       base = RaImage(
         url: raImageUrl(row.imageIcon!),
-        width: 80,
-        height: 80,
+        width: _art,
+        height: _art,
         fit: BoxFit.cover,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: ui.roundMd,
         error: row.rom != null
             ? romStatusIcon(row.rom!)
             : const SizedBox.shrink(),
         placeholder: const SizedBox(
-          width: 80,
-          height: 80,
+          width: _art,
+          height: _art,
           child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
         ),
       );
     } else if (scrapedArt != null) {
       // No RA art. Fall back to imported (Skraper) box art on disk.
       base = ClipRRect(
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: ui.roundMd,
         child: Image.file(
           File(scrapedArt),
-          width: 80,
-          height: 80,
+          width: _art,
+          height: _art,
           // Decode at thumbnail size, scraper PNGs are full covers and would
           // otherwise fill the image cache at native resolution per row.
-          cacheWidth: 160,
+          cacheWidth: (_art * 2).round(),
           fit: BoxFit.cover,
           errorBuilder: (_, _, _) => row.rom != null
               ? romStatusIcon(row.rom!)
@@ -251,8 +284,8 @@ class RomRowTile extends StatelessWidget {
 
     if (!display.showSelection || !isSelectMode) return base;
     return SizedBox(
-      width: 80,
-      height: 80,
+      width: _art,
+      height: _art,
       child: Stack(
         children: [
           base,
@@ -291,39 +324,43 @@ class RomRowTile extends StatelessWidget {
     }
     if (!RomProgress.hasProgress(row.rom!)) return null;
     return Padding(
-      padding: const EdgeInsets.only(top: 3),
-      child: RomProgress(rom: row.rom!, barHeight: 4, labelSize: 10),
+      padding: const EdgeInsets.only(top: 5),
+      child:
+          RomProgress(rom: row.rom!, barHeight: 4, labelSize: 10, inline: true),
     );
   }
 
-  Widget _sizeLine(
+  /// The one mono line under the title. [parts] stay their own Text widgets
+  /// rather than one joined string, so each remains findable, and they read as
+  /// a single line either way.
+  Widget? _metaLine(
     UiTokens ui,
-    String text, {
+    List<String?> parts, {
     Color? fg,
-    List<Widget> chips = const [],
-    TextStyle? style,
+    Color? firstColor,
   }) {
-    style = (style ?? const TextStyle()).copyWith(color: fg);
-    if (chips.isEmpty) {
-      return Text(text, overflow: TextOverflow.ellipsis, style: style);
-    }
-    return Row(
-      children: [
-        Flexible(
-          child: Text(text, overflow: TextOverflow.ellipsis, style: style),
-        ),
-        const SizedBox(width: 8),
-        // Flexible so the chip strip gets a bounded width and wraps to a new run
-        // on narrow (mobile) rows instead of overflowing the Row.
-        Flexible(
-          child: Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: chips,
-          ),
-        ),
-      ],
+    final shown = parts.whereType<String>().where((p) => p.isNotEmpty).toList();
+    if (shown.isEmpty) return null;
+    final style = TextStyle(fontSize: 11, color: fg ?? ui.muted);
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        children: [
+          for (var i = 0; i < shown.length; i++) ...[
+            if (i > 0) Text('  ·  ', style: style),
+            Flexible(
+              child: Text(
+                shown[i],
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: i == 0 && firstColor != null && fg == null
+                    ? style.copyWith(color: firstColor)
+                    : style,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -335,24 +372,24 @@ class RomRowTile extends StatelessWidget {
     }
 
     final rom = row.rom!;
-    final sizeSuffix = row.sizeLabel != null ? '  ·  ${row.sizeLabel}' : '';
-    final chips = display.showChips ? _chips(ui) : <Widget>[];
+    // Size lives in the subtitle for ROM rows only; the storage screen draws its
+    // own via display.showSizeBar, which play mode never touches.
+    final sizeLabel = playView.fileSize ? row.sizeLabel : null;
 
     // localOnly renders like a supported row minus RA data: filename title,
-    // size + chips, no achievements/progress and no "Not fetched" status text.
+    // size, no achievements/progress and no "Not fetched" status text.
     if (rom.status == RomStatus.supported || rom.isLocalOnly) {
+      final fileName = playView.fileName &&
+              row.subtitle != null &&
+              row.subtitle != row.title
+          ? row.subtitle
+          : null;
+      final meta = _metaLine(ui, [fileName, sizeLabel], fg: fg);
       final progress = _buildProgress();
+      if (meta == null && progress == null) return null;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (row.subtitle != null && row.subtitle != row.title)
-            Text(
-              row.subtitle!,
-              style: TextStyle(fontSize: 11, color: fg ?? ui.muted),
-            ),
-          _sizeLine(ui, row.sizeLabel ?? '', fg: fg, chips: chips),
-          ?progress,
-        ],
+        children: [?meta, ?progress],
       );
     }
 
@@ -367,14 +404,13 @@ class RomRowTile extends StatelessWidget {
       _ => null,
     };
     if (statusText == null) return null;
-    return _sizeLine(
+    return _metaLine(
       ui,
-      '$statusText$sizeSuffix',
+      [statusText, sizeLabel],
       fg: fg,
-      chips: chips,
-      style: rom.status == RomStatus.error ||
+      firstColor: rom.status == RomStatus.error ||
               rom.status == RomStatus.unsupportedFormat
-          ? TextStyle(color: ui.warning)
+          ? ui.warning
           : null,
     );
   }

@@ -1,3 +1,4 @@
+import '../services/ra_service.dart' show RaAward;
 import 'folder_stats.dart' show formatBytes;
 import 'game_metadata.dart';
 
@@ -63,6 +64,9 @@ class RomResult {
   int? numPlayersHardcore;
   int? earnedAchievements;
   int? earnedHardcore;
+  // Highest RA award (beaten/completed/mastered); null until progress loads.
+  RaAward? highestAward;
+  DateTime? highestAwardDate;
   DateTime? lastPlayed;
   String? errorMessage;
 

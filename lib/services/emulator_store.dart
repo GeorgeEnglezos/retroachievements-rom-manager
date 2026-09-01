@@ -69,6 +69,9 @@ class EmulatorStore {
   // named distinctly from the retired 'console_emulators' key to avoid confusion.
   static const _connectionsKey = 'console_connections';
   static const _fullscreenKey = 'launch_fullscreen';
+  // Set once the Android installed-app sweep has run, so removing an
+  // auto-detected emulator sticks instead of coming back on the next visit.
+  static const _androidSweptKey = 'android_emulators_swept';
 
   static Future<List<Emulator>> emulators() async {
     final prefs = await SharedPreferences.getInstance();
@@ -180,6 +183,15 @@ class EmulatorStore {
   static Future<void> setLaunchFullscreen(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_fullscreenKey, value);
+  }
+
+  /// Whether the one-time Android sweep of installed emulator apps has run.
+  /// Returns false and marks it done, so callers auto-detect exactly once.
+  static Future<bool> takeAndroidSweep() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_androidSweptKey) ?? false) return false;
+    await prefs.setBool(_androidSweptKey, true);
+    return true;
   }
 
   /// Updates the [extraArgs] of emulator [id] in place (no connection changes).

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/rom_group.dart';
 import '../models/rom_row.dart';
+import '../services/app_mode.dart';
 import '../services/member_key.dart';
 import '../services/playlist_store.dart';
 import '../services/scan_settings.dart';
@@ -20,9 +21,9 @@ import 'row_display.dart';
 class RomListView extends StatefulWidget {
   final List<RomRow> rows;
   final List<RomGroup>? groups;
-  // Optional per-row widget drawn in a fixed gutter to the LEFT of each tile,
-  // outside its card. Index-aligned to [rows]; null entries reserve the gutter
-  // so cards stay aligned. Flat lists only (storage's console/game icons).
+  // Optional per-row thumbnail, index-aligned to [rows], drawn in the tile's
+  // own art slot in place of whatever the row would resolve. Null entries fall
+  // back to the row's art. Flat lists only (storage's console/game icons).
   final List<Widget?>? leadings;
   final RowDisplay display;
   final PlaylistStore store;
@@ -83,6 +84,9 @@ class RomListView extends StatefulWidget {
 
 class _RomListViewState extends State<RomListView> {
   final Set<String> _selected = {};
+  // Gaming mode is browse-and-play, so multi-select (and with it the bulk bar
+  // and the Delete shortcut) is off whatever the caller asked for.
+  bool get _selectionEnabled => widget.enableSelection && !gamingMode;
   // Group labels the user folded away. Labels are unique per grouping, and the
   // set is view-only state, so it isn't persisted.
   final Set<String> _collapsed = {};
@@ -238,7 +242,7 @@ class _RomListViewState extends State<RomListView> {
   }
 
   void Function({required bool isShift})? _selectToggle(RomRow r) {
-    if (!widget.enableSelection) return null;
+    if (!_selectionEnabled) return null;
     final k = _key(r);
     if (k == null) return null;
     return ({required bool isShift}) => _toggle(k, isShift);
@@ -259,7 +263,7 @@ class _RomListViewState extends State<RomListView> {
   @override
   Widget build(BuildContext context) {
     final showBar =
-        widget.enableSelection && (_selected.isNotEmpty || _deleting);
+        _selectionEnabled && (_selected.isNotEmpty || _deleting);
 
     Widget list;
     if (_flatRows.isEmpty) {
@@ -295,7 +299,7 @@ class _RomListViewState extends State<RomListView> {
       ],
     );
 
-    if (!widget.enableSelection) return column;
+    if (!_selectionEnabled) return column;
     return CallbackShortcuts(
       bindings: {
         // Esc clears the selection; Delete sends it to the Recycle Bin (which
@@ -314,19 +318,13 @@ class _RomListViewState extends State<RomListView> {
         physics: widget.physics,
         padding: widget.padding,
         itemCount: widget.rows.length,
-        itemBuilder: (_, i) => _withLeading(i, _tile(widget.rows[i])),
+        itemBuilder: (_, i) => _tile(widget.rows[i], leading: _leading(i)),
       );
 
-  // Wraps a tile with its left-gutter leading icon when [leadings] is supplied.
-  Widget _withLeading(int i, Widget tile) {
-    if (widget.leadings == null) return tile;
-    final leading = i < widget.leadings!.length ? widget.leadings![i] : null;
-    return Row(
-      children: [
-        SizedBox(width: 76, child: Center(child: leading)),
-        Expanded(child: tile),
-      ],
-    );
+  Widget? _leading(int i) {
+    final l = widget.leadings;
+    if (l == null || i >= l.length) return null;
+    return l[i];
   }
 
   Widget _buildGrouped() {
@@ -391,8 +389,9 @@ class _RomListViewState extends State<RomListView> {
         },
       );
 
-  Widget _tile(RomRow r) => RomRowTile(
+  Widget _tile(RomRow r, {Widget? leading}) => RomRowTile(
         row: r,
+        leading: leading,
         display: widget.display,
         store: widget.store,
         isSelected: _isSelected(r),

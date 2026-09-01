@@ -421,7 +421,6 @@ class _CredentialsStepState extends State<_CredentialsStep> {
             controller: _usernameCtrl,
             decoration: const InputDecoration(
               labelText: 'Username',
-              border: OutlineInputBorder(),
               isDense: true,
             ),
           ),
@@ -432,7 +431,6 @@ class _CredentialsStepState extends State<_CredentialsStep> {
             obscureText: true,
             decoration: const InputDecoration(
               labelText: 'Web API key',
-              border: OutlineInputBorder(),
               isDense: true,
             ),
           ),

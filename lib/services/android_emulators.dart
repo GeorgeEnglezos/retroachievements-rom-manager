@@ -37,16 +37,30 @@ class AndroidEmulators {
 
   /// Launchable apps on the device, known emulators first. Empty on failure.
   static Future<List<InstalledApp>> installedApps() async {
-    final raw =
-        await _channel.invokeListMethod<Map<dynamic, dynamic>>('installedApps');
+    List<Map<dynamic, dynamic>>? raw;
+    try {
+      raw = await _channel
+          .invokeListMethod<Map<dynamic, dynamic>>('installedApps');
+    } on PlatformException catch (_) {
+      return [];
+    } on MissingPluginException catch (_) {
+      return [];
+    }
     if (raw == null) return [];
-    return raw
-        .map((m) => InstalledApp(
-              package: m['package'] as String,
-              label: m['label'] as String,
-              known: m['known'] as bool? ?? false,
-            ))
-        .toList();
+    return raw.map((m) {
+      final package = m['package'] as String;
+      return InstalledApp(
+        package: package,
+        label: m['label'] as String,
+        // Derived from the catalog rather than sent by the native side, so
+        // adding an emulator there is the only edit a new package needs.
+        known: EmulatorCatalog.detectKindFromPackage(package) !=
+            EmulatorCatalog.customKindId,
+      );
+    }).toList()
+      ..sort((a, b) => a.known == b.known
+          ? a.label.toLowerCase().compareTo(b.label.toLowerCase())
+          : (a.known ? -1 : 1));
   }
 
   /// Opens [romPath] in [package] via the right intent for [kindId]/[consoleId].
@@ -127,11 +141,12 @@ class AndroidEmulators {
         'clearTask': true,
       };
     }
-    // ArmSX2 (com.armsx2 / com.nanodata.armsx2): a separate PS2 emulator that
-    // boots via ACTION_VIEW on the ROM URI. It needs an EXPLICIT component (a
-    // package-only VIEW intent throws ActivityNotFoundException), and the
-    // activity class differs per build.
-    if (pkg.contains('armsx2')) {
+    // ArmSX2 / ArmSX3 (com.armsx2, com.armsx3, com.nanodata.armsx2): a separate
+    // PS2 emulator that boots via ACTION_VIEW on the ROM URI. It needs an
+    // EXPLICIT component (a package-only VIEW intent throws
+    // ActivityNotFoundException), and the activity class differs per build.
+    // ArmSX3 ships the same com.armsx2.* classes, so it takes the default.
+    if (pkg.contains('armsx')) {
       const armsx2Activity = {
         'com.armsx2': 'com.armsx2.Main',
         'com.nanodata.armsx2': 'kr.co.iefriends.pcsx2.MainActivity',
@@ -206,6 +221,31 @@ class AndroidEmulators {
           'componentClass': 'xyz.aethersx2.android.EmulationActivity',
           'action': 'android.intent.action.MAIN',
           'extras': {'bootPath': '{file.uri}'},
+          'clearTask': true,
+        };
+      case 'citra': // 3DS: Lime3DS, Azahar, Citra MMJ
+        return {
+          'romPath': romPath,
+          'componentPkg': pkg,
+          // Verified against Lime3DS: EmulationActivity's VIEW filter takes a
+          // content URI typed application/octet-stream. Every Citra fork keeps
+          // the class, only the package differs.
+          'componentClass': 'org.citra.citra_emu.activities.EmulationActivity',
+          'action': 'android.intent.action.VIEW',
+          'data': '{file.uri}',
+          'mimeType': 'application/octet-stream',
+          'clearTask': true,
+        };
+      case 'flycast':
+        return {
+          'romPath': romPath,
+          'componentPkg': pkg,
+          // Flycast's VIEW filter declares scheme "file" only, and we hand out
+          // content URIs, so name the activity explicitly (an explicit
+          // component skips filter matching) instead of using setPackage.
+          'componentClass': 'com.flycast.emulator.MainActivity',
+          'action': 'android.intent.action.VIEW',
+          'data': '{file.uri}',
           'clearTask': true,
         };
     }

@@ -4,6 +4,26 @@ import 'http_throttle.dart';
 import 'log_service.dart';
 import '../models/user_progress.dart';
 
+/// RA's award tiers for a game, lowest to highest. `beatenSoftcore`/`beatenHardcore`
+/// are the game-completion badge (all progression achievements + a win condition);
+/// `completed`/`mastered` are the all-achievements badge, softcore vs hardcore.
+/// RA reports the single highest tier the user reached via `HighestAwardKind`.
+enum RaAward { none, beatenSoftcore, beatenHardcore, completed, mastered }
+
+/// Maps RA's `HighestAwardKind` string to [RaAward]; unknown/absent -> none.
+RaAward raAwardFromKind(String? kind) => switch (kind) {
+      'beaten-softcore' => RaAward.beatenSoftcore,
+      'beaten-hardcore' => RaAward.beatenHardcore,
+      'completed' => RaAward.completed,
+      'mastered' => RaAward.mastered,
+      _ => RaAward.none,
+    };
+
+/// Resolves a persisted [RaAward] name; unknown/absent -> none. Kept beside the
+/// enum so persistence stays robust to future tiers.
+RaAward raAwardByName(String? name) =>
+    RaAward.values.firstWhere((a) => a.name == name, orElse: () => RaAward.none);
+
 class Achievement {
   final int id;
   final String title;
@@ -16,6 +36,9 @@ class Achievement {
   final int numAwarded;
   final DateTime? dateEarned;
   final DateTime? dateEarnedHardcore;
+  // RA achievement kind: "progression", "win_condition", "missable", or null
+  // (a standard achievement). Progression + a win_condition define "beaten".
+  final String? type;
 
   Achievement({
     required this.id,
@@ -28,6 +51,7 @@ class Achievement {
     required this.numAwarded,
     this.dateEarned,
     this.dateEarnedHardcore,
+    this.type,
   });
 
   bool get isEarned => dateEarned != null;
@@ -43,6 +67,7 @@ class Achievement {
         numAwarded: (j['NumAwarded'] as num?)?.toInt() ?? 0,
         dateEarned: _parseDate(j['DateEarned'] as String?),
         dateEarnedHardcore: _parseDate(j['DateEarnedHardcore'] as String?),
+        type: (j['Type'] as String?)?.isEmpty ?? true ? null : j['Type'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -56,6 +81,7 @@ class Achievement {
         'NumAwarded': numAwarded,
         'DateEarned': dateEarned?.toIso8601String(),
         'DateEarnedHardcore': dateEarnedHardcore?.toIso8601String(),
+        'Type': type,
       };
 
   static DateTime? _parseDate(String? s) {
@@ -165,6 +191,10 @@ class CompletedGame {
   final int maxPossible;
   final String? imageIcon;
   final DateTime? lastPlayed;
+  // Highest RA award the user reached for this game (beaten/completed/mastered),
+  // and when. RA computes this server-side; we don't re-derive it from counts.
+  final RaAward highestAward;
+  final DateTime? highestAwardDate;
 
   CompletedGame({
     required this.gameId,
@@ -175,6 +205,8 @@ class CompletedGame {
     required this.maxPossible,
     this.imageIcon,
     this.lastPlayed,
+    this.highestAward = RaAward.none,
+    this.highestAwardDate,
   });
 
   factory CompletedGame.fromJson(Map<String, dynamic> j) => CompletedGame(
@@ -189,6 +221,10 @@ class CompletedGame {
         numAwardedHardcore: (j['NumAwardedHardcore'] as num?)?.toInt() ?? 0,
         lastPlayed: (j['MostRecentAwardedDate'] as String?)?.isNotEmpty ?? false
             ? DateTime.tryParse(j['MostRecentAwardedDate'] as String)
+            : null,
+        highestAward: raAwardFromKind(j['HighestAwardKind'] as String?),
+        highestAwardDate: (j['HighestAwardDate'] as String?)?.isNotEmpty ?? false
+            ? DateTime.tryParse(j['HighestAwardDate'] as String)
             : null,
       );
 }
@@ -501,6 +537,10 @@ class RaService {
       earnedAchievements: earnedCasual,
       earnedHardcore: earnedHardcore,
       lastPlayed: lastPlayed,
+      highestAward: raAwardFromKind(data['HighestAwardKind'] as String?),
+      highestAwardDate: (data['HighestAwardDate'] as String?)?.isNotEmpty ?? false
+          ? DateTime.tryParse(data['HighestAwardDate'] as String)
+          : null,
       achievements: achievementsList,
     );
 

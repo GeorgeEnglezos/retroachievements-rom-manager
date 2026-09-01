@@ -19,6 +19,9 @@ abstract final class PrefKeys {
   // Library root folder (owned by library_folder.dart, also read by settings).
   static const lastFolder = 'last_folder';
 
+  // Cleaning vs play surface (owned by app_mode.dart).
+  static const appMode = 'app_mode';
+
   // Set once the first-run wizard completes or is skipped. Unset = show it.
   static const setupDone = 'setup_done';
 
@@ -33,4 +36,8 @@ abstract final class PrefKeys {
   static const folderSortAsc = 'folder_sort_asc';
   static const folderGridView = 'folder_grid_view';
   static const cleanupMode = 'cleanup_mode';
+  // Play-mode listing settings, one JSON blob (see play_view.dart).
+  static const playView = 'play_view';
+  // Home dashboard section layout on phones (DashboardLayout.name).
+  static const dashboardLayout = 'dashboard_layout';
 }

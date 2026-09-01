@@ -167,6 +167,34 @@ void main() {
       expect(info.points, isNull);
       expect(progress.achievements, isEmpty);
     });
+
+    test('captures per-achievement Type', () {
+      final (_, progress) = parseHelper(response(
+        achievements: {
+          '1': {'ID': 1, 'DisplayOrder': 1, 'Type': 'progression'},
+          '2': {'ID': 2, 'DisplayOrder': 2, 'Type': 'win_condition'},
+          '3': {'ID': 3, 'DisplayOrder': 3}, // standard: no Type
+        },
+      ));
+      final byId = {for (final a in progress.achievements) a.id: a};
+      expect(byId[1]!.type, 'progression');
+      expect(byId[2]!.type, 'win_condition');
+      expect(byId[3]!.type, isNull);
+    });
+
+    test('captures top-level HighestAwardKind into progress', () {
+      final data = response()
+        ..['HighestAwardKind'] = 'completed'
+        ..['HighestAwardDate'] = '2026-07-04 09:00:00';
+      final (_, progress) = parseHelper(data);
+      expect(progress.highestAward, RaAward.completed);
+      expect(progress.highestAwardDate, DateTime.parse('2026-07-04 09:00:00'));
+    });
+
+    test('award defaults to none when absent', () {
+      final (_, progress) = parseHelper(response());
+      expect(progress.highestAward, RaAward.none);
+    });
   });
 
   group('Achievement.fromJson', () {
@@ -231,6 +259,16 @@ void main() {
       expect(a.points, 0);
       expect(a.badgeName, '');
       expect(a.isEarned, isFalse);
+    });
+
+    test('Type is captured, empty string normalised to null, round-trips', () {
+      final missable =
+          Achievement.fromJson(achJson()..['Type'] = 'missable');
+      expect(missable.type, 'missable');
+      expect(Achievement.fromJson(missable.toJson()).type, 'missable');
+      // RA sends "" for a standard achievement; treat it as no type.
+      expect(Achievement.fromJson(achJson()..['Type'] = '').type, isNull);
+      expect(Achievement.fromJson(achJson()).type, isNull);
     });
   });
 
@@ -319,6 +357,33 @@ void main() {
       (data['Results'] as List).first.remove('MostRecentAwardedDate');
       final g = RaService.parseCompletionProgress(data).single;
       expect(g.lastPlayed, isNull);
+    });
+
+    test('maps HighestAwardKind to RaAward and captures the date', () {
+      final data = payload();
+      (data['Results'] as List).first
+        ..['HighestAwardKind'] = 'beaten-hardcore'
+        ..['HighestAwardDate'] = '2026-06-01 08:00:00';
+      final g = RaService.parseCompletionProgress(data).single;
+      expect(g.highestAward, RaAward.beatenHardcore);
+      expect(g.highestAwardDate, DateTime.parse('2026-06-01 08:00:00'));
+    });
+
+    test('award is none and date null when absent', () {
+      final g = RaService.parseCompletionProgress(payload()).single;
+      expect(g.highestAward, RaAward.none);
+      expect(g.highestAwardDate, isNull);
+    });
+  });
+
+  group('raAwardFromKind', () {
+    test('maps every RA kind and defaults unknown to none', () {
+      expect(raAwardFromKind('beaten-softcore'), RaAward.beatenSoftcore);
+      expect(raAwardFromKind('beaten-hardcore'), RaAward.beatenHardcore);
+      expect(raAwardFromKind('completed'), RaAward.completed);
+      expect(raAwardFromKind('mastered'), RaAward.mastered);
+      expect(raAwardFromKind(null), RaAward.none);
+      expect(raAwardFromKind('something-new'), RaAward.none);
     });
   });
 

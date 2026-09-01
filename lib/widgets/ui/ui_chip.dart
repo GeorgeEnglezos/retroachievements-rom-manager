@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../theme/ui_tokens.dart';
 
-/// GB DMG chip. Selected = red fill + beige text; unselected = card fill + ink
-/// text. Hard ink border, no radius. A trailing ✕ appears when [onRemove] is
-/// set (tapping it calls [onRemove], not [onTap]).
+/// Pill chip. Selected = accent fill + background-colored text; unselected =
+/// surface fill + normal ink. A trailing ✕ appears when [onRemove] is set
+/// (tapping it calls [onRemove], not [onTap]).
 class UiChip extends StatelessWidget {
   final String label;
   final bool selected;
@@ -27,9 +27,10 @@ class UiChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.fromLTRB(8, 4, onRemove != null ? 4 : 8, 4),
+        padding: EdgeInsets.fromLTRB(10, 4, onRemove != null ? 6 : 10, 4),
         decoration: BoxDecoration(
           color: selected ? ui.accent : ui.surface,
+          borderRadius: UiTokens.pill,
           border: Border.all(color: ui.border, width: ui.borderWidth),
         ),
         child: Row(

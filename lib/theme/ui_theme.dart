@@ -14,12 +14,13 @@ ThemeData uiTheme(UiTokens t) {
     primary: t.accent,
     onPrimary: t.background,
     onSurface: t.text,
-    error: t.accent,
+    error: t.warning,
   );
 
-  const zero = RoundedRectangleBorder(borderRadius: BorderRadius.zero);
+  final control = RoundedRectangleBorder(borderRadius: t.roundMd);
+  final panel = RoundedRectangleBorder(borderRadius: t.roundLg);
   OutlineInputBorder inputBorder(Color c) => OutlineInputBorder(
-        borderRadius: BorderRadius.zero,
+        borderRadius: t.roundMd,
         borderSide: BorderSide(color: c, width: t.borderWidth),
       );
 
@@ -42,20 +43,35 @@ ThemeData uiTheme(UiTokens t) {
       style: FilledButton.styleFrom(
         backgroundColor: t.accent,
         foregroundColor: t.background,
-        shape: zero,
+        shape: control,
       ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(shape: zero),
+      style: ElevatedButton.styleFrom(shape: control),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: t.text,
         side: BorderSide(color: t.border, width: t.borderWidth),
-        shape: zero,
+        shape: control,
       ),
     ),
-    cardTheme: const CardThemeData(shape: zero),
-    dialogTheme: const DialogThemeData(shape: zero),
+    // Sub-tabs read as an underlined strip on the page, not as a filled band:
+    // the accent marks the active label and a hairline carries the rest.
+    tabBarTheme: TabBarThemeData(
+      labelColor: t.accent,
+      unselectedLabelColor: t.muted,
+      indicatorColor: t.accent,
+      indicatorSize: TabBarIndicatorSize.label,
+      dividerColor: t.border,
+      dividerHeight: t.borderWidth,
+      labelStyle: const TextStyle(
+          fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: const TextStyle(
+          fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.w400),
+      overlayColor: WidgetStatePropertyAll(t.accent.withValues(alpha: 0.06)),
+    ),
+    cardTheme: CardThemeData(shape: panel),
+    dialogTheme: DialogThemeData(shape: panel),
   );
 }

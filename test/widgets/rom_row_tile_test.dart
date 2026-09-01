@@ -7,6 +7,8 @@ import 'package:path/path.dart' as p;
 import 'package:rarm/models/rom_result.dart';
 import 'package:rarm/models/rom_row.dart';
 import 'package:rarm/models/scraped_game.dart';
+import 'package:rarm/services/app_mode.dart';
+import 'package:rarm/services/play_view.dart';
 import 'package:rarm/services/playlist_store.dart';
 import 'package:rarm/services/scraper/scraped_store.dart';
 import 'package:rarm/services/storage_treemap.dart' show TreemapItem;
@@ -247,6 +249,44 @@ void main() {
       await tester.tap(find.text('Delete'));
       await tester.pumpAndSettle();
       expect(find.textContaining('all 3 discs'), findsOneWidget);
+    });
+  });
+
+  group('play-mode listing settings', () {
+    tearDown(() {
+      appModeListenable.value = AppMode.cleaning;
+      playViewListenable.value = const PlayView();
+    });
+
+    RomResult named() =>
+        RomResult(filePath: r'C:\roms\snes\smw.sfc', fileName: 'smw.sfc')
+          ..status = RomStatus.supported
+          ..gameTitle = 'Super Mario World'
+          ..fileSize = 512 * 1024;
+
+    testWidgets('cleaning shows the file name and size lines', (tester) async {
+      await tester.pumpWidget(hostRom(named()));
+      expect(find.text('Super Mario World'), findsOneWidget);
+      expect(find.text('smw.sfc'), findsOneWidget);
+      expect(find.text('512.0 KB'), findsOneWidget);
+    });
+
+    testWidgets('play mode drops the file name and size by default',
+        (tester) async {
+      appModeListenable.value = AppMode.gaming;
+      await tester.pumpWidget(hostRom(named()));
+      expect(find.text('Super Mario World'), findsOneWidget);
+      expect(find.text('smw.sfc'), findsNothing);
+      expect(find.text('512.0 KB'), findsNothing);
+    });
+
+    testWidgets('play mode can title rows by file name instead',
+        (tester) async {
+      appModeListenable.value = AppMode.gaming;
+      playViewListenable.value = const PlayView(raTitle: false);
+      await tester.pumpWidget(hostRom(named()));
+      expect(find.text('Super Mario World'), findsNothing);
+      expect(find.text('smw.sfc'), findsOneWidget);
     });
   });
 }

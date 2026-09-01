@@ -342,6 +342,58 @@ void main() {
       expect(find.byType(RaImage), findsNWidgets(2));
       expect(localPaths(tester), isEmpty);
     });
-  });
 
+    testWidgets('the achievement readout sits beside the shots and still fits '
+        'a short window', (tester) async {
+      final rom = RomResult(filePath: 'snes/delta.sfc', fileName: 'delta.sfc')
+        ..status = RomStatus.supported
+        ..gameId = 6
+        ..imageBoxArt = '/Images/delta_box.png'
+        ..imageTitle = '/Images/delta_title.png'
+        ..imageIngame = '/Images/delta_ingame.png'
+        ..achievementCount = 60
+        ..earnedAchievements = 21;
+
+      // The panel is a fixed height under an Expanded grid of shots, so a
+      // shallow window is where the column would burst if it ever did.
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 380,
+            width: 900,
+            child: CullCard(
+              card: CullCardData(rom: rom, discs: [rom], memberKey: 'ra:6'),
+              onSearch: () {},
+            ),
+          ),
+        ),
+      ));
+
+      expect(find.text('ACHIEVEMENTS'), findsOneWidget);
+      expect(find.text('21/60'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a game with no set gets no achievement readout',
+        (tester) async {
+      final rom = RomResult(filePath: 'snes/gamma.sfc', fileName: 'gamma.sfc')
+        ..status = RomStatus.localOnly;
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 480,
+            width: 900,
+            child: CullCard(
+              card: CullCardData(
+                  rom: rom, discs: [rom], memberKey: 'path:snes/gamma.sfc'),
+              onSearch: () {},
+            ),
+          ),
+        ),
+      ));
+
+      expect(find.text('ACHIEVEMENTS'), findsNothing);
+    });
+  });
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/scan_progress.dart';
+import '../theme/ui_tokens.dart';
 
 /// Persistent bottom bar showing the current sweep's progress + a cancel
 /// button. Renders nothing when no scan is running. Mounted once above the
@@ -15,8 +16,11 @@ class ScanProgressBar extends StatelessWidget {
       builder: (context, _) {
         final p = ScanProgress.instance;
         if (!p.running) return const SizedBox.shrink();
+        final ui = context.ui;
         return Material(
-          elevation: 8,
+          color: ui.surface,
+          shape: Border(
+              top: BorderSide(color: ui.border, width: ui.borderWidth)),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
             child: Row(
@@ -26,14 +30,20 @@ class ScanProgressBar extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      LinearProgressIndicator(value: p.value),
+                      // Not UiProgressBar: a live scan needs the
+                      // indeterminate animation, and its entrance tween would
+                      // fight the value updating every few frames.
+                      LinearProgressIndicator(
+                        value: p.value,
+                        minHeight: 8,
+                        color: ui.accent,
+                        backgroundColor: ui.trough,
+                        borderRadius: UiTokens.pill,
+                      ),
                       if (p.label.isNotEmpty)
                         Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            p.label,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(p.label, style: ui.body),
                         ),
                     ],
                   ),

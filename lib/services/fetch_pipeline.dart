@@ -105,6 +105,8 @@ Future<void> applyFetchResultToRom({
         applyGameInfo(rom, info);
         rom.earnedAchievements = progress.earnedAchievements;
         rom.earnedHardcore = progress.earnedHardcore;
+        rom.highestAward = progress.highestAward;
+        rom.highestAwardDate = progress.highestAwardDate;
         rom.lastPlayed = progress.lastPlayed;
       } else {
         rom.status = RomStatus.supported;

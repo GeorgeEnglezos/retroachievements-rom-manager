@@ -8,6 +8,7 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path/path.dart' as p;
 import '../models/rom_result.dart';
 import '../services/android_emulators.dart';
+import '../services/app_mode.dart';
 import '../services/file_actions.dart';
 import '../services/icon_service.dart';
 import '../services/library.dart';
@@ -92,24 +93,32 @@ class RomActions {
         if (Platform.isAndroid)
           _item('shortcut', Icons.add_to_home_screen,
               'Add to home screen (beta)'),
-        _item('reveal', Icons.folder_open, 'Reveal in Explorer'),
-        _item('copy', Icons.copy, 'Copy path'),
+        if (!gamingMode) ...[
+          _item('reveal', Icons.folder_open, 'Reveal in Explorer'),
+          _item('copy', Icons.copy, 'Copy path'),
+        ],
         _item('google', Icons.search, 'Search Google'),
         if (canOpenRa) _item('ra', Icons.open_in_new, 'Open RA page'),
         if (rom.status == RomStatus.unsupported)
           _item('why_unsupported', Icons.help_outline, 'Why unsupported?'),
-        if (rom.duplicateGroupId != null && onDismissDuplicate != null)
-          _item('dismiss_dup', Icons.do_not_disturb_on_outlined,
-              'Not a duplicate'),
-        if (rom.status != RomStatus.checking &&
-            !rom.isLocalOnly &&
-            onFetch != null)
-          rom.status == RomStatus.supported
-              ? _item('fetch', Icons.sync, 'Sync progress')
-              : _item('fetch', Icons.cloud_download_outlined, 'Fetch'),
+        // Everything below curates or edits the library, which gaming mode
+        // exists not to do.
+        if (!gamingMode) ...[
+          if (rom.duplicateGroupId != null && onDismissDuplicate != null)
+            _item('dismiss_dup', Icons.do_not_disturb_on_outlined,
+                'Not a duplicate'),
+          if (rom.status != RomStatus.checking &&
+              !rom.isLocalOnly &&
+              onFetch != null)
+            rom.status == RomStatus.supported
+                ? _item('fetch', Icons.sync, 'Sync progress')
+                : _item('fetch', Icons.cloud_download_outlined, 'Fetch'),
+        ],
         _item('playlist', Icons.playlist_add, 'Add to playlist…'),
-        _item('delete', Icons.delete_outline, 'Delete', color: Colors.red),
-        _item('exclude', Icons.block, 'Exclude from scans'),
+        if (!gamingMode) ...[
+          _item('delete', Icons.delete_outline, 'Delete', color: Colors.red),
+          _item('exclude', Icons.block, 'Exclude from scans'),
+        ],
       ],
     );
     if (choice == null || !context.mounted) return;

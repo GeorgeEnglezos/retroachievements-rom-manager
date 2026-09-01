@@ -3,7 +3,7 @@ import '../../theme/ui_tokens.dart';
 
 typedef UiDropdownItem<T> = ({T value, String label});
 
-/// GB DMG dropdown: a button-styled trigger (current label + ▾) that opens a
+/// Dropdown: a button-styled trigger (current label + ▾) that opens a
 /// PopupMenu of [items]. Dimmed and inert when [enabled] is false.
 class UiDropdown<T> extends StatelessWidget {
   final T value;
@@ -39,9 +39,10 @@ class UiDropdown<T> extends StatelessWidget {
             ),
         ],
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: ui.surface,
+            borderRadius: ui.roundMd,
             border: Border.all(color: ui.border, width: ui.borderWidth),
             boxShadow: ui.shadow(ui.controlShadow),
           ),

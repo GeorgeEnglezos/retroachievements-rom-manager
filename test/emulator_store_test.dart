@@ -136,4 +136,10 @@ void main() {
     await EmulatorStore.setExtraArgs('e1', '--bar');
     expect((await EmulatorStore.emulators()).single.extraArgs, '--bar');
   });
+
+  test('takeAndroidSweep is true once, then false forever', () async {
+    expect(await EmulatorStore.takeAndroidSweep(), isTrue);
+    expect(await EmulatorStore.takeAndroidSweep(), isFalse);
+    expect(await EmulatorStore.takeAndroidSweep(), isFalse);
+  });
 }

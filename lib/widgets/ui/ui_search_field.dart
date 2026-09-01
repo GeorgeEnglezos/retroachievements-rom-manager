@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/ui_tokens.dart';
 
-/// GB-styled search text field with a clear (✕) button. The [controller] is
+/// Rounded search text field with a clear (✕) button. The [controller] is
 /// owned by the parent; this widget listens to it to show/hide the clear button.
 class UiSearchField extends StatefulWidget {
   final TextEditingController controller;
@@ -35,7 +35,7 @@ class _SearchFieldState extends State<UiSearchField> {
   }
 
   OutlineInputBorder _border(Color c) => OutlineInputBorder(
-        borderRadius: BorderRadius.zero,
+        borderRadius: context.ui.roundMd,
         borderSide: BorderSide(color: c, width: context.ui.borderWidth),
       );
 

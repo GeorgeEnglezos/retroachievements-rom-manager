@@ -11,6 +11,7 @@ void main() {
     RomFilter filter = const RomFilter(),
     FolderSort sort = FolderSort.alphabetical,
     bool anyDuplicates = true,
+    bool showViewToggle = true,
     CleanupScoreMode cleanupMode = CleanupScoreMode.logDampened,
     void Function(RomFilter)? onFilterChanged,
     void Function(FolderSort)? onSortChanged,
@@ -25,6 +26,7 @@ void main() {
             sort: sort,
             sortAscending: true,
             gridView: false,
+            showViewToggle: showViewToggle,
             availableGenres: const ['Action'],
             showProgress: true,
             anyDuplicates: anyDuplicates,
@@ -112,5 +114,15 @@ void main() {
     ));
     await tester.tap(find.byIcon(Icons.close).first);
     expect(got?.statuses.contains(RomStatus.supported), isFalse);
+  });
+
+  testWidgets('a pinned play layout hides the list/grid toggle', (tester) async {
+    await tester.pumpWidget(host());
+    expect(find.byIcon(Icons.grid_view), findsOneWidget);
+
+    await tester.pumpWidget(host(showViewToggle: false));
+    expect(find.byIcon(Icons.grid_view), findsNothing);
+    // The rest of the toolbar is untouched.
+    expect(find.byIcon(Icons.arrow_upward), findsOneWidget);
   });
 }

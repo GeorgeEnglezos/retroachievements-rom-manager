@@ -137,6 +137,8 @@ Future<FolderRunResult> runFolderFetch({
           earnedAchievements: prog?.numAwarded ?? 0,
           earnedHardcore: prog?.numAwardedHardcore ?? 0,
           lastPlayed: prog?.lastPlayed,
+          highestAward: prog?.highestAward ?? RaAward.none,
+          highestAwardDate: prog?.highestAwardDate,
           achievements: g.progress?.achievements ?? const [],
         ),
       );

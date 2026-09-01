@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart' show VoidCallback;
+import '../services/play_view.dart' show listingTitle;
 import '../services/storage_treemap.dart' show TreemapItem;
 import 'folder_stats.dart' show formatBytes;
 import 'rom_result.dart';
@@ -50,7 +51,7 @@ class RomRow {
   factory RomRow.fromRom(RomResult rom,
           {VoidCallback? onTap, String? scoreLabel}) =>
       RomRow(
-        title: gameDisplayName(rom.gameTitle, rom.fileName),
+        title: listingTitle(rom.gameTitle, rom.fileName),
         subtitle: rom.fileName,
         filePath: rom.filePath,
         status: rom.status,

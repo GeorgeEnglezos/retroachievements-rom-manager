@@ -28,9 +28,9 @@ class BulkActionBar extends StatelessWidget {
     required this.onClose,
   });
 
-  /// Foreground (text/icons) on the bar: white reads cleanly on the
-  /// dark/blue bar background in both palettes.
-  static const Color _onBar = Color(0xFFFFFFFF);
+  /// Foreground on the two solid-filled buttons (purple favorite, red delete):
+  /// white reads cleanly on both fills in either palette.
+  static const Color _onFill = Color(0xFFFFFFFF);
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +39,7 @@ class BulkActionBar extends StatelessWidget {
       key: const ValueKey('bulk-bar'),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: ui.text,
+        color: ui.surfaceAlt,
         border: Border(bottom: BorderSide(color: ui.border, width: ui.borderWidth)),
       ),
       child: deleting ? _deletingRow(ui) : _actionsRow(ui),
@@ -49,7 +49,7 @@ class BulkActionBar extends StatelessWidget {
   Widget _deletingRow(UiTokens ui) => Row(
         children: [
           Text('Deleting $deleteDone of $deleteTotal…',
-              style: ui.mono.copyWith(color: _onBar, fontWeight: FontWeight.w900)),
+              style: ui.mono.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(width: 12),
           Expanded(
             child: LinearProgressIndicator(
@@ -64,7 +64,7 @@ class BulkActionBar extends StatelessWidget {
   Widget _actionsRow(UiTokens ui) => Row(
         children: [
           Text('$selectedCount selected',
-              style: ui.mono.copyWith(color: _onBar, fontWeight: FontWeight.w900)),
+              style: ui.mono.copyWith(fontWeight: FontWeight.w900)),
           const Spacer(),
           if (onFavorites != null)
             _btn(ui, Icons.favorite, 'Favorites', onFavorites,
@@ -74,7 +74,9 @@ class BulkActionBar extends StatelessWidget {
           _btn(ui, Icons.delete_outline, 'Delete', onDelete, fill: kDangerColor),
           if (onExclude != null) _btn(ui, Icons.block, 'Exclude', onExclude),
           IconButton(
-            icon: const Icon(Icons.close, size: 18, color: _onBar),
+            icon: Icon(Icons.close, size: 18, color: ui.text),
+            // The only bare icon on the bar; the rest carry visible text.
+            tooltip: 'Clear selection',
             visualDensity: VisualDensity.compact,
             onPressed: onClose,
           ),
@@ -83,24 +85,24 @@ class BulkActionBar extends StatelessWidget {
 
   Widget _btn(UiTokens ui, IconData icon, String label, VoidCallback? onTap,
       {Color? fill}) {
-    // Favorite (pink) and Delete (red) are solid filled buttons with white text
-    // so they read cleanly against the blue bar instead of clashing.
+    // Favorite (purple) and Delete (red) are solid filled buttons with white
+    // text so they read cleanly against the bar instead of clashing.
     if (fill != null) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4),
         child: TextButton.icon(
-          icon: Icon(icon, size: 16, color: _onBar),
+          icon: Icon(icon, size: 16, color: _onFill),
           label: Text(label,
-              style: ui.labelCaps.copyWith(color: _onBar, fontWeight: FontWeight.w900)),
+              style: ui.labelCaps.copyWith(color: _onFill, fontWeight: FontWeight.w900)),
           style: TextButton.styleFrom(
             backgroundColor: fill,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            shape: RoundedRectangleBorder(borderRadius: ui.roundMd),
           ),
           onPressed: onTap,
         ),
       );
     }
-    final color = onTap == null ? ui.muted : _onBar;
+    final color = onTap == null ? ui.muted : ui.text;
     return TextButton.icon(
       icon: Icon(icon, size: 16, color: color),
       label: Text(label,

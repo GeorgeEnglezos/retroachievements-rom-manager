@@ -19,6 +19,7 @@ import '../services/ra_service.dart';
 import '../services/scan_settings.dart';
 import '../services/console_map.dart';
 import '../services/library.dart';
+import '../services/play_view.dart';
 import '../services/playlist_store.dart';
 import '../services/pref_keys.dart';
 import '../services/scraper/scraped_store.dart';
@@ -44,14 +45,6 @@ import '../widgets/require_credentials.dart';
 import '../widgets/rom_list_view.dart';
 import '../theme/ui_tokens.dart';
 
-
-const _groupColors = [
-  Color(0xFF7986CB),
-  Color(0xFFEF9A9A),
-  Color(0xFF80CBC4),
-  Color(0xFFFFCC80),
-  Color(0xFF80DEEA),
-];
 
 class _GroupHeader {
   final Color color;
@@ -101,6 +94,13 @@ class _FolderViewState extends State<FolderView> {
   FolderSort _folderSort = FolderSort.alphabetical;
   bool _sortAscending = true;
   bool _gridView = false;
+  // The layout actually drawn. Play mode can pin it, in which case the toolbar
+  // toggle is hidden and _gridView keeps whatever cleaning last chose.
+  bool get _effectiveGrid => switch (playView.layout) {
+        PlayLayout.follow => _gridView,
+        PlayLayout.list => false,
+        PlayLayout.grid => true,
+      };
   CleanupScoreMode _cleanupMode = CleanupScoreMode.logDampened;
   // Sort override; a flag (not a FolderSort) so toggling off restores the
   // previous sort.
@@ -351,6 +351,8 @@ class _FolderViewState extends State<FolderView> {
                 earnedAchievements: r.earnedAchievements!,
                 earnedHardcore: r.earnedHardcore ?? 0,
                 lastPlayed: r.lastPlayed,
+                highestAward: r.highestAward ?? RaAward.none,
+                highestAwardDate: r.highestAwardDate,
               ),
       ));
     }
@@ -565,6 +567,8 @@ class _FolderViewState extends State<FolderView> {
             applyGameInfo(rom, info);
             rom.earnedAchievements = progress.earnedAchievements;
             rom.earnedHardcore = progress.earnedHardcore;
+            rom.highestAward = progress.highestAward;
+            rom.highestAwardDate = progress.highestAwardDate;
             rom.lastPlayed = progress.lastPlayed;
           });
         }
@@ -689,7 +693,7 @@ class _FolderViewState extends State<FolderView> {
     if (!g.isMultiDisc) return _toRow(g.discs.first);
     final rep = g.representative;
     return RomRow(
-      title: gameDisplayName(rep.gameTitle, stripDiscToken(rep.fileName)),
+      title: listingTitle(rep.gameTitle, stripDiscToken(rep.fileName)),
       filePath: rep.filePath,
       status: rep.status,
       imageIcon: rep.imageIcon,
@@ -756,7 +760,8 @@ class _FolderViewState extends State<FolderView> {
         final start = i;
         while (i < roms.length && roms[i].duplicateGroupId == gid) { i++; }
         final end = i;
-        final color = _groupColors[gid % _groupColors.length];
+        final accents = context.ui.accents;
+        final color = accents[gid % accents.length];
         rows.add(_GroupHeader(color: color, count: end - start));
         rows.addAll(roms.sublist(start, end));
       }
@@ -795,7 +800,8 @@ class _FolderViewState extends State<FolderView> {
                   filter: _filter,
                   sort: _folderSort,
                   sortAscending: _sortAscending,
-                  gridView: _gridView,
+                  gridView: _effectiveGrid,
+                  showViewToggle: playView.layout == PlayLayout.follow,
                   availableGenres: _availableGenres,
                   availableTags: _availableTags,
                   showProgress: _anyProgress,
@@ -840,7 +846,7 @@ class _FolderViewState extends State<FolderView> {
                         : RowDisplay.roms,
                     store: _playlistStore,
                     enableSelection: true,
-                    gridView: _gridView,
+                    gridView: _effectiveGrid,
                     gridDelegate:
                         const SliverGridDelegateWithMaxCrossAxisExtent(
                             maxCrossAxisExtent: 300,

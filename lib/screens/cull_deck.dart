@@ -201,14 +201,17 @@ class _CullDeckState extends State<CullDeck> {
           children: [
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                 child: Center(
                   child: ConstrainedBox(
-                    // Desktop widths get a wider card so it can show the whole
-                    // image set side by side; phones keep the single-cover card.
+                    // Desktop widths give the card most of the window so the
+                    // cover, the rest of the image set and the achievement
+                    // readout all get room; phones keep the single-cover card,
+                    // where the cap is wider than the screen anyway.
                     constraints: BoxConstraints(
-                        maxWidth:
-                            MediaQuery.sizeOf(context).width >= 900 ? 980 : 420),
+                        maxWidth: MediaQuery.sizeOf(context).width >= 900
+                            ? 1320
+                            : 520),
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
@@ -260,8 +263,7 @@ class _CullDeckState extends State<CullDeck> {
   Widget _reveal(
           UiTokens ui, IconData icon, Color color, Alignment align) =>
       Container(
-        decoration: BoxDecoration(
-            color: color, borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(color: color, borderRadius: ui.roundLg),
         alignment: align,
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Icon(icon, color: ui.navSelectedFg, size: 36),

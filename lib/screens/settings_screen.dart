@@ -5,12 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../theme/ui_tokens.dart';
+import '../services/android_emulators.dart';
+import '../services/app_mode.dart';
+import '../services/play_view.dart';
 import '../services/app_theme.dart';
 import '../services/backup_service.dart';
 import '../services/console_map.dart';
 import '../services/credentials.dart';
 import '../services/display_name.dart';
 import '../services/emulator_catalog.dart';
+import '../services/emulator_finder.dart';
 import '../services/emulator_store.dart';
 import '../services/library.dart';
 import '../services/pref_keys.dart';
@@ -245,15 +250,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScanSettings.setEnabledExtensions(defaults);
   }
 
-  // Section heading with an optional one-line description.
+  // Section heading with an optional one-line description. The description is
+  // held to a readable measure so a wide window does not stretch it into one
+  // long line.
   Widget _heading(String title, String description) {
+    final ui = context.ui;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 4),
-        Text(description, style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(height: 12),
+        Text(title, style: ui.display.copyWith(fontSize: 17)),
+        const SizedBox(height: 6),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Text(description,
+              style: TextStyle(fontSize: 13, height: 1.45, color: ui.muted)),
+        ),
+        const SizedBox(height: 16),
       ],
     );
   }
@@ -268,7 +280,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           controller: _usernameCtrl,
           decoration: const InputDecoration(
             labelText: 'Username',
-            border: OutlineInputBorder(),
             isDense: true,
           ),
           onChanged: (v) => _setStringPref(PrefKeys.raUsername, v.trim()),
@@ -280,7 +291,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           focusNode: _apiKeyFocus,
           decoration: const InputDecoration(
             labelText: 'Web API key',
-            border: OutlineInputBorder(),
             isDense: true,
           ),
           obscureText: true,
@@ -302,7 +312,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           decoration: const InputDecoration(
             labelText: 'Extensions',
             hintText: 'chd, nds, gb, gba, ...',
-            border: OutlineInputBorder(),
             isDense: true,
           ),
           minLines: 1,
@@ -325,7 +334,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           decoration: const InputDecoration(
             labelText: 'Ignored folders',
             hintText: 'BIOS, Saves, Cheats',
-            border: OutlineInputBorder(),
             isDense: true,
           ),
           minLines: 1,
@@ -341,7 +349,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             helperText: 'Full paths, one per line. Excluded files are hidden and '
                 'skipped, but not deleted.',
             helperMaxLines: 2,
-            border: OutlineInputBorder(),
             isDense: true,
           ),
           minLines: 2,
@@ -384,6 +391,89 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _modeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _heading('Mode',
+            'Play hides the maintenance tabs, scans, multi-select and every '
+            'delete button, so the app is safe to hand over.'),
+        ValueListenableBuilder<AppMode>(
+          valueListenable: appModeListenable,
+          builder: (context, mode, _) => SegmentedButton<AppMode>(
+            segments: const [
+              ButtonSegment(value: AppMode.cleaning, label: Text('Cleaning')),
+              ButtonSegment(value: AppMode.gaming, label: Text('Play')),
+            ],
+            selected: {mode},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) => saveAppMode(s.first),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // One switch bound to a single PlayView flag.
+  Widget _playSwitch(
+    String title,
+    bool value,
+    PlayView Function(bool) update, {
+    String? subtitle,
+  }) {
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      title: Text(title),
+      subtitle: subtitle == null ? null : Text(subtitle),
+      value: value,
+      onChanged: (on) => savePlayView(update(on)),
+    );
+  }
+
+  Widget _playViewSection() {
+    return ValueListenableBuilder<PlayView>(
+      valueListenable: playViewListenable,
+      builder: (context, v, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _heading('Play listings',
+              'What ROM lists show while Play is on. Cleaning always shows '
+              'everything.'),
+          _playSwitch('RetroAchievements names', v.raTitle,
+              (on) => v.copyWith(raTitle: on),
+              subtitle: 'Off names games by their file name instead.'),
+          _playSwitch(
+              'File name line', v.fileName, (on) => v.copyWith(fileName: on)),
+          _playSwitch(
+              'File size', v.fileSize, (on) => v.copyWith(fileSize: on)),
+          _playSwitch('Achievement count badge', v.achievementCount,
+              (on) => v.copyWith(achievementCount: on)),
+          _playSwitch('Hot badge', v.hot, (on) => v.copyWith(hot: on)),
+          _playSwitch('No-achievements badge', v.noAchievements,
+              (on) => v.copyWith(noAchievements: on)),
+          _playSwitch(
+              'File name tags', v.fileTags, (on) => v.copyWith(fileTags: on),
+              subtitle: 'Region, HACK, ENG and friends, read off the file name.'),
+          const SizedBox(height: 8),
+          Text('Layout', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 4),
+          SegmentedButton<PlayLayout>(
+            segments: const [
+              ButtonSegment(value: PlayLayout.follow, label: Text('My choice')),
+              ButtonSegment(value: PlayLayout.list, label: Text('List')),
+              ButtonSegment(value: PlayLayout.grid, label: Text('Grid')),
+            ],
+            selected: {v.layout},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) =>
+                savePlayView(v.copyWith(layout: s.first)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -569,13 +659,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _column(List<Widget> sections) {
+    final ui = context.ui;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      // Stretch, so a section's closing hairline runs the width of the column
+      // rather than stopping at whatever its widest control happens to be.
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (var i = 0; i < sections.length; i++) ...[
-          if (i > 0) const Divider(height: 40),
-          sections[i],
-        ],
+        for (var i = 0; i < sections.length; i++)
+          Container(
+            padding: EdgeInsets.only(bottom: i == sections.length - 1 ? 0 : 28),
+            margin: EdgeInsets.only(bottom: i == sections.length - 1 ? 0 : 28),
+            decoration: i == sections.length - 1
+                ? null
+                : BoxDecoration(
+                    border: Border(
+                        bottom: BorderSide(
+                            color: ui.border, width: ui.borderWidth))),
+            child: sections[i],
+          ),
       ],
     );
   }
@@ -590,7 +691,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: twoColumns ? 1400 : 720),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
               child: twoColumns
                   ? Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -618,6 +719,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _libraryFolderSection(),
       _scanFiltersSection(),
       _displaySection(),
+      _modeSection(),
+      _playViewSection(),
       _themeSection(),
       _dataSection(),
       // Mobile has no sidebar, so surface the version here.
@@ -627,24 +730,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final emulation = [
       EmulatorSettingsSection(library: widget.library),
     ];
+    final ui = context.ui;
     return DefaultTabController(
       length: 3,
       child: Scaffold(
-        appBar: AppBar(
-          title: wide ? const Text('Settings') : null,
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'General'),
-              Tab(text: 'Systems'),
-              Tab(text: 'Emulation (beta)'),
-            ],
-          ),
-        ),
-        body: TabBarView(
+        backgroundColor: ui.background,
+        // No AppBar: the tabs sit on the page under the title, on a hairline
+        // that runs the full width, the way the rest of the app separates
+        // sections. The shell already shows the title on mobile.
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _tabBody(general),
-            _tabBody(systems),
-            _tabBody(emulation),
+            Padding(
+              padding: EdgeInsets.fromLTRB(24, wide ? 24 : 10, 24, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (wide) ...[
+                    Text('Settings', style: ui.display.copyWith(fontSize: 26)),
+                    const SizedBox(height: 16),
+                  ],
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: TabBar(
+                      isScrollable: true,
+                      tabAlignment: TabAlignment.start,
+                      dividerHeight: 0,
+                      tabs: [
+                        Tab(text: 'General'),
+                        Tab(text: 'Systems'),
+                        Tab(text: 'Emulation (beta)'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, thickness: ui.borderWidth, color: ui.border),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _tabBody(general),
+                  _tabBody(systems),
+                  _tabBody(emulation),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -665,6 +796,7 @@ class EmulatorSettingsSection extends StatefulWidget {
 
 class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
   _EmulatorData? _data;
+  bool _scanning = false;
 
   @override
   void initState() {
@@ -679,6 +811,12 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
   }
 
   Future<_EmulatorData> _load() async {
+    // Android emulators are installed apps, so the first time this tab opens we
+    // sweep them in without asking. After that it's the Detect button, so a
+    // removed emulator stays removed.
+    if (Platform.isAndroid && await EmulatorStore.takeAndroidSweep()) {
+      await _addDetectedApps();
+    }
     final emulators = await EmulatorStore.emulators();
     final connections = await EmulatorStore.connections();
     final fullscreen = await EmulatorStore.launchFullscreen();
@@ -724,6 +862,53 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
     _toast('Added ${emu.name}. Connected its default systems below.');
   }
 
+  // Adds every installed app we recognise as an emulator, skipping kinds the
+  // user already has. Returns what it added.
+  Future<List<Emulator>> _addDetectedApps() async {
+    final found = emulatorsFromApps(await AndroidEmulators.installedApps(),
+        existing: await EmulatorStore.emulators());
+    for (final emu in found) {
+      await EmulatorStore.addEmulator(emu);
+    }
+    return found;
+  }
+
+  Future<void> _detectEmulatorApps() async {
+    setState(() => _scanning = true);
+    try {
+      final found = await _addDetectedApps();
+      await _refresh();
+      _toast(found.isEmpty
+          ? 'No new emulator apps found.'
+          : 'Added ${found.map((e) => e.name).join(', ')}. '
+              'Connected their default systems below.');
+    } finally {
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
+
+  // Desktop: point at a folder, add every emulator under it. EmulatorStore
+  // connects each one's default systems as it's added.
+  Future<void> _scanForEmulators() async {
+    final folder = await pickEmulatorFolder(context);
+    if (folder == null) return;
+    setState(() => _scanning = true);
+    try {
+      final found = await findEmulators(Directory(folder),
+          existing: _data?.emulators ?? const []);
+      for (final emu in found) {
+        await EmulatorStore.addEmulator(emu);
+      }
+      await _refresh();
+      _toast(found.isEmpty
+          ? 'No new emulators found in that folder.'
+          : 'Added ${found.map((e) => e.name).join(', ')}. '
+              'Connected their default systems below.');
+    } finally {
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
+
   Future<void> _editEmulatorExe(Emulator emu) async {
     final picked = await pickNewEmulator(context,
         dialogTitle: 'Choose the emulator executable for ${emu.name}');
@@ -755,7 +940,7 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
                       'RetroArch auto-fills the right core for most systems; '
                       'standalone emulators (Dolphin, PCSX2, DuckStation, PPSSPP) '
                       'connect their own.',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(fontSize: 12, color: context.ui.muted),
             ),
             const SizedBox(height: 16),
             Text('Your emulators', style: subhead),
@@ -833,12 +1018,38 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
                     ],
                   ),
               const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _addEmulator,
-                icon: const Icon(Icons.add),
-                label: Text(Platform.isAndroid
-                    ? 'Add emulator (pick app)'
-                    : 'Add emulator (browse exe)'),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _scanning ? null : _addEmulator,
+                    icon: const Icon(Icons.add),
+                    label: Text(Platform.isAndroid
+                        ? 'Add emulator (pick app)'
+                        : 'Add emulator (browse exe)'),
+                  ),
+                  // Desktop searches a folder of exes; Android sweeps the
+                  // installed apps, so there's nothing to browse for.
+                  OutlinedButton.icon(
+                    onPressed: _scanning
+                        ? null
+                        : Platform.isAndroid
+                            ? _detectEmulatorApps
+                            : _scanForEmulators,
+                    icon: _scanning
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.travel_explore),
+                    label: Text(_scanning
+                        ? 'Scanning…'
+                        : Platform.isAndroid
+                            ? 'Detect installed emulators'
+                            : 'Scan a folder for emulators'),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               Text('Systems', style: subhead),
@@ -922,7 +1133,6 @@ class _AutoSaveTextFieldState extends State<_AutoSaveTextField> {
       focusNode: _focus,
       decoration: InputDecoration(
         labelText: widget.label,
-        border: const OutlineInputBorder(),
         isDense: true,
       ),
       onEditingComplete: () => widget.onSave(_ctrl.text),

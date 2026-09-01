@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../models/folder_stats.dart' show compactCount;
 import '../models/rom_result.dart';
 import '../models/scraped_game.dart';
 import '../services/cull_deck_builder.dart';
@@ -14,13 +15,18 @@ import 'ra_image.dart';
 import 'rom_badges.dart';
 import 'rom_thumb.dart';
 import 'ui/ui_card.dart';
+import 'ui/ui_progress_bar.dart';
 
 /// One elimination-game card: art, listing thumbnail, title, file name,
 /// achievements and metadata, with the search button supplied by the deck. The
 /// console is not repeated here, the deck's app bar already names it. Tapping any image
 /// enlarges it in place; the detail dialog opens from the info button beside
 /// the search one. Given a wide card (desktop), the cover shares the art area
-/// with every other image the game has.
+/// with every other image the game has and an achievement readout.
+///
+/// Artwork is shown whole (letterboxed on its own panel) rather than cropped to
+/// fill: a keep-or-trash call is made off the picture, so cutting the edges off
+/// a cover would be hiding the thing being judged.
 class CullCard extends StatelessWidget {
   final CullCardData card;
   final VoidCallback onSearch;
@@ -146,16 +152,19 @@ class CullCard extends StatelessWidget {
       ];
 
   // RA box art first; else imported (Skraper) box art on disk; else a
-  // placeholder icon. Same lookup/fallback chain as RomGridItem._buildLeading.
+  // placeholder icon. Same lookup/fallback chain as RomThumb.
   Widget _buildArt(UiTokens ui, RomResult rom, ScrapedGame? scraped) {
     if (rom.boxArt != null) {
-      return RaImage(
-        url: raImageUrl(rom.boxArt!),
-        fit: BoxFit.cover,
-        zoomable: true,
-        error: _placeholder(ui),
-        placeholder: const Center(
-            child: CircularProgressIndicator(strokeWidth: 2)),
+      return _panel(
+        ui,
+        RaImage(
+          url: raImageUrl(rom.boxArt!),
+          fit: BoxFit.contain,
+          zoomable: true,
+          error: _placeholder(ui),
+          placeholder: const Center(
+              child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
       );
     }
     final scrapedArt = scraped?.thumbPath;
@@ -172,6 +181,13 @@ class CullCard extends StatelessWidget {
     return _placeholder(ui);
   }
 
+  // The ground a whole-image render sits on, so the letterbox bands around a
+  // portrait cover read as part of the card instead of a gap.
+  Widget _panel(UiTokens ui, Widget child) => ColoredBox(
+        color: ui.trough,
+        child: Padding(padding: const EdgeInsets.all(6), child: child),
+      );
+
   // Imported (Skraper) media from disk, tap-to-zoom like [RaImage] does for RA
   // art. The viewer gets the undecoded file so zooming isn't capped at the
   // thumbnail's decode width.
@@ -181,11 +197,14 @@ class CullCard extends StatelessWidget {
         builder: (context) => GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => showImageViewer(context, FileImage(File(path))),
-          child: Image.file(
-            File(path),
-            fit: BoxFit.cover,
-            cacheWidth: cacheWidth,
-            errorBuilder: (_, _, _) => _placeholder(ui, icon: errorIcon),
+          child: _panel(
+            ui,
+            Image.file(
+              File(path),
+              fit: BoxFit.contain,
+              cacheWidth: cacheWidth,
+              errorBuilder: (_, _, _) => _placeholder(ui, icon: errorIcon),
+            ),
           ),
         ),
       );
@@ -198,29 +217,70 @@ class CullCard extends StatelessWidget {
         ),
       );
 
-  // Wide card (desktop): the cover keeps the hero slot and every other image
-  // tiles beside it, so the whole set is visible without opening the dialog.
-  // Falls back to the plain cover when the game has nothing else.
+  // Wide card (desktop): the cover keeps the hero slot, and the column beside
+  // it carries every other image the game has plus the achievement readout the
+  // keep-or-trash call actually turns on. Falls back to the plain cover when the
+  // game has neither.
   Widget _gallery(UiTokens ui, RomResult rom, ScrapedGame? scraped) {
     final extras = _extraImages(rom, scraped);
-    if (extras.isEmpty) return _buildArt(ui, rom, scraped);
+    final panel = _achievements(ui, rom);
+    if (extras.isEmpty && panel == null) return _buildArt(ui, rom, scraped);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(flex: 3, child: _buildArt(ui, rom, scraped)),
-        const SizedBox(width: 4),
+        const SizedBox(width: 6),
         Expanded(
           flex: 2,
-          child: GridView.count(
-            crossAxisCount: extras.length > 2 ? 2 : 1,
-            padding: EdgeInsets.zero,
-            mainAxisSpacing: 4,
-            crossAxisSpacing: 4,
-            childAspectRatio: 4 / 3,
-            children: [for (final e in extras) _shot(ui, e)],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (extras.isNotEmpty)
+                Expanded(
+                  child: GridView.count(
+                    crossAxisCount: extras.length > 2 ? 2 : 1,
+                    padding: EdgeInsets.zero,
+                    mainAxisSpacing: 6,
+                    crossAxisSpacing: 6,
+                    childAspectRatio: 4 / 3,
+                    children: [for (final e in extras) _shot(ui, e)],
+                  ),
+                ),
+              if (extras.isNotEmpty && panel != null) const SizedBox(height: 6),
+              ?panel,
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  // Set size and how far in the user already is, in the same slot every card
+  // puts it. Null when the game has no set to report on.
+  Widget? _achievements(UiTokens ui, RomResult rom) {
+    final total = rom.achievementCount ?? 0;
+    if (total == 0) return null;
+    final earned = rom.earnedAchievements ?? 0;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: ui.surfaceAlt,
+        borderRadius: ui.roundMd,
+        border: Border.all(color: ui.border, width: ui.borderWidth),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('ACHIEVEMENTS',
+              style: ui.labelCaps.copyWith(color: ui.muted, fontSize: 10)),
+          const SizedBox(height: 4),
+          Text('$earned/$total', style: ui.mono.copyWith(fontSize: 22)),
+          const SizedBox(height: 10),
+          UiProgressBar(
+              value: earned / total, height: 5, color: ui.accentGames),
+        ],
+      ),
     );
   }
 
@@ -244,11 +304,14 @@ class CullCard extends StatelessWidget {
   Widget _shot(UiTokens ui, (String, bool) shot) {
     final (path, isLocal) = shot;
     if (!isLocal) {
-      return RaImage(
-        url: raImageUrl(path),
-        fit: BoxFit.cover,
-        zoomable: true,
-        error: _placeholder(ui, icon: 24),
+      return _panel(
+        ui,
+        RaImage(
+          url: raImageUrl(path),
+          fit: BoxFit.contain,
+          zoomable: true,
+          error: _placeholder(ui, icon: 24),
+        ),
       );
     }
     return _localImage(ui, path, cacheWidth: 400, errorIcon: 24);
@@ -268,14 +331,7 @@ class CullCard extends StatelessWidget {
             _gap(rom.developer, scraped?.developer),
         if ((rom.points ?? 0) > 0) '${rom.points} pts',
         if ((rom.numPlayersCasual ?? 0) > 0)
-          '${_fmtCount(rom.numPlayersCasual!)} players',
+          '${compactCount(rom.numPlayersCasual!)} players',
         rom.fileSizeLabel,
       ].whereType<String>().join(' · ');
-
-  // Same K/M abbreviation as GameDetailDialog._fmt.
-  String _fmtCount(int n) {
-    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
-    return n.toString();
-  }
 }
