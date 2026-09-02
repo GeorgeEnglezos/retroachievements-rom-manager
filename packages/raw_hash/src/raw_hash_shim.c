@@ -4,6 +4,7 @@
 
 #include "rc_hash.h"
 #include "chd_cdreader.h"
+#include "zstd.h"
 
 #include <string.h>
 
@@ -58,6 +59,14 @@ FFI_PLUGIN_EXPORT void raw_hash_set_filereader(raw_hash_vr_open open_fn,
   g_filereader.read = (rc_hash_filereader_read_handler)read_fn;
   g_filereader.close = (rc_hash_filereader_close_file_handler)close_fn;
   g_filereader_set = (open_fn != NULL);
+}
+
+FFI_PLUGIN_EXPORT int64_t raw_hash_zstd_decompress(uint8_t* dst, size_t dst_cap,
+                                                   const uint8_t* src, size_t src_size) {
+  size_t r = ZSTD_decompress(dst, dst_cap, src, src_size);
+  if (ZSTD_isError(r))
+    return -1;
+  return (int64_t)r;
 }
 
 FFI_PLUGIN_EXPORT int raw_hash_file_vreader(char* out33, uint32_t console_id, const char* path) {

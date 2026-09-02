@@ -4,18 +4,27 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:raw_hash/disc_bytes_reader.dart';
 
+import 'rvz_reader.dart';
+
 /// Opens a random-access reader for a compressed GC/Wii container, or null if
-/// the extension isn't one we decompress on the fly. See [DiscBytesReader].
+/// the extension isn't one we decompress on the fly or the file can't be opened
+/// or parsed. See [DiscBytesReader].
 DiscBytesReader? openDiscReader(String path) {
-  switch (p.extension(path).replaceFirst('.', '').toLowerCase()) {
-    case 'ciso':
-      return CisoReader.open(path);
-    case 'gcz':
-      return GczReader.open(path);
-    case 'wbfs':
-      return WbfsReader.open(path);
-    default:
-      return null;
+  try {
+    switch (p.extension(path).replaceFirst('.', '').toLowerCase()) {
+      case 'ciso':
+        return CisoReader.open(path);
+      case 'gcz':
+        return GczReader.open(path);
+      case 'wbfs':
+        return WbfsReader.open(path);
+      case 'rvz':
+        return RvzReader.open(path); // null for Wii / unsupported compression
+      default:
+        return null;
+    }
+  } catch (_) {
+    return null; // unopenable/unreadable path is simply not on-device hashable
   }
 }
 

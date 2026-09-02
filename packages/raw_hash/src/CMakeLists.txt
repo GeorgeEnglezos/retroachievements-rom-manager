@@ -36,6 +36,7 @@ target_include_directories(raw_hash PRIVATE
   "${RC}/include"
   "${RC}/src/rhash"
   "${CMAKE_CURRENT_SOURCE_DIR}/vendor/libchdr/include"
+  "${CMAKE_CURRENT_SOURCE_DIR}/vendor/libchdr/deps/zstd-1.5.7"
 )
 
 target_compile_definitions(raw_hash PUBLIC DART_SHARED_LIB)
@@ -43,7 +44,7 @@ if(MSVC)
   target_compile_definitions(raw_hash PRIVATE _CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO_WARNINGS)
 endif()
 
-target_link_libraries(raw_hash PRIVATE chdr-static)
+target_link_libraries(raw_hash PRIVATE chdr-static zstd)
 
 if (ANDROID)
   # Support Android 15 16k page size

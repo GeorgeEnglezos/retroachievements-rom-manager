@@ -3,43 +3,32 @@ import 'package:rarm/services/disc_formats.dart';
 
 void main() {
   group('DiscFormats', () {
-    test('compressed disc formats need decompression', () {
-      expect(DiscFormats.needsDecompression('game.rvz'), isTrue);
-      expect(DiscFormats.needsDecompression('D:/roms/gc/Gizmo.RVZ'), isTrue);
-      expect(DiscFormats.needsDecompression('game.wbfs'), isTrue);
-      expect(DiscFormats.needsDecompression('game.wia'), isTrue);
-      expect(DiscFormats.needsDecompression('game.gcz'), isTrue);
-      expect(DiscFormats.needsDecompression('game.ciso'), isTrue);
-    });
-
-    test('CISO/WBFS/GCZ hash on-device; RVZ/WIA still need DolphinTool', () {
+    test('on-device vs DolphinTool routing per format', () {
+      // Always on-device, never DolphinTool.
       for (final ext in ['ciso', 'wbfs', 'gcz']) {
         expect(DiscFormats.hasOnDeviceReader('game.$ext'), isTrue, reason: ext);
-        expect(DiscFormats.needsDolphinTool('game.$ext'), isFalse, reason: ext);
+        expect(DiscFormats.requiresDolphinTool('game.$ext'), isFalse,
+            reason: ext);
       }
-      for (final ext in ['rvz', 'wia']) {
-        expect(DiscFormats.needsDolphinTool('game.$ext'), isTrue, reason: ext);
-        expect(DiscFormats.hasOnDeviceReader('game.$ext'), isFalse, reason: ext);
-      }
+      // RVZ: on-device attempt (GameCube) with DolphinTool fallback (Wii), so
+      // it's never in the never-hashable set.
+      expect(DiscFormats.hasOnDeviceReader('game.rvz'), isTrue);
+      expect(DiscFormats.needsDolphinTool('game.rvz'), isTrue);
+      expect(DiscFormats.requiresDolphinTool('game.rvz'), isFalse);
+      // WIA: no on-device reader, so it truly requires DolphinTool.
+      expect(DiscFormats.hasOnDeviceReader('game.wia'), isFalse);
+      expect(DiscFormats.requiresDolphinTool('game.wia'), isTrue);
+
       expect(DiscFormats.hasOnDeviceReader('game.iso'), isFalse);
     });
 
-    test('raw disc formats do not need decompression', () {
-      expect(DiscFormats.needsDecompression('game.iso'), isFalse);
-      expect(DiscFormats.needsDecompression('game.gcm'), isFalse);
-      expect(DiscFormats.needsDecompression('game.gba'), isFalse);
-    });
-
-    test('NKit images are detected but NOT routed to decompression', () {
+    test('NKit images are detected (hash_service short-circuits them)', () {
       // DolphinTool can't rebuild NKit (output stays NKit, same hash, RA
-      // GameID 0), so NKit must not go through the decompression path.
+      // GameID 0), so hash_service flags NKit unsupported before format routing.
       expect(DiscFormats.isNkit('Blahblah Galaxy.nkit.iso'), isTrue);
       expect(DiscFormats.isNkit('D:/roms/wii/Space Hunter.NKIT.ISO'), isTrue);
       expect(DiscFormats.isNkit('game.nkit.gcm'), isTrue);
       expect(DiscFormats.isNkit('game.iso'), isFalse);
-      expect(DiscFormats.needsDecompression('Blahblah Galaxy.nkit.iso'),
-          isFalse);
-      expect(DiscFormats.needsDecompression('game.nkit.gcm'), isFalse);
     });
   });
 }

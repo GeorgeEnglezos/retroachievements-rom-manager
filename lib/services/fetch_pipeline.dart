@@ -24,6 +24,9 @@ HashFn romHasher({
   return (path) async {
     final r = await HashService.computeHash(path, consoleId,
         dolphinToolPath: dolphinToolPath);
+    if (r.note != null) {
+      LogService.info(logContext, '${p.basename(path)}: ${r.note}');
+    }
     if (r.unsupportedFormat) {
       LogService.warning(logContext,
           'Compressed disc format needs conversion to ISO (no DolphinTool): $path');

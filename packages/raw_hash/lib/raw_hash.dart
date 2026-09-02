@@ -1,5 +1,6 @@
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
@@ -63,6 +64,29 @@ class RawHash {
   static final _rawHashFileVreader = _dylib.lookupFunction<
       Int32 Function(Pointer<Uint8>, Uint32, Pointer<Utf8>),
       int Function(Pointer<Uint8>, int, Pointer<Utf8>)>('raw_hash_file_vreader');
+
+  // int64_t raw_hash_zstd_decompress(uint8_t* dst, size_t cap, const uint8_t* src, size_t n)
+  static final _zstdDecompress = _dylib.lookupFunction<
+      Int64 Function(Pointer<Uint8>, Size, Pointer<Uint8>, Size),
+      int Function(Pointer<Uint8>, int, Pointer<Uint8>, int)>(
+    'raw_hash_zstd_decompress',
+  );
+
+  /// Zstandard-decompresses [src] into a buffer of exactly [dstSize] bytes.
+  /// Returns null on error (bad stream or size mismatch).
+  static Uint8List? zstdDecompress(Uint8List src, int dstSize) {
+    final srcP = calloc<Uint8>(src.length);
+    final dstP = calloc<Uint8>(dstSize);
+    try {
+      srcP.asTypedList(src.length).setAll(0, src);
+      final n = _zstdDecompress(dstP, dstSize, srcP, src.length);
+      if (n < 0) return null;
+      return Uint8List.fromList(dstP.asTypedList(n));
+    } finally {
+      calloc.free(srcP);
+      calloc.free(dstP);
+    }
+  }
 
   /// Computes the RetroAchievements hash for [path] using rcheevos.
   ///

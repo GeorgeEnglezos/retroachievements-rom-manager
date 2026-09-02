@@ -210,12 +210,13 @@ Future<FolderRunResult> runFolderFetch({
           .map((f) => f.path)
           .toList();
 
-  // CISO/WBFS/GCZ hash on-device now; only RVZ/WIA still need DolphinTool.
-  // Without it, skip those up front so they don't burn a slot, and report them.
+  // CISO/WBFS/GCZ and GameCube RVZ hash on-device; only WIA (and Wii RVZ, which
+  // we can't tell apart by extension) truly needs DolphinTool. Skip only the
+  // never-hashable ones up front so they don't burn a slot, and report them.
   final dolphinToolPath =
       hash == null ? await DiscDecompressor.resolveToolPath() : null;
   final unhashable = (hash == null && dolphinToolPath == null)
-      ? targets.where(DiscFormats.needsDolphinTool).toList()
+      ? targets.where(DiscFormats.requiresDolphinTool).toList()
       : const <String>[];
   targets.removeWhere(unhashable.contains);
   onTargets?.call(targets.length);

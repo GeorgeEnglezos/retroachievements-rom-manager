@@ -49,4 +49,10 @@ FFI_PLUGIN_EXPORT void raw_hash_set_filereader(raw_hash_vr_open open_fn,
 FFI_PLUGIN_EXPORT int raw_hash_file_vreader(char* out33, uint32_t console_id,
                                             const char* path);
 
+// Zstandard one-shot decompress (used by the Dart RVZ reader for group data).
+// Writes up to `dst_cap` bytes; returns the decompressed size, or -1 on error.
+FFI_PLUGIN_EXPORT int64_t raw_hash_zstd_decompress(uint8_t* dst, size_t dst_cap,
+                                                   const uint8_t* src,
+                                                   size_t src_size);
+
 #endif // RAW_HASH_H

@@ -26,80 +26,117 @@ const _arcadeConsoleId = 27;
 class HashService {
   /// Computes the RA hash via rcheevos on a background isolate. Cartridge
   /// zips are unpacked first (rcheevos can't hash those containers).
-  /// Returns the hex hash (null on failure) plus rcheevos' diagnostic [log].
-  static Future<({String? hash, List<String> log, bool unsupportedFormat})>
-      computeHash(String filePath, int consoleId, {String? dolphinToolPath}) {
+  /// Returns the hex hash (null on failure), rcheevos' diagnostic [log], and a
+  /// human-readable [note] set when the on-device reader was bypassed for the
+  /// DolphinTool fallback (so the caller can surface it in the logs).
+  static Future<
+      ({
+        String? hash,
+        List<String> log,
+        bool unsupportedFormat,
+        String? note
+      })> computeHash(String filePath, int consoleId, {String? dolphinToolPath}) {
     return Isolate.run(() => _hash(filePath, consoleId, dolphinToolPath));
   }
 
-  static Future<({String? hash, List<String> log, bool unsupportedFormat})>
-      _hash(String filePath, int consoleId, String? dolphinToolPath) async {
+  static Future<
+      ({
+        String? hash,
+        List<String> log,
+        bool unsupportedFormat,
+        String? note
+      })> _hash(String filePath, int consoleId, String? dolphinToolPath) async {
     // NKit can't be hashed even via DolphinTool (output stays NKit, RA
     // returns GameID 0); the real fix is converting to ISO/RVZ.
     if (DiscFormats.isNkit(filePath)) {
-      return (hash: null, log: const <String>[], unsupportedFormat: true);
+      return (
+        hash: null,
+        log: const <String>[],
+        unsupportedFormat: true,
+        note: null
+      );
     }
 
     // rcheevos can't hash a 7z container and we don't unpack them (scanned for
     // display-only libraries); hashing the raw archive would yield a garbage
     // hash and a false "no match".
     if (p.extension(filePath).toLowerCase() == '.7z') {
-      return (hash: null, log: const <String>[], unsupportedFormat: true);
-    }
-
-    // RVZ/WIA still need DolphinTool; without it they can't be hashed.
-    if (DiscFormats.needsDolphinTool(filePath) && dolphinToolPath == null) {
-      return (hash: null, log: const <String>[], unsupportedFormat: true);
+      return (
+        hash: null,
+        log: const <String>[],
+        unsupportedFormat: true,
+        note: null
+      );
     }
 
     final log = <String>[];
 
-    // rcheevos error callback is process-global: safe only while hashing is
-    // sequential. Concurrent hashing needs a thread-local in the C shim.
+    // On-device readers (CISO/WBFS/GCZ always; RVZ for GameCube). These hash
+    // with no DolphinTool, so they work on Android too. Opening the reader is
+    // pure Dart file I/O — no native call until we actually hash.
+    if (DiscFormats.hasOnDeviceReader(filePath)) {
+      final reader = openDiscReader(filePath);
+      if (reader != null) {
+        try {
+          final hash = _runNative(
+              log, () => RawHash.hashFileVirtual(filePath, reader, consoleId));
+          return (hash: hash, log: log, unsupportedFormat: false, note: null);
+        } finally {
+          reader.close();
+        }
+      }
+      // Reader declined (Wii RVZ / unsupported compression): fall back to
+      // DolphinTool if present, otherwise it's unsupported here.
+      if (!DiscFormats.needsDolphinTool(filePath) || dolphinToolPath == null) {
+        return (hash: null, log: log, unsupportedFormat: true, note: null);
+      }
+    } else if (DiscFormats.needsDolphinTool(filePath) &&
+        dolphinToolPath == null) {
+      // WIA, no tool.
+      return (hash: null, log: log, unsupportedFormat: true, note: null);
+    }
+
+    if (DiscFormats.needsDolphinTool(filePath)) {
+      final note = DiscFormats.hasOnDeviceReader(filePath)
+          ? 'on-device RVZ reader declined (unsupported compression); '
+              'used DolphinTool'
+          : 'no on-device reader for this format; used DolphinTool';
+      final result =
+          await DiscDecompressor.decompressToIso(dolphinToolPath!, filePath);
+      if (result.isoPath == null) {
+        log.add('DolphinTool failed to decompress $filePath'
+            '${result.error == null || result.error!.isEmpty ? '' : ': ${result.error}'}');
+        return (hash: null, log: log, unsupportedFormat: false, note: note);
+      }
+      final iso = result.isoPath!;
+      try {
+        final hash = _runNative(log, () => RawHash.hashFile(iso, consoleId));
+        return (hash: hash, log: log, unsupportedFormat: false, note: note);
+      } finally {
+        try {
+          File(iso).deleteSync();
+        } catch (_) {}
+      }
+    }
+
+    final hash = _runNative(
+        log,
+        () => shouldUnzip(filePath, consoleId)
+            ? _hashZip(filePath, consoleId)
+            : RawHash.hashFile(filePath, consoleId));
+    return (hash: hash, log: log, unsupportedFormat: false, note: null);
+  }
+
+  /// Runs [hashFn] with the rcheevos log callback wired into [log]. The callback
+  /// is process-global and only safe while hashing is sequential (FetchEngine
+  /// hashes one file at a time); concurrent hashing needs a thread-local shim.
+  static String? _runNative(List<String> log, String? Function() hashFn) {
     final cb = NativeCallable<Void Function(Pointer<Utf8>)>.isolateLocal(
       (Pointer<Utf8> msg) => log.add(msg.toDartString()),
     );
     try {
       RawHash.setLogCallback(cb.nativeFunction);
-
-      // CISO/WBFS/GCZ: decompress on the fly in Dart and hash through a virtual
-      // filereader, so these work on Android with no DolphinTool.
-      if (DiscFormats.hasOnDeviceReader(filePath)) {
-        final reader = openDiscReader(filePath);
-        if (reader == null) {
-          return (hash: null, log: log, unsupportedFormat: true);
-        }
-        try {
-          final hash = RawHash.hashFileVirtual(filePath, reader, consoleId);
-          return (hash: hash, log: log, unsupportedFormat: false);
-        } finally {
-          reader.close();
-        }
-      }
-
-      if (DiscFormats.needsDolphinTool(filePath)) {
-        final result =
-            await DiscDecompressor.decompressToIso(dolphinToolPath!, filePath);
-        if (result.isoPath == null) {
-          log.add('DolphinTool failed to decompress $filePath'
-              '${result.error == null || result.error!.isEmpty ? '' : ': ${result.error}'}');
-          return (hash: null, log: log, unsupportedFormat: false);
-        }
-        final iso = result.isoPath!;
-        try {
-          final hash = RawHash.hashFile(iso, consoleId);
-          return (hash: hash, log: log, unsupportedFormat: false);
-        } finally {
-          try {
-            File(iso).deleteSync();
-          } catch (_) {}
-        }
-      }
-
-      final hash = shouldUnzip(filePath, consoleId)
-          ? _hashZip(filePath, consoleId)
-          : RawHash.hashFile(filePath, consoleId);
-      return (hash: hash, log: log, unsupportedFormat: false);
+      return hashFn();
     } finally {
       RawHash.setLogCallback(nullptr);
       cb.close();
