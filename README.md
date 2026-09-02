@@ -149,6 +149,17 @@ This project bundles third-party libraries inside `packages/raw_hash/src/vendor/
 each of which stays under its own permissive license: rcheevos (MIT),
 libchdr (BSD-3-Clause), and libchdr's bundled codecs zstd, miniz, lzma, and
 dr_flac.
+
+### Credits
+
+The on-device GameCube/Wii disc hashing (CISO/WBFS/GCZ/RVZ readers in
+`lib/services/` and `packages/raw_hash/`) is a Dart reimplementation of disc
+formats and Wii cryptography documented by the
+[Dolphin Emulator](https://dolphin-emu.org) project — its `WiaAndRvz.md` format
+spec and `LaggedFibonacciGenerator` (both CC0) and the Wii disc structure
+described on [WiiBrew](https://wiibrew.org). Reconstructed byte-for-byte from
+those references; no Dolphin GPL code is bundled. Thanks to both projects.
+
 RetroAchievements is a trademark of its respective owners; this is an unofficial
 community tool and is not affiliated with RetroAchievements.
 
