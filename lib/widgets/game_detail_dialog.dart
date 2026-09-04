@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../models/folder_stats.dart' show compactCount;
 import '../models/rom_result.dart';
 import '../models/scraped_game.dart';
 import '../services/credentials.dart';
@@ -993,10 +994,5 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     return '${months[dt.month - 1]} ${dt.day} ${dt.year}';
   }
 
-  String _fmt(int? n) {
-    if (n == null || n == 0) return '0';
-    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
-    return n.toString();
-  }
+  String _fmt(int? n) => n == null ? '0' : compactCount(n);
 }
