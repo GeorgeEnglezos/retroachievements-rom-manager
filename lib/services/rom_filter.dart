@@ -1,5 +1,7 @@
+import '../models/folder_sort.dart';
 import '../models/rom_result.dart';
 import '../models/rom_tags.dart';
+import 'cleanup_score.dart';
 import 'member_key.dart';
 
 enum ProgressState { notStarted, started, nearComplete, mastered }
@@ -30,6 +32,57 @@ List<RomResult> visibleRoms(List<RomResult> roms, RomFilter filter,
     final key = memberKeyFor(gameId: r.gameId, filePath: r.filePath);
     return filter.matches(r, playlistIdsForRom: membership[key] ?? const {});
   }).toList();
+}
+
+/// Sorts [roms] for the folder list, returning a new list. [hot] overrides
+/// [sort] and [ascending], ranking by casual player count (most popular first).
+/// Null keys always sink to the bottom regardless of direction.
+List<RomResult> sortRoms(
+  List<RomResult> roms, {
+  required FolderSort sort,
+  required bool ascending,
+  required bool hot,
+  required CleanupScoreMode cleanupMode,
+}) {
+  final list = [...roms];
+  if (hot) {
+    list.sort((a, b) =>
+        (b.numPlayersCasual ?? 0).compareTo(a.numPlayersCasual ?? 0));
+    return list;
+  }
+  final dir = ascending ? 1 : -1;
+  switch (sort) {
+    case FolderSort.alphabetical:
+      list.sort((a, b) =>
+          dir * a.fileName.toLowerCase().compareTo(b.fileName.toLowerCase()));
+    case FolderSort.achievementCount:
+      list.sort(
+          (a, b) => _nullsLast(a.achievementCount, b.achievementCount, dir));
+    case FolderSort.points:
+      list.sort((a, b) => _nullsLast(a.points, b.points, dir));
+    case FolderSort.progress:
+      double? ratio(RomResult r) => (r.achievementCount ?? 0) > 0
+          ? (r.earnedAchievements ?? 0) / r.achievementCount!
+          : null;
+      list.sort((a, b) => _nullsLast(ratio(a), ratio(b), dir));
+    case FolderSort.lastPlayed:
+      list.sort((a, b) => _nullsLast(a.lastPlayed, b.lastPlayed, dir));
+    case FolderSort.cleanup:
+      double? cleanup(RomResult r) => cleanupScore(
+            players: r.numPlayersCasual ?? 0,
+            setCreated: r.setCreated,
+            mode: cleanupMode,
+          );
+      list.sort((a, b) => _nullsLast(cleanup(a), cleanup(b), dir));
+  }
+  return list;
+}
+
+int _nullsLast<T extends Comparable<Object>>(T? a, T? b, int dir) {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  return dir * a.compareTo(b);
 }
 
 /// At or above this earned/total ratio (but not yet mastered) a game counts as

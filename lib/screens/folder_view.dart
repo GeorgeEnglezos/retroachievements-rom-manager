@@ -116,49 +116,13 @@ class _FolderViewState extends State<FolderView> {
   List<String> get _availableTags => availableTags(_roms);
   List<RomResult> get _visibleRoms => visibleRoms(_roms, _filter, _membership);
 
-  // Nulls always sink to the bottom regardless of direction.
-  static int _nullsLast<T extends Comparable<Object>>(T? a, T? b, int dir) {
-    if (a == null && b == null) return 0;
-    if (a == null) return 1;
-    if (b == null) return -1;
-    return dir * a.compareTo(b);
-  }
-
-  List<RomResult> get _sortedRoms {
-    final list = _visibleRoms;
-    if (_hot) {
-      list.sort((a, b) =>
-          (b.numPlayersCasual ?? 0).compareTo(a.numPlayersCasual ?? 0));
-      return list;
-    }
-    final dir = _sortAscending ? 1 : -1;
-    switch (_folderSort) {
-      case FolderSort.alphabetical:
-        list.sort((a, b) =>
-            dir *
-            a.fileName.toLowerCase().compareTo(b.fileName.toLowerCase()));
-      case FolderSort.achievementCount:
-        list.sort(
-            (a, b) => _nullsLast(a.achievementCount, b.achievementCount, dir));
-      case FolderSort.points:
-        list.sort((a, b) => _nullsLast(a.points, b.points, dir));
-      case FolderSort.progress:
-        double? ratio(RomResult r) => (r.achievementCount ?? 0) > 0
-            ? (r.earnedAchievements ?? 0) / r.achievementCount!
-            : null;
-        list.sort((a, b) => _nullsLast(ratio(a), ratio(b), dir));
-      case FolderSort.lastPlayed:
-        list.sort((a, b) => _nullsLast(a.lastPlayed, b.lastPlayed, dir));
-      case FolderSort.cleanup:
-        double? cleanup(RomResult r) => cleanupScore(
-              players: r.numPlayersCasual ?? 0,
-              setCreated: r.setCreated,
-              mode: _cleanupMode,
-            );
-        list.sort((a, b) => _nullsLast(cleanup(a), cleanup(b), dir));
-    }
-    return list;
-  }
+  List<RomResult> get _sortedRoms => sortRoms(
+        _visibleRoms,
+        sort: _folderSort,
+        ascending: _sortAscending,
+        hot: _hot,
+        cleanupMode: _cleanupMode,
+      );
 
   bool get _anyDuplicates => _roms.any((r) => r.duplicateGroupId != null);
   bool get _anyProgress => _roms.any((r) => r.earnedAchievements != null);
