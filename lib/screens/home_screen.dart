@@ -87,15 +87,15 @@ class _HomeScreenState extends State<HomeScreen> {
   bool get _combineSystems => combineSystemsListenable.value;
   NameMode get _nameMode => nameModeListenable.value;
 
-  // Folders whose directory is gone keep their card until the next re-listing,
-  // showing stats for something that isn't there; the library already knows
-  // which those are. A folder we have counted and found empty is hidden too:
-  // no stats yet (null) means "not listed", not "empty", so it stays. Scans
-  // still walk `_subfolders`, so a folder that gains ROMs comes back.
+  // The grid mirrors Library.summaries(), the single source of truth for which
+  // systems exist: a folder shows only when it's a non-empty system there (a
+  // positive stat). Ignored, missing, out-of-root, and empty systems are all
+  // dropped by summaries, so they never get a stat and never show. Scans still
+  // walk `_subfolders` (the raw disk list), so a folder that gains ROMs comes
+  // back on the next stats load.
   List<Directory> get _presentSubfolders => [
         for (final d in _subfolders)
-          if (!_lib.isSystemMissing(d.path) && _stats[d.path]?.totalGames != 0)
-            d
+          if ((_stats[d.path]?.totalGames ?? 0) > 0) d
       ];
 
   List<Directory> get _sortedSubfolders {

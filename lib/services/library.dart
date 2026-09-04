@@ -7,9 +7,11 @@ import 'package:path_provider/path_provider.dart';
 import '../models/game_entry.dart';
 import '../models/home_index.dart' show SystemSummary, SearchIndexEntry;
 import '../models/system_data.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'file_actions.dart';
 import 'home_index_builder.dart';
 import 'log_service.dart';
+import 'pref_keys.dart';
 import 'scan_settings.dart';
 
 /// Single source of truth for scanned data: all systems in memory, home grid
@@ -187,24 +189,29 @@ class Library extends ChangeNotifier {
   /// The live exclude/ignore filters, loaded once per derived-view read so a
   /// settings change takes effect app-wide without a rescan (mirrors the
   /// Storage tab, which filters at display time).
-  Future<_ScanFilters> _scanFilters() async => _ScanFilters(
-        (await ScanSettings.excludedFiles())
-            .map((e) => e.toLowerCase())
-            .toSet(),
-        (await ScanSettings.ignoredFolders())
-            .map((e) => e.toLowerCase())
-            .toSet(),
-      );
+  Future<_ScanFilters> _scanFilters() async {
+    final prefs = await SharedPreferences.getInstance();
+    final root = prefs.getString(PrefKeys.lastFolder);
+    return _ScanFilters(
+      (await ScanSettings.excludedFiles()).map((e) => e.toLowerCase()).toSet(),
+      (await ScanSettings.ignoredFolders()).map((e) => e.toLowerCase()).toSet(),
+      root == null || root.isEmpty ? null : _norm(root),
+    );
+  }
 
-  /// Whether the system at [systemPath] is hidden from every derived view,
-  /// because it is ignored or because its folder is gone.
+  /// Whether the system at [systemPath] is hidden from every derived view:
+  /// ignored, its folder is gone, or it's stale from a previous library root
+  /// (not a direct child of the current one). Null root means no root is set
+  /// yet, so nothing is scoped out.
   bool _hidden(String systemPath, _ScanFilters f) =>
       isSystemMissing(systemPath) ||
-      ScanSettings.isFolderIgnored(systemPath, f.ignored);
+      ScanSettings.isFolderIgnored(systemPath, f.ignored) ||
+      (f.root != null && _norm(p.dirname(systemPath)) != f.root);
 
-  /// Home-grid summaries, computed from in-memory system data. Ignored and
-  /// missing systems drop out; excluded/ignored games are filtered from each
-  /// system's counts.
+  /// Home-grid summaries, computed from in-memory system data. The single
+  /// source of truth for "which systems exist": ignored, missing, out-of-root,
+  /// and empty (no games left after the exclude/ignore filter) systems all drop
+  /// out, so every view built on this hides exactly what the home grid hides.
   Future<List<SystemSummary>> summaries() async {
     await init();
     final f = await _scanFilters();
@@ -216,7 +223,7 @@ class Library extends ChangeNotifier {
               name: p.basename(d.systemPath),
               consoleId: d.consoleId,
               keep: f.keepFor(d.systemPath)),
-    ];
+    ].where((s) => s.totalGames > 0).toList();
   }
 
   /// Flat search rows, computed from in-memory system data. Excluded/ignored
@@ -323,7 +330,9 @@ class Library extends ChangeNotifier {
 class _ScanFilters {
   final Set<String> excluded;
   final Set<String> ignored;
-  const _ScanFilters(this.excluded, this.ignored);
+  /// Current library root (normalized), or null when none is set.
+  final String? root;
+  const _ScanFilters(this.excluded, this.ignored, this.root);
 
   bool Function(GameEntry g) keepFor(String systemPath) => (g) =>
       !ScanSettings.isFileExcluded(g.filePath, excluded) &&

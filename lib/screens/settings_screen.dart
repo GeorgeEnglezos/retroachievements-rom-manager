@@ -839,38 +839,19 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
     final emulators = await EmulatorStore.emulators();
     final connections = await EmulatorStore.connections();
     final fullscreen = await EmulatorStore.launchFullscreen();
+    // The library's filtered systems are the single source, so this list
+    // matches the home grid / badge: ignored, missing, out-of-root, and
+    // never-scanned folders never leak in here.
     final summaries =
         await (widget.library ?? Library.instance).summaries();
-    // Scanned consoles + folder-mapped consoles, so an emulator can be set
-    // before any scan.
     final consoleIds = <int>{
       for (final s in summaries)
         if (s.consoleId != null && ConsoleMap.consoleNames[s.consoleId!] != null)
           s.consoleId!,
-      ...await _mappedConsoleIds(),
     }.toList()
       ..sort((a, b) => ConsoleMap.consoleNames[a]!
           .compareTo(ConsoleMap.consoleNames[b]!));
     return _EmulatorData(emulators, connections, consoleIds, fullscreen);
-  }
-
-  // Console ids for the root subfolders: overrides first, then name detection.
-  Future<Set<int>> _mappedConsoleIds() async {
-    final prefs = await SharedPreferences.getInstance();
-    final root = prefs.getString(PrefKeys.lastFolder);
-    if (root == null || !Directory(root).existsSync()) return {};
-    final overrides = await ScanSettings.folderConsoleOverrides();
-    final ignored = (await ScanSettings.ignoredFolders())
-        .map((e) => e.toLowerCase())
-        .toSet();
-    final ids = <int>{};
-    for (final d in Directory(root).listSync().whereType<Directory>()) {
-      final name = p.basename(d.path);
-      if (ignored.contains(name.toLowerCase())) continue;
-      final id = overrides[name] ?? ConsoleMap.idForFolder(name);
-      if (id != null && ConsoleMap.consoleNames[id] != null) ids.add(id);
-    }
-    return ids;
   }
 
   Future<void> _addEmulator() async {
