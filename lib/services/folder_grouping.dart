@@ -1,4 +1,6 @@
 import '../models/folder_stats.dart';
+import '../models/home_sort.dart';
+import 'console_map.dart';
 
 /// One row in the home grid when "Combine systems" is on: either a real console
 /// group (consoleId != null, one or more folders) or a single unknown-console
@@ -51,4 +53,30 @@ FolderStats aggregateFolderStats(int consoleId, List<FolderStats> stats) {
   }
   agg.lastScanned = anyUnscanned ? null : earliest;
   return agg;
+}
+
+/// Orders a home-grid item by [sort], projecting it to the keys each mode needs
+/// (so both plain folders and combined console groups share one comparator).
+int compareByHomeSort<T>(
+  T a,
+  T b, {
+  required HomeSort sort,
+  required String Function(T) name,
+  required int Function(T) sizeBytes,
+  required int Function(T) gameCount,
+  required int? Function(T) consoleId,
+}) {
+  switch (sort) {
+    case HomeSort.alphabetical:
+      return name(a).toLowerCase().compareTo(name(b).toLowerCase());
+    case HomeSort.size:
+      return sizeBytes(b).compareTo(sizeBytes(a));
+    case HomeSort.fileCount:
+      return gameCount(b).compareTo(gameCount(a));
+    case HomeSort.system:
+      final ka = ConsoleMap.manufacturerSortKey(consoleId(a));
+      final kb = ConsoleMap.manufacturerSortKey(consoleId(b));
+      if (ka != kb) return ka.compareTo(kb);
+      return name(a).toLowerCase().compareTo(name(b).toLowerCase());
+  }
 }
