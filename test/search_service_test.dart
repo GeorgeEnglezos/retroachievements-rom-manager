@@ -68,7 +68,7 @@ void main() {
     expect(hits.single.rom.status, RomStatus.notFetched);
   });
 
-  SystemSummary _sys(String name, {int? consoleId}) => SystemSummary(
+  SystemSummary sys(String name, {int? consoleId}) => SystemSummary(
         systemPath: 'D:/roms/$name',
         systemId: name,
         name: name,
@@ -81,17 +81,17 @@ void main() {
       );
 
   test('matchFolders matches the short folder name', () {
-    final systems = [_sys('gba', consoleId: 5), _sys('snes', consoleId: 3)];
+    final systems = [sys('gba', consoleId: 5), sys('snes', consoleId: 3)];
     expect(matchFolders(systems, 'gba').map((s) => s.name), ['gba']);
   });
 
   test('matchFolders matches the long console name', () {
-    final systems = [_sys('gba', consoleId: 5), _sys('snes', consoleId: 3)];
+    final systems = [sys('gba', consoleId: 5), sys('snes', consoleId: 3)];
     // "advance" only appears in the long name "Game Boy Advance".
     expect(matchFolders(systems, 'advance').map((s) => s.name), ['gba']);
   });
 
   test('matchFolders is empty for a blank query', () {
-    expect(matchFolders([_sys('gba', consoleId: 5)], '  '), isEmpty);
+    expect(matchFolders([sys('gba', consoleId: 5)], '  '), isEmpty);
   });
 }
