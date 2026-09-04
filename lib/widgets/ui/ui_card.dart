@@ -47,9 +47,15 @@ class _CardState extends State<UiCard> {
       decoration: BoxDecoration(
         color: widget.color ?? ui.surface,
         borderRadius: ui.roundLg,
+        boxShadow: pressed ? const [] : ui.shadow(),
+      ),
+      // Border drawn on top of the (clipped) child: antialiased corner clipping
+      // shaves a border painted in the same decoration, eating 1-2px of the
+      // hairline at each rounded corner.
+      foregroundDecoration: BoxDecoration(
+        borderRadius: ui.roundLg,
         border: Border.all(
             color: widget.borderColor ?? ui.border, width: ui.borderWidth),
-        boxShadow: pressed ? const [] : ui.shadow(),
       ),
       child: widget.child,
     );

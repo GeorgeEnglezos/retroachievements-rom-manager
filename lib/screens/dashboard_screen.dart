@@ -117,25 +117,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
     String title,
     List<RomResult> games, {
     required bool narrow,
+    required bool landscape,
   }) {
-    if (!narrow) {
+    // Desktop wide: a single fitted row of covers.
+    if (!narrow && !landscape) {
       return DashboardCoverSection(
         title: title,
         games: games,
         onOpen: _open,
+        store: _store,
+        onChanged: _load,
       );
     }
+    // Phone, portrait or landscape, honours the list/grid toggle.
     return switch (_layout) {
       DashboardLayout.list => DashboardListSection(
           title: title,
           games: games,
           onOpen: _open,
+          max: landscape ? 8 : 6,
         ),
       DashboardLayout.grid => DashboardCoverSection(
           title: title,
           games: games,
           onOpen: _open,
-          columns: 3,
+          store: _store,
+          onChanged: _load,
+          // Landscape derives many small columns from a narrow tile and fills
+          // two rows, so more games show smaller; portrait keeps the fixed 3.
+          columns: landscape ? null : 3,
+          minTileWidth: landscape ? 112 : 168,
           rows: 2,
         ),
     };
@@ -144,22 +155,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// The featured banners: the mastery hero, plus a "closest to beat" hero when
   /// one exists. Side by side once there's room ([wide]); stacked below that.
   List<Widget> _heroes(HomeDashboard dash,
-      {required bool narrow, required bool wide}) {
+      {required bool narrow, required bool wide, required bool landscape}) {
     final mastery = dash.spotlight;
     if (mastery == null) return const [];
     final masteryHero = SpotlightHero(
-        rom: mastery, compact: narrow, onOpen: () => _open(mastery));
+        rom: mastery,
+        compact: narrow,
+        mini: landscape,
+        onOpen: () => _open(mastery));
 
     final beat = dash.beatSpotlight;
     if (beat == null) return [masteryHero];
     final beatHero = SpotlightHero(
       rom: beat,
       compact: narrow,
+      mini: landscape,
       eyebrow: 'CLOSEST TO BEAT',
       onOpen: () => _open(beat),
     );
 
-    if (wide) {
+    // Side by side once there's room: a wide window, or landscape's mini pair.
+    if (wide || landscape) {
       return [
         IntrinsicHeight(
           child: Row(
@@ -185,21 +201,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (dash == null || !dash.hasContent) {
       return _EmptyDashboard(onOpenLibrary: widget.onOpenLibrary);
     }
-    final width = MediaQuery.sizeOf(context).width;
-    final narrow = width < 600;
+    final size = MediaQuery.sizeOf(context);
+    final width = size.width;
+    // Phone held sideways: mini heroes + the shell's rail (see app_shell). Wins
+    // over [narrow] so the dashboard doesn't also draw its portrait phone chrome.
+    final landscape = Theme.of(context).platform == TargetPlatform.android &&
+        size.shortestSide < 600 &&
+        size.width > size.height;
+    final narrow = width < 600 && !landscape;
 
     return ListView(
       padding: narrow
           ? const EdgeInsets.fromLTRB(16, 16, 16, 32)
           : const EdgeInsets.fromLTRB(20, 20, 20, 40),
       children: [
-        ..._heroes(dash, narrow: narrow, wide: width >= 900),
+        ..._heroes(dash, narrow: narrow, wide: width >= 900, landscape: landscape),
         const SizedBox(height: 8),
-        DashboardStatStrip(stats: dash.stats, narrow: narrow),
-        if (narrow) _LayoutPicker(value: _layout, onChanged: _setLayout),
-        _section('Jump back in', dash.continuePlaying, narrow: narrow),
-        _section('Closest to mastery', dash.closestToMastery, narrow: narrow),
-        _section('Popular & unplayed', dash.popularUnplayed, narrow: narrow),
+        DashboardStatStrip(
+            stats: dash.stats, narrow: narrow, landscape: landscape),
+        if (narrow || landscape)
+          _LayoutPicker(value: _layout, onChanged: _setLayout),
+        _section('Jump back in', dash.continuePlaying,
+            narrow: narrow, landscape: landscape),
+        _section('Closest to mastery', dash.closestToMastery,
+            narrow: narrow, landscape: landscape),
+        _section('Popular & unplayed', dash.popularUnplayed,
+            narrow: narrow, landscape: landscape),
       ],
     );
   }

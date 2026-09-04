@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rarm/models/rom_result.dart';
-import 'package:rarm/widgets/dashboard_cover.dart';
 import 'package:rarm/widgets/dashboard_sections.dart';
+import 'package:rarm/widgets/rom_grid_item.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // boxArt left null so the cover renders its placeholder (no network image).
 RomResult _g(String path, String title, {int total = 10, int earned = 0}) =>
@@ -19,6 +20,8 @@ final _games = [
 ];
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   testWidgets('renders one cover per game and reports the tapped rom',
       (tester) async {
     RomResult? tapped;
@@ -35,10 +38,10 @@ void main() {
       ),
     ));
 
-    expect(find.byType(DashboardCover), findsNWidgets(2));
+    expect(find.byType(RomGridItem), findsNWidgets(2));
     expect(find.text('3/10'), findsOneWidget); // per-cover achievement line
 
-    await tester.tap(find.byType(DashboardCover).first);
+    await tester.tap(find.byType(RomGridItem).first);
     expect(tapped?.filePath, '/a.sfc');
   });
 
@@ -60,8 +63,8 @@ void main() {
 
     // 700 wide at the 168 minimum, 12px gaps: 3 columns, one row (a 4th
     // would push each cell under the minimum).
-    expect(find.byType(DashboardCover), findsNWidgets(3));
-    final tile = tester.getSize(find.byType(DashboardCover).first);
+    expect(find.byType(RomGridItem), findsNWidgets(3));
+    final tile = tester.getSize(find.byType(RomGridItem).first);
     expect(tile.width, closeTo((700 - 12 * 2) / 3, 0.1));
   });
 
@@ -80,7 +83,7 @@ void main() {
       ),
     ));
 
-    expect(find.byType(DashboardCover), findsNWidgets(2));
+    expect(find.byType(RomGridItem), findsNWidgets(2));
   });
 
   testWidgets('renders nothing when the bucket is empty', (tester) async {
@@ -92,7 +95,7 @@ void main() {
     ));
 
     expect(find.text('Empty'), findsNothing);
-    expect(find.byType(DashboardCover), findsNothing);
+    expect(find.byType(RomGridItem), findsNothing);
   });
 
   group('phone layouts', () {
@@ -136,11 +139,11 @@ void main() {
         ),
       ));
 
-      expect(find.byType(DashboardCover), findsNWidgets(6)); // 3 x 2
+      expect(find.byType(RomGridItem), findsNWidgets(6)); // 3 x 2
       // 3 columns, 12px gaps: (358 - 24) / 3.
       // Fixed cells: a placeholder or a wide box-art fallback must not
       // narrow a column and break the grid.
-      final tile = tester.getSize(find.byType(DashboardCover).first);
+      final tile = tester.getSize(find.byType(RomGridItem).first);
       expect(tile.width, closeTo(111.33, 0.1));
     });
   });

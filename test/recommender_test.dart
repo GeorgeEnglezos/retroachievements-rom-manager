@@ -5,11 +5,13 @@ RecGame g(String title,
         {required int total,
         required int earned,
         int hardcoreEarned = 0,
-        int players = 0}) =>
+        int players = 0,
+        int? gameId}) =>
     RecGame(
       title: title,
       systemName: 'NES',
       filePath: '/$title',
+      gameId: gameId,
       total: total,
       earned: earned,
       hardcoreEarned: hardcoreEarned,
@@ -48,6 +50,24 @@ void main() {
   test('games without an achievement set are ignored', () {
     final r = Recommender.build([g('noset', total: 0, earned: 0)]);
     expect(r.isEmpty, isTrue);
+  });
+
+  test('the same game across two ROM libraries is recommended once', () {
+    // Two separate library folders hold the same RA game (same gameId) as
+    // different files; it must not appear twice.
+    final r = Recommender.build([
+      g('God of War (lib A)', total: 40, earned: 10, gameId: 2782),
+      g('God of War (lib B)', total: 40, earned: 10, gameId: 2782),
+    ]);
+    expect(r.closestToMastery.length, 1);
+  });
+
+  test('duplicate copies collapse to the most-progressed one', () {
+    final r = Recommender.build([
+      g('copy A', total: 10, earned: 3, gameId: 99),
+      g('copy B', total: 10, earned: 7, gameId: 99),
+    ]);
+    expect(r.closestToMastery.map((e) => e.earned), [7]);
   });
 
   test('limit caps each bucket', () {

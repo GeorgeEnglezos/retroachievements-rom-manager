@@ -157,6 +157,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _toast('All scanned data cleared.');
   }
 
+  Future<void> _pruneMissing() async {
+    final removed =
+        await (widget.library ?? Library.instance).pruneMissingSystems();
+    _toast(removed == 0
+        ? 'No missing systems to remove.'
+        : 'Removed $removed missing system${removed == 1 ? '' : 's'}.');
+  }
+
   Future<void> _backup() async {
     try {
       final path = await FilePicker.platform.saveFile(
@@ -481,19 +489,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _heading('Theme',
-            'Light or RetroAchievements (dark). Applies immediately.'),
+        _heading('Theme', 'Pick a colour palette. Applies immediately.'),
         ValueListenableBuilder<AppTheme>(
           valueListenable: appThemeListenable,
-          builder: (context, theme, _) => SegmentedButton<AppTheme>(
-            segments: const [
-              ButtonSegment(value: AppTheme.light, label: Text('Light')),
-              ButtonSegment(
-                  value: AppTheme.dark, label: Text('RetroAchievements')),
+          builder: (context, current, _) => Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (final theme in AppTheme.values)
+                _ThemeSwatch(
+                  theme: theme,
+                  selected: theme == current,
+                  onTap: () => saveAppTheme(theme),
+                ),
             ],
-            selected: {theme},
-            showSelectedIcon: false,
-            onSelectionChanged: (s) => saveAppTheme(s.first),
           ),
         ),
       ],
@@ -629,6 +638,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 icon: const Icon(Icons.restart_alt),
                 label: const Text('Re-run setup'),
+              ),
+            ),
+            Tooltip(
+              message: 'Deletes scan results for library folders that no longer '
+                  'exist (e.g. after moving or renaming your ROMs). Folders '
+                  'still on disk are untouched.',
+              child: OutlinedButton.icon(
+                onPressed: _pruneMissing,
+                icon: const Icon(Icons.folder_off_outlined),
+                label: const Text('Remove missing systems'),
               ),
             ),
             Tooltip(
@@ -1219,6 +1238,89 @@ class _SystemRow extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// One tappable palette card in the theme picker. Painted in the palette's own
+/// colours so it previews the theme; the selection ring uses the *current*
+/// theme's accent so it reads against the live UI.
+class _ThemeSwatch extends StatelessWidget {
+  final AppTheme theme;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ThemeSwatch({
+    required this.theme,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ui = context.ui; // live theme, for the selection ring
+    final t = theme.tokens; // this card's palette, for the preview
+    final dots = [t.accent, t.supported, t.accentAlt, t.accentGames];
+    return InkWell(
+      onTap: onTap,
+      borderRadius: ui.roundMd,
+      child: Container(
+        width: 152,
+        decoration: BoxDecoration(
+          borderRadius: ui.roundMd,
+          border: Border.all(
+            color: selected ? ui.accent : t.border,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: ui.roundMd,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 46,
+                width: double.infinity,
+                color: t.background,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  children: [
+                    for (final c in dots)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: Container(
+                          width: 14,
+                          height: 14,
+                          decoration:
+                              BoxDecoration(color: c, shape: BoxShape.circle),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Container(
+                width: double.infinity,
+                color: t.surface,
+                padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        theme.label,
+                        style: t.body.copyWith(fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (selected)
+                      Icon(Icons.check_circle, size: 16, color: ui.accent),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

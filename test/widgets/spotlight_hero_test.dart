@@ -75,9 +75,9 @@ void main() {
     expect(find.text('SNES  ·  10/10 achievements'), findsOneWidget);
   });
 
-  testWidgets('compact is shorter than the desktop hero at phone width',
+  testWidgets('the size ladder: mini < compact < full at phone width',
       (tester) async {
-    Future<double> heightOf(bool compact) async {
+    Future<double> heightOf({bool compact = false, bool mini = false}) async {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
           body: SizedBox(
@@ -85,6 +85,7 @@ void main() {
             child: SpotlightHero(
                 rom: _g('The Legend of Zelda: A Link to the Past'),
                 compact: compact,
+                mini: mini,
                 onOpen: () {}),
           ),
         ),
@@ -92,8 +93,25 @@ void main() {
       return tester.getSize(find.byType(SpotlightHero)).height;
     }
 
-    final compact = await heightOf(true);
-    final full = await heightOf(false);
+    final mini = await heightOf(mini: true);
+    final compact = await heightOf(compact: true);
+    final full = await heightOf();
+    expect(mini, lessThan(compact));
     expect(compact, lessThan(full));
+  });
+
+  testWidgets('mini keeps the eyebrow, title, meta and bar', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 358,
+          child: SpotlightHero(rom: _g('Super Metroid'), mini: true, onOpen: () {}),
+        ),
+      ),
+    ));
+    expect(find.text('CLOSEST TO MASTERY'), findsOneWidget);
+    expect(find.text('Super Metroid'), findsOneWidget);
+    expect(find.text('SNES  ·  7/10 achievements'), findsOneWidget);
+    expect(find.byType(UiProgressBar), findsOneWidget);
   });
 }

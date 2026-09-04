@@ -218,6 +218,18 @@ void main() {
           find.descendant(of: row, matching: find.text('44/120')),
           findsOneWidget);
     });
+
+    testWidgets('lean tile shows the console and drops the chips', (tester) async {
+      final rom = inProgress()..numPlayersCasual = 100000; // would be hot
+      await tester.pumpWidget(MaterialApp(
+        theme: uiTheme(UiTokens.light),
+        home: Scaffold(
+            body: RomGridItem(rom: rom, store: PlaylistStore(), lean: true)),
+      ));
+      expect(find.text('44/120'), findsOneWidget);
+      expect(find.textContaining('SNES'), findsOneWidget); // console shown
+      expect(find.text('🔥 HOT'), findsNothing); // no chips in lean mode
+    });
   });
 
   group('cell fit', () {

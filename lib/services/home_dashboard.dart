@@ -88,7 +88,18 @@ HomeDashboard buildHomeDashboard(
   List<RomResult> games, {
   List<SystemSummary> systems = const [],
 }) {
-  final withSet = games.where((r) => _total(r) > 0).toList();
+  // Two ROM libraries can hold the same game (same RA gameId, different file
+  // paths); collapse to one entry so a game counts once across every bucket and
+  // the stat strip. Keep the most-progressed copy; fall back to filePath when a
+  // matched game has no id so genuinely distinct games never merge.
+  final byGame = <Object, RomResult>{};
+  for (final r in games) {
+    if (_total(r) == 0) continue;
+    final key = r.gameId ?? r.filePath;
+    final prev = byGame[key];
+    if (prev == null || _earned(r) > _earned(prev)) byGame[key] = r;
+  }
+  final withSet = byGame.values.toList();
   final byPath = {for (final r in withSet) r.filePath: r};
 
   final recs = Recommender.build([
@@ -97,6 +108,7 @@ HomeDashboard buildHomeDashboard(
         title: listingTitle(r.gameTitle, r.fileName),
         systemName: r.consoleName ?? '',
         filePath: r.filePath,
+        gameId: r.gameId,
         total: _total(r),
         earned: _earned(r),
         hardcoreEarned: r.earnedHardcore ?? 0,

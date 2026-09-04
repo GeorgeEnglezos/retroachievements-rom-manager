@@ -239,6 +239,31 @@ void main() {
     expect(await lib.summaries(), hasLength(1));
   });
 
+  test('pruneMissingSystems deletes only systems whose folder is gone',
+      () async {
+    final live = await Directory(p.join(tmp.path, 'snes')).create();
+    final gone = await Directory(p.join(tmp.path, 'ps4')).create();
+    for (final d in [live, gone]) {
+      await lib.save(SystemData(
+        systemId: '', systemPath: d.path,
+        dismissedDuplicatePairs: <String>{}, consoleId: 3,
+        games: [GameEntry.unscanned(p.join(d.path, 'game.iso'))],
+      ));
+    }
+
+    await gone.delete(recursive: true);
+    expect(await lib.pruneMissingSystems(), 1);
+
+    // The live system survives; the missing one is gone from a fresh instance.
+    final fresh = Library(baseDir: tmp);
+    expect(await fresh.summaries(), hasLength(1));
+    expect((await fresh.load(gone.path)).games, isEmpty);
+    expect((await fresh.load(live.path)).games, hasLength(1));
+
+    // Idempotent: nothing left to prune.
+    expect(await lib.pruneMissingSystems(), 0);
+  });
+
   test('gamesFor of an unscanned path is empty', () async {
     expect(await lib.gamesFor(p.join(tmp.path, 'never')), isEmpty);
   });

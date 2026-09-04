@@ -44,6 +44,7 @@ class _RecommendationsScreenState extends State<RecommendationsScreen> {
           title: e.gameInfo!.title,
           systemName: s.name,
           filePath: e.filePath,
+          gameId: e.gameId,
           total: e.gameInfo!.achievementCount,
           earned: e.progress?.earnedAchievements ?? 0,
           hardcoreEarned: e.progress?.earnedHardcore ?? 0,

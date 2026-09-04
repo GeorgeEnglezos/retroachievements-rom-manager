@@ -35,6 +35,8 @@ abstract final class PrefKeys {
   static const folderSort = 'folder_sort';
   static const folderSortAsc = 'folder_sort_asc';
   static const folderGridView = 'folder_grid_view';
+  // Grid tile size (max cross-axis extent, px) for the folder game grid.
+  static const folderGridSize = 'folder_grid_size';
   static const cleanupMode = 'cleanup_mode';
   // Play-mode listing settings, one JSON blob (see play_view.dart).
   static const playView = 'play_view';

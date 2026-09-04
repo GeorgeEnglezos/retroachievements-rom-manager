@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:rarm/screens/folder_view.dart';
 import 'package:rarm/services/library.dart';
 import 'package:rarm/widgets/fetch_fab.dart';
+import 'package:rarm/widgets/folder_toolbar.dart';
 
 void main() {
   testWidgets('lists ROM files from every folder path', (tester) async {
@@ -69,6 +70,42 @@ void main() {
 
     expect(find.text('Blahblah (USA).sfc'), findsOneWidget); // rendered
     expect(find.byType(FetchFab), findsNothing); // but no fetch entry point
+
+    root.deleteSync(recursive: true);
+    dataDir.deleteSync(recursive: true);
+  });
+
+  testWidgets('the search & filters toolbar collapses and reappears',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final root = Directory.systemTemp.createTempSync('fv_collapse');
+    final a = Directory('${root.path}/SNES')..createSync();
+    File('${a.path}/Game (USA).sfc').writeAsStringSync('x');
+    final dataDir = Directory.systemTemp.createTempSync('fv_collapse_data');
+
+    await tester.runAsync(() async {
+      await tester.pumpWidget(MaterialApp(
+        home: FolderView(
+          folderPaths: [a.path],
+          title: 'SNES',
+          enabledExtensions: const {'sfc'},
+          library: Library(baseDir: dataDir),
+        ),
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    });
+    await tester.pump();
+
+    expect(find.byType(FolderToolbar), findsNothing); // hidden by default
+    expect(find.text('Game (USA).sfc'), findsOneWidget); // list still there
+
+    await tester.tap(find.byKey(const Key('toolbar_toggle')));
+    await tester.pump();
+    expect(find.byType(FolderToolbar), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('toolbar_toggle')));
+    await tester.pump();
+    expect(find.byType(FolderToolbar), findsNothing);
 
     root.deleteSync(recursive: true);
     dataDir.deleteSync(recursive: true);

@@ -14,9 +14,11 @@ RomResult _game(
   String? title,
   DateTime? lastPlayed,
   RaAward? award,
+  int? gameId,
 }) {
   return RomResult(filePath: path, fileName: p.basename(path))
     ..status = RomStatus.supported
+    ..gameId = gameId
     ..gameTitle = title
     ..consoleName = 'SNES'
     ..achievementCount = total
@@ -92,6 +94,18 @@ void main() {
         ['/big.sfc', '/small.sfc']);
     // No in-progress games, so the hero falls back to the most-wanted unplayed.
     expect(d.spotlight!.filePath, '/big.sfc');
+  });
+
+  test('the same game across two ROM libraries is counted once', () {
+    // Two library folders hold the same RA game (same gameId) as different
+    // files. It must not double up in any bucket or the stat strip.
+    final d = buildHomeDashboard([
+      _game('/libA/gow.chd', total: 40, earned: 10, gameId: 2782),
+      _game('/libB/gow.chd', total: 40, earned: 10, gameId: 2782),
+    ]);
+    expect(d.continuePlaying.length, 1);
+    expect(d.closestToMastery.length, 1);
+    expect(d.stats.achievementsEarned, 10);
   });
 
   test('games without an achievement set are ignored', () {

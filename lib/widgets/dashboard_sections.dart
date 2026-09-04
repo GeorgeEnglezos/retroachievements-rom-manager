@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/rom_result.dart';
 import '../services/play_view.dart';
+import '../services/playlist_store.dart';
 import '../theme/ui_tokens.dart';
-import 'dashboard_cover.dart';
 import 'ra_image.dart';
+import 'rom_grid_item.dart';
 import 'ui/ui_progress_bar.dart';
 
 /// The section layouts a phone can render a bucket of games with. Neither
@@ -30,6 +31,13 @@ class DashboardCoverSection extends StatelessWidget {
   final List<RomResult> games;
   final void Function(RomResult rom) onOpen;
 
+  /// Playlists for the tiles' favorite/playlist context actions. Defaults to the
+  /// shared singleton.
+  final PlaylistStore? store;
+
+  /// Reload hook after a tile's context menu deletes a game or edits playlists.
+  final VoidCallback? onChanged;
+
   /// Fixed column count. Null works it out from the width.
   final int? columns;
 
@@ -45,6 +53,8 @@ class DashboardCoverSection extends StatelessWidget {
     required this.title,
     required this.games,
     required this.onOpen,
+    this.store,
+    this.onChanged,
     this.columns,
     this.minTileWidth = 168,
     this.rows = 1,
@@ -65,16 +75,21 @@ class DashboardCoverSection extends StatelessWidget {
           // Uniform square cells: the row trades the artwork's true ratio for
           // columns that line up.
           final tile = (c.maxWidth - _gap * (cols - 1)) / cols;
+          final playlists = store ?? PlaylistStore();
           return Wrap(
             spacing: _gap,
             runSpacing: 16,
             children: [
               for (final rom in games.take(cols * rows))
-                DashboardCover(
+                RomGridItem(
                   rom: rom,
+                  store: playlists,
+                  lean: true,
                   height: tile,
                   width: tile,
-                  onTap: () => onOpen(rom),
+                  onOpen: () => onOpen(rom),
+                  onDeleted: onChanged,
+                  onPlaylistChanged: onChanged,
                 ),
             ],
           );
@@ -215,7 +230,10 @@ class _GameRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (total > 0) ...[
+            // Small screens drop the bar (this list only renders on phones):
+            // the earned/total read below the title already carries progress.
+            if (total > 0 &&
+                MediaQuery.sizeOf(context).shortestSide >= 600) ...[
               const SizedBox(width: 12),
               SizedBox(
                 width: 64,

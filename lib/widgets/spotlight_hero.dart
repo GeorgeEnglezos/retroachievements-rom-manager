@@ -19,6 +19,11 @@ class SpotlightHero extends StatelessWidget {
   /// the art stays visible above the text instead of behind it.
   final bool compact;
 
+  /// Landscape-phone layout: a short side-by-side banner. Keeps the eyebrow,
+  /// title, meta and bar but at a fraction of the height, so two heroes and the
+  /// shelves below all fit the sideways screen. Wins over [compact] when set.
+  final bool mini;
+
   /// The kicker pill's caption; names why this game is featured.
   final String eyebrow;
 
@@ -27,6 +32,7 @@ class SpotlightHero extends StatelessWidget {
     required this.rom,
     required this.onOpen,
     this.compact = false,
+    this.mini = false,
     this.eyebrow = 'CLOSEST TO MASTERY',
   });
 
@@ -54,6 +60,14 @@ class SpotlightHero extends StatelessWidget {
         '${compactCount(rom.numPlayersCasual!)} players',
     ].whereType<String>().join('  ·  ');
 
+    // One size ladder: mini (landscape) < compact (portrait) < full (wide).
+    final titleSize = mini ? 19.0 : (compact ? 28.0 : 42.0);
+    final pad = mini ? 14.0 : (compact ? 18.0 : 28.0);
+    final minH = mini ? 92.0 : (compact ? 260.0 : 300.0);
+    // The bottom-to-top scrim is only for the tall portrait banner; mini goes
+    // back to the side scrim so the short card keeps its art on the right.
+    final vscrim = compact && !mini;
+
     return ClipRRect(
       borderRadius: ui.roundLg,
       child: Stack(
@@ -74,7 +88,7 @@ class SpotlightHero extends StatelessWidget {
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                gradient: compact
+                gradient: vscrim
                     ? LinearGradient(
                         begin: Alignment.bottomCenter,
                         end: Alignment.topCenter,
@@ -99,40 +113,39 @@ class SpotlightHero extends StatelessWidget {
             ),
           ),
           ConstrainedBox(
-            constraints: BoxConstraints(minHeight: compact ? 260 : 300),
+            constraints: BoxConstraints(minHeight: minH),
             child: Padding(
-              padding: EdgeInsets.all(compact ? 18 : 28),
+              padding: EdgeInsets.all(pad),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 540),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  // Text hugs the bottom so the art reads above it.
+                  // Portrait hugs the bottom so the art reads above it; mini and
+                  // wide centre in their band.
                   mainAxisAlignment:
-                      compact ? MainAxisAlignment.end : MainAxisAlignment.center,
+                      vscrim ? MainAxisAlignment.end : MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _Eyebrow(eyebrow),
-                    const SizedBox(height: 12),
+                    SizedBox(height: mini ? 7 : 12),
                     Text(title,
-                        maxLines: 2,
+                        maxLines: mini ? 1 : 2,
                         overflow: TextOverflow.ellipsis,
                         style: ui.display.copyWith(
-                            color: kOnScrim,
-                            fontSize: compact ? 28 : 42,
-                            height: 0.98)),
+                            color: kOnScrim, fontSize: titleSize, height: 0.98)),
                     if (meta.isNotEmpty) ...[
-                      const SizedBox(height: 12),
+                      SizedBox(height: mini ? 6 : 12),
                       Text(meta,
-                          maxLines: 2,
+                          maxLines: mini ? 1 : 2,
                           overflow: TextOverflow.ellipsis,
                           style: ui.mono.copyWith(
                               color: kOnScrimMuted,
-                              fontSize: 11,
+                              fontSize: mini ? 10 : 11,
                               fontWeight: FontWeight.w500)),
                     ],
                     if (total > 0) ...[
-                      SizedBox(height: compact ? 14 : 18),
-                      _bar(frac),
+                      SizedBox(height: mini ? 8 : (compact ? 14 : 18)),
+                      _bar(frac, mini ? 150 : _barWidth),
                     ],
                   ],
                 ),
@@ -156,8 +169,8 @@ class SpotlightHero extends StatelessWidget {
   // The mockup's "loading" bar: the fill sweeps in from the left on mount
   // (UiProgressBar's easeOutBack tween) rather than drawing at its final width.
   // Scrim inks, since it sits on the artwork.
-  Widget _bar(double frac) => SizedBox(
-        width: _barWidth,
+  Widget _bar(double frac, double width) => SizedBox(
+        width: width,
         child: UiProgressBar(
           value: frac,
           height: 7,

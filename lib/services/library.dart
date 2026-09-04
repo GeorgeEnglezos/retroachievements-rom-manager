@@ -278,6 +278,34 @@ class Library extends ChangeNotifier {
   bool isSystemMissing(String systemPath) =>
       _missingSystemPaths.contains(_norm(systemPath));
 
+  /// Permanently deletes every system whose folder no longer exists. A manual
+  /// cleanup for a moved or renamed library; the automatic path only hides
+  /// missing systems ([refreshMissingSystems]) so a remounted drive returns.
+  /// Returns how many systems were removed.
+  Future<int> pruneMissingSystems() async {
+    await init();
+    return _locked(() async {
+      final dir = await _systemsDir();
+      var removed = 0;
+      for (final d in _byId.values.toList()) {
+        try {
+          if (await Directory(d.systemPath).exists()) continue;
+        } catch (_) {
+          // An IO error (offline drive) counts as present, so a transient
+          // failure never deletes data.
+          continue;
+        }
+        _byId.remove(d.systemId);
+        _missingSystemPaths.remove(_norm(d.systemPath));
+        final file = File(p.join(dir.path, '${d.systemId}.json'));
+        if (await file.exists()) await file.delete();
+        removed++;
+      }
+      if (removed > 0) notifyListeners();
+      return removed;
+    });
+  }
+
   /// Every scanned ROM's absolute file path across all systems. Used to match
   /// imported gamelist entries to real files.
   Future<Set<String>> allRomPaths() async {

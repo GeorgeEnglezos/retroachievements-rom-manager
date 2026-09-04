@@ -16,6 +16,11 @@ class RomProgress extends StatelessWidget {
   /// one line on progress rather than two.
   final bool inline;
 
+  /// Overrides the award-derived bar/label colour. Favorite rows pass
+  /// ui.favoriteInk so the bar reads against the favorite fill like the row's
+  /// other labels, instead of an award hue that clashes with it.
+  final Color? colorOverride;
+
   const RomProgress({
     super.key,
     required this.rom,
@@ -23,6 +28,7 @@ class RomProgress extends StatelessWidget {
     this.labelSize = 9,
     this.labelWeight = FontWeight.w500,
     this.inline = false,
+    this.colorOverride,
   });
 
   /// True when the ROM has a known achievement total to show progress against.
@@ -89,10 +95,18 @@ class RomProgress extends StatelessWidget {
         }
     }
 
-    final bar = UiProgressBar(value: fraction, height: barHeight, color: color);
+    final barColor = colorOverride ?? color;
+    final bar = UiProgressBar(
+      value: fraction,
+      height: barHeight,
+      color: barColor,
+      // On a favorite fill the palette trough vanishes; a faint wash of the ink
+      // keeps the track visible.
+      trough: colorOverride?.withValues(alpha: 0.25),
+    );
     final text = Text(label,
         style: TextStyle(
-            fontSize: labelSize, color: color, fontWeight: labelWeight));
+            fontSize: labelSize, color: barColor, fontWeight: labelWeight));
 
     if (inline) {
       return Row(

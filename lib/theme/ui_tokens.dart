@@ -40,6 +40,8 @@ class UiTokens extends ThemeExtension<UiTokens> {
   final Color supported; // supported / has-achievements status
   final Color warning; // error status
   final Color muted; // secondary text
+  final Color favoriteFill; // favorite card fill
+  final Color favoriteInk; // labels/icons on a favorite card
 
   // Geometry
   final Brightness brightness;
@@ -62,6 +64,8 @@ class UiTokens extends ThemeExtension<UiTokens> {
     required this.supported,
     required this.warning,
     required this.muted,
+    required this.favoriteFill,
+    required this.favoriteInk,
     required this.brightness,
     required this.unit,
     required this.radius,
@@ -69,6 +73,32 @@ class UiTokens extends ThemeExtension<UiTokens> {
     required this.controlShadow,
     required this.borderWidth,
   });
+
+  /// Palette-only const constructor. Every theme shares the same geometry
+  /// (8px unit, 16px radius, hairline border, no offset shadows), so an extra
+  /// palette declares just its colours and brightness. All the brightness-
+  /// keyed getters below then follow from [brightness].
+  const UiTokens.palette({
+    required this.background,
+    required this.surface,
+    required this.surfaceAlt,
+    required this.text,
+    required this.accent,
+    required this.accentAlt,
+    required this.accentGames,
+    required this.border,
+    required this.trough,
+    required this.supported,
+    required this.warning,
+    required this.muted,
+    required this.favoriteFill,
+    required this.favoriteInk,
+    required this.brightness,
+  })  : unit = 8,
+        radius = 16,
+        cardShadow = Offset.zero,
+        controlShadow = Offset.zero,
+        borderWidth = 1;
 
   // Warm light theme: yellowish retro tint, no pure-white surfaces (easier on
   // the eyes), amber accent. Same geometry as [dark]: rounded, hairline border.
@@ -85,6 +115,8 @@ class UiTokens extends ThemeExtension<UiTokens> {
     supported: Color(0xFF526E2A),
     warning: Color(0xFF885D14),
     muted: Color(0xFF6B6457),
+    favoriteFill: Color(0xFF835F18), // placeholder = accent
+    favoriteInk: Color(0xFFF5EFD8), // placeholder = background
     brightness: Brightness.light,
     unit: 8,
     radius: 16,
@@ -111,12 +143,190 @@ class UiTokens extends ThemeExtension<UiTokens> {
     supported: Color(0xFF7DE8D3), // mint
     warning: Color(0xFFF59F85), // coral
     muted: Color(0xA7DDCEB1), // warm cream at 65%
+    favoriteFill: Color(0xFFEF80A9), // placeholder = accent
+    favoriteInk: Color(0xFF191627), // placeholder = background
     brightness: Brightness.dark,
     unit: 8,
     radius: 16,
     cardShadow: Offset.zero,
     controlShadow: Offset.zero,
     borderWidth: 1,
+  );
+
+  // ── Extra palettes ────────────────────────────────────────────────────────
+  // Each clears the same WCAG bar as [light]/[dark]: every ink at 4.5:1 on all
+  // three grounds, the border at 3:1 on surface, five distinct accents. See
+  // ui_tokens_test.dart, which runs those invariants over every AppTheme.
+
+  /// True black, bright accents: max contrast, OLED-friendly.
+  static const UiTokens oled = UiTokens.palette(
+    background: Color(0xFF000000),
+    surface: Color(0xFF0B0B0B),
+    surfaceAlt: Color(0xFF1C1C1C),
+    text: Color(0xFFFFFFFF),
+    accent: Color(0xFF7DD3FC),
+    accentAlt: Color(0xFFC4B5FD),
+    accentGames: Color(0xFFFCD34D),
+    border: Color(0xFF6E6E6E),
+    trough: Color(0xFF000000),
+    supported: Color(0xFF6EE7B7),
+    warning: Color(0xFFFCA5A5),
+    muted: Color(0xFFA6A6A6),
+    favoriteFill: Color(0xFF7DD3FC), // placeholder = accent
+    favoriteInk: Color(0xFF000000), // placeholder = background
+    brightness: Brightness.dark,
+  );
+
+  /// Nord: cool polar-night grounds, frost and aurora accents.
+  static const UiTokens nord = UiTokens.palette(
+    background: Color(0xFF262B35),
+    surface: Color(0xFF2F3541),
+    surfaceAlt: Color(0xFF3A4150),
+    text: Color(0xFFECEFF4),
+    accent: Color(0xFF9AD0CF),
+    accentAlt: Color(0xFF9BB8DA),
+    accentGames: Color(0xFFEBCB8B),
+    border: Color(0xFF7E8AA1),
+    trough: Color(0xFF262B35),
+    supported: Color(0xFFB0C89A),
+    warning: Color(0xFFE8A48D),
+    muted: Color(0xFFAEB7C7),
+    favoriteFill: Color(0xFF9AD0CF), // placeholder = accent
+    favoriteInk: Color(0xFF262B35), // placeholder = background
+    brightness: Brightness.dark,
+  );
+
+  /// GitHub dark: navy-black grounds, GitHub's blue/purple/green accents.
+  static const UiTokens github = UiTokens.palette(
+    background: Color(0xFF0D1117),
+    surface: Color(0xFF161B22),
+    surfaceAlt: Color(0xFF232A34),
+    text: Color(0xFFE6EDF3),
+    accent: Color(0xFF6CB6FF),
+    accentAlt: Color(0xFFC297FF),
+    accentGames: Color(0xFFE3B341),
+    border: Color(0xFF6E7681),
+    trough: Color(0xFF0D1117),
+    supported: Color(0xFF57D364),
+    warning: Color(0xFFF08A8A),
+    muted: Color(0xFFA6B0BC),
+    favoriteFill: Color(0xFF6CB6FF), // placeholder = accent
+    favoriteInk: Color(0xFF0D1117), // placeholder = background
+    brightness: Brightness.dark,
+  );
+
+  /// Deep violet dark with lavender accents.
+  static const UiTokens lavenderDark = UiTokens.palette(
+    background: Color(0xFF110F1E),
+    surface: Color(0xFF1A1729),
+    surfaceAlt: Color(0xFF272338),
+    text: Color(0xFFEDE8FF),
+    accent: Color(0xFFC4B5FD),
+    accentAlt: Color(0xFF93C5FD),
+    accentGames: Color(0xFFFCD34D),
+    border: Color(0xFF7E72A8),
+    trough: Color(0xFF110F1E),
+    supported: Color(0xFF6EE7B7),
+    warning: Color(0xFFF4A3A3),
+    muted: Color(0xFFA99EC9),
+    favoriteFill: Color(0xFFC4B5FD), // placeholder = accent
+    favoriteInk: Color(0xFF110F1E), // placeholder = background
+    brightness: Brightness.dark,
+  );
+
+  /// Greyscale dark: black grounds, ink-only accents (hue-blind safe).
+  static const UiTokens monochrome = UiTokens.palette(
+    background: Color(0xFF000000),
+    surface: Color(0xFF0D0D0D),
+    surfaceAlt: Color(0xFF1E1E1E),
+    text: Color(0xFFFFFFFF),
+    accent: Color(0xFFF0F0F0),
+    accentAlt: Color(0xFFC8C8C8),
+    accentGames: Color(0xFFD8D8D8),
+    border: Color(0xFF6E6E6E),
+    trough: Color(0xFF000000),
+    supported: Color(0xFFB8B8B8),
+    warning: Color(0xFFA6A6A6),
+    muted: Color(0xFFAEAEAE),
+    favoriteFill: Color(0xFFF0F0F0), // placeholder = accent
+    favoriteInk: Color(0xFF000000), // placeholder = background
+    brightness: Brightness.dark,
+  );
+
+  /// Game Boy DMG: the pea-green LCD, dark-green ink and accents.
+  static const UiTokens gameboy = UiTokens.palette(
+    background: Color(0xFF9BBC0F),
+    surface: Color(0xFFAECB2E),
+    surfaceAlt: Color(0xFFC3DA5C),
+    text: Color(0xFF0C300C),
+    accent: Color(0xFF143C14),
+    accentAlt: Color(0xFF0A3A3A),
+    accentGames: Color(0xFF4A2F00),
+    border: Color(0xFF3A5210),
+    trough: Color(0xFF8BAC0F),
+    supported: Color(0xFF1F4A00),
+    warning: Color(0xFF7A1414),
+    muted: Color(0xFF1C4014),
+    favoriteFill: Color(0xFF143C14), // placeholder = accent
+    favoriteInk: Color(0xFF9BBC0F), // placeholder = background
+    brightness: Brightness.light,
+  );
+
+  /// Soft lilac light theme.
+  static const UiTokens lavenderLight = UiTokens.palette(
+    background: Color(0xFFEDEAF7),
+    surface: Color(0xFFFAFAFF),
+    surfaceAlt: Color(0xFFE6E0F4),
+    text: Color(0xFF1C1836),
+    accent: Color(0xFF6D28D9),
+    accentAlt: Color(0xFF1D4ED8),
+    accentGames: Color(0xFF7A5600),
+    border: Color(0xFF7C6FA8),
+    trough: Color(0xFFDED6F0),
+    supported: Color(0xFF1B6B24),
+    warning: Color(0xFF9E1B1B),
+    muted: Color(0xFF524678),
+    favoriteFill: Color(0xFF6D28D9), // placeholder = accent
+    favoriteInk: Color(0xFFEDEAF7), // placeholder = background
+    brightness: Brightness.light,
+  );
+
+  /// Neutral grey light theme with a muted steel-blue accent.
+  static const UiTokens slate = UiTokens.palette(
+    background: Color(0xFFE8E8E8),
+    surface: Color(0xFFF4F4F4),
+    surfaceAlt: Color(0xFFE0E0E0),
+    text: Color(0xFF1A1A1A),
+    accent: Color(0xFF33506F),
+    accentAlt: Color(0xFF1D4ED8),
+    accentGames: Color(0xFF6E5600),
+    border: Color(0xFF808080),
+    trough: Color(0xFFDADADA),
+    supported: Color(0xFF1B6B24),
+    warning: Color(0xFF9E1B1B),
+    muted: Color(0xFF515151),
+    favoriteFill: Color(0xFF33506F), // placeholder = accent
+    favoriteInk: Color(0xFFE8E8E8), // placeholder = background
+    brightness: Brightness.light,
+  );
+
+  /// Greyscale light: white grounds, ink-only accents (hue-blind safe).
+  static const UiTokens monochromeLight = UiTokens.palette(
+    background: Color(0xFFFFFFFF),
+    surface: Color(0xFFF5F5F5),
+    surfaceAlt: Color(0xFFE2E2E2),
+    text: Color(0xFF000000),
+    accent: Color(0xFF1A1A1A),
+    accentAlt: Color(0xFF3A3A3A),
+    accentGames: Color(0xFF505050),
+    border: Color(0xFF757575),
+    trough: Color(0xFFE2E2E2),
+    supported: Color(0xFF2E2E2E),
+    warning: Color(0xFF444444),
+    muted: Color(0xFF505050),
+    favoriteFill: Color(0xFF1A1A1A), // placeholder = accent
+    favoriteInk: Color(0xFFFFFFFF), // placeholder = background
+    brightness: Brightness.light,
   );
 
   /// Backwards-compatible alias used by the `context.ui` fallback and tests.
@@ -137,12 +347,6 @@ class UiTokens extends ThemeExtension<UiTokens> {
   List<Color> get accents =>
       [accent, supported, accentAlt, accentGames, warning];
 
-  /// Favorite-row wash. Light uses solid black (labels flip to white); dark
-  /// keeps the low-alpha purple accent.
-  Color get favoriteHighlight => brightness == Brightness.light
-      ? const Color(0xFF000000)
-      : kFavoriteColor.withValues(alpha: 0.14);
-
   /// Backdrop for console tiles and home shortcut cards. Full-color console
   /// logos need a light backdrop, so both palettes render these on a light
   /// surface (with dark ink): warm beige in light, white in dark.
@@ -150,20 +354,16 @@ class UiTokens extends ThemeExtension<UiTokens> {
       ? const Color(0xFFEDEBE3)
       : const Color(0xFFFFFFFF);
 
-  /// Label/icon color for favorite rows. Null keeps the default text color;
-  /// light returns white because [favoriteHighlight] is solid black there.
-  Color? get favoriteText =>
-      brightness == Brightness.light ? const Color(0xFFFFFFFF) : null;
-
-  /// Background of the selected nav tab. Light uses black; dark uses the
-  /// raised surface, as the reference sidebar does.
+  /// Background of the selected nav tab. Light fills with the theme [accent]
+  /// (matching the segmented toggles) so the pill wears the palette's own
+  /// colour; dark uses the raised surface, as the reference sidebar does.
   Color get navSelectedBg =>
-      brightness == Brightness.light ? const Color(0xFF000000) : surfaceAlt;
+      brightness == Brightness.light ? accent : surfaceAlt;
 
-  /// Label/icon color on the selected nav tab: white on light's black fill,
-  /// normal cream ink on dark's raised surface.
+  /// Label/icon color on the selected nav tab: the ground colour on light's
+  /// accent fill (as the toggles do), normal ink on dark's raised surface.
   Color get navSelectedFg =>
-      brightness == Brightness.light ? const Color(0xFFFFFFFF) : text;
+      brightness == Brightness.light ? background : text;
 
   /// Hard offset shadow (no blur). Returns no shadow when the offset is zero.
   List<BoxShadow> shadow([Offset? offset]) {
@@ -216,6 +416,8 @@ class UiTokens extends ThemeExtension<UiTokens> {
     Color? supported,
     Color? warning,
     Color? muted,
+    Color? favoriteFill,
+    Color? favoriteInk,
     Brightness? brightness,
     double? unit,
     double? radius,
@@ -236,6 +438,8 @@ class UiTokens extends ThemeExtension<UiTokens> {
         supported: supported ?? this.supported,
         warning: warning ?? this.warning,
         muted: muted ?? this.muted,
+        favoriteFill: favoriteFill ?? this.favoriteFill,
+        favoriteInk: favoriteInk ?? this.favoriteInk,
         brightness: brightness ?? this.brightness,
         unit: unit ?? this.unit,
         radius: radius ?? this.radius,
@@ -260,6 +464,8 @@ class UiTokens extends ThemeExtension<UiTokens> {
       supported: Color.lerp(supported, other.supported, t)!,
       warning: Color.lerp(warning, other.warning, t)!,
       muted: Color.lerp(muted, other.muted, t)!,
+      favoriteFill: Color.lerp(favoriteFill, other.favoriteFill, t)!,
+      favoriteInk: Color.lerp(favoriteInk, other.favoriteInk, t)!,
       brightness: t < 0.5 ? brightness : other.brightness,
       unit: _lerpDouble(unit, other.unit, t),
       radius: _lerpDouble(radius, other.radius, t),

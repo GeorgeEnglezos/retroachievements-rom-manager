@@ -5,10 +5,10 @@ import '../theme/ui_tokens.dart';
 import 'rom_thumb.dart';
 
 /// The shared game tile: full-bleed art with a mastery trophy or in-progress
-/// strip over it, then the title and a caller-built [meta] line. Home uses it
-/// lean (see [DashboardCover]); the library grid wraps it with selection, a
-/// context menu and the extra chips (see RomGridItem). Presentational only —
-/// every behavior (tap, selection, favorites) belongs to the caller.
+/// strip over it, then the title and a caller-built [meta] line. Home and the
+/// library grid both wrap it through RomGridItem, which adds tap, the context
+/// menu and the selection dot. Presentational only — every behavior (tap,
+/// selection, favorites) belongs to the caller.
 ///
 /// The trophy/strip inks are fixed scrim colors, since they sit on artwork that
 /// is full-colour in either palette.

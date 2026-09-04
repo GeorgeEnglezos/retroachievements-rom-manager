@@ -29,6 +29,11 @@ class FolderToolbar extends StatefulWidget {
   final bool showHot;
   final CleanupScoreMode cleanupMode;
   final List<({String id, String name})> playlists;
+  // Grid tile size (max cross-axis extent, px) and its live/commit callbacks.
+  // The slider only shows in grid view when [onGridSizeChanged] is wired.
+  final double gridSize;
+  final ValueChanged<double>? onGridSizeChanged;
+  final ValueChanged<double>? onGridSizeChangeEnd;
   final ValueChanged<RomFilter> onFilterChanged;
   final ValueChanged<FolderSort> onSortChanged;
   final ValueChanged<CleanupScoreMode> onCleanupModeChanged;
@@ -36,6 +41,11 @@ class FolderToolbar extends StatefulWidget {
   final VoidCallback onViewToggle;
   final ValueChanged<bool> onDuplicatesToggle;
   final ValueChanged<bool> onHotToggle;
+
+  // Smaller = more, smaller tiles. Default is well below the old fixed 300.
+  static const gridSizeMin = 120.0;
+  static const gridSizeMax = 300.0;
+  static const gridSizeDefault = 180.0;
 
   const FolderToolbar({
     super.key,
@@ -51,6 +61,9 @@ class FolderToolbar extends StatefulWidget {
     this.hot = false,
     this.showHot = false,
     this.cleanupMode = CleanupScoreMode.logDampened,
+    this.gridSize = gridSizeDefault,
+    this.onGridSizeChanged,
+    this.onGridSizeChangeEnd,
     required this.playlists,
     required this.onFilterChanged,
     required this.onSortChanged,
@@ -158,7 +171,34 @@ class _FolderToolbarState extends State<FolderToolbar> {
                 widget.onFilterChanged(widget.filter.copyWith(text: v)),
           ),
         ),
+        if (widget.gridView && widget.onGridSizeChanged != null)
+          _gridSizeSlider(),
       ],
+    );
+  }
+
+  // Top-right control to scale the grid tiles. Larger value = larger cells.
+  Widget _gridSizeSlider() {
+    final ui = context.ui;
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.photo_size_select_large, size: 16, color: ui.muted),
+          SizedBox(
+            width: 120,
+            child: Slider(
+              value: widget.gridSize
+                  .clamp(FolderToolbar.gridSizeMin, FolderToolbar.gridSizeMax),
+              min: FolderToolbar.gridSizeMin,
+              max: FolderToolbar.gridSizeMax,
+              onChanged: widget.onGridSizeChanged,
+              onChangeEnd: widget.onGridSizeChangeEnd,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

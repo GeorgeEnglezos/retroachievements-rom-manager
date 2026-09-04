@@ -86,11 +86,11 @@ class RomRowTile extends StatelessWidget {
     final cardColor = isSelected
         ? ui.accent.withValues(alpha: 0.12)
         : isFavorite
-            ? ui.favoriteHighlight
+            ? ui.favoriteFill
             : null;
-    // Favorite rows flip their labels to ui.favoriteText (white on the light
-    // theme's black wash; unchanged on dark).
-    final fg = isFavorite ? ui.favoriteText : null;
+    // Favorite rows are accent-filled, so their labels flip to ui.favoriteInk
+    // (the ground colour) to read against the fill.
+    final fg = isFavorite ? ui.favoriteInk : null;
     Widget body = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: UiCard(
@@ -172,7 +172,7 @@ class RomRowTile extends StatelessWidget {
 
   Widget _tileContent(BuildContext context, UiTokens ui, Color? fg) {
     final chips = display.showChips ? _chips(ui) : <Widget>[];
-    final subtitle = _buildSubtitle(ui, fg);
+    final subtitle = _buildSubtitle(context, ui, fg);
     final title = Text(
       row.title,
       maxLines: 1,
@@ -316,7 +316,11 @@ class RomRowTile extends StatelessWidget {
   }
 
 
-  Widget? _buildProgress() {
+  Widget? _buildProgress(BuildContext context, Color? fg) {
+    // Small screens (phones in any orientation, or any narrow window) drop the
+    // per-row bar: the row is too tight for a bar + label, and the earned/total
+    // read in the meta line already carries how far in the game is.
+    if (MediaQuery.sizeOf(context).shortestSide < 600) return null;
     if (!display.showProgress ||
         row.rom == null ||
         row.earnedAchievements == null) {
@@ -325,8 +329,12 @@ class RomRowTile extends StatelessWidget {
     if (!RomProgress.hasProgress(row.rom!)) return null;
     return Padding(
       padding: const EdgeInsets.only(top: 5),
-      child:
-          RomProgress(rom: row.rom!, barHeight: 4, labelSize: 10, inline: true),
+      child: RomProgress(
+          rom: row.rom!,
+          barHeight: 4,
+          labelSize: 10,
+          inline: true,
+          colorOverride: fg),
     );
   }
 
@@ -364,7 +372,7 @@ class RomRowTile extends StatelessWidget {
     );
   }
 
-  Widget? _buildSubtitle(UiTokens ui, Color? fg) {
+  Widget? _buildSubtitle(BuildContext context, UiTokens ui, Color? fg) {
     if (row.rom == null) {
       return row.subtitle != null
           ? Text(row.subtitle!, style: TextStyle(color: fg))
@@ -384,8 +392,14 @@ class RomRowTile extends StatelessWidget {
               row.subtitle != row.title
           ? row.subtitle
           : null;
-      final meta = _metaLine(ui, [fileName, sizeLabel], fg: fg);
-      final progress = _buildProgress();
+      // The same earned/total read the grid's GameMetaRow shows, inline in the
+      // meta line alongside any progress bar below.
+      final total = rom.achievementCount ?? 0;
+      final achLabel = playView.achievementCount && total > 0
+          ? '${rom.earnedAchievements ?? 0}/$total'
+          : null;
+      final meta = _metaLine(ui, [fileName, sizeLabel, achLabel], fg: fg);
+      final progress = _buildProgress(context, fg);
       if (meta == null && progress == null) return null;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,7 +436,6 @@ class RomRowTile extends StatelessWidget {
       ?discBadge(row.discCount, ui),
       if (display.showDupBadge) ?dupBadge(rom, ui),
       ?hotBadge(rom),
-      ?achBadge(rom, ui),
       ?noAchBadge(rom),
       ...tagBadges(rom.fileName),
     ];

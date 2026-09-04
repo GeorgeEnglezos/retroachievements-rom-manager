@@ -932,6 +932,15 @@ class _HomeScreenState extends State<HomeScreen> {
     return total;
   }
 
+  // Phone held sideways: show the shortcuts as chips (like portrait) and a
+  // tighter system grid, rather than the desktop's big leading cards.
+  bool _isLandscapePhone() {
+    final size = MediaQuery.sizeOf(context);
+    return Theme.of(context).platform == TargetPlatform.android &&
+        size.shortestSide < 600 &&
+        size.width > size.height;
+  }
+
   @override
   Widget build(BuildContext context) {
     final grid = _combineSystems ? _buildCombinedGrid() : _buildSubfolderGrid();
@@ -948,6 +957,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     onPlaylistChanged: _refreshPlaylists,
                     idleActions: _idleActions(),
                     idleTrailing: [_buildSortButton()],
+                    onOpenFolder: _openSubfolder,
                     child: grid,
                   ),
           ),
@@ -968,12 +978,13 @@ class _HomeScreenState extends State<HomeScreen> {
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
     final narrow = MediaQuery.sizeOf(context).width < 600;
+    final landscape = _isLandscapePhone();
     return [
-      // On phones the shortcuts live here as buttons instead of eating the top
-      // of the list, so the systems stay in reach.
-      if (narrow) ..._shortcutChips(),
+      // On phones (portrait or landscape) the shortcuts live here as buttons
+      // instead of eating the grid, so the systems stay in reach.
+      if (narrow || landscape) ..._shortcutChips(),
       // Scan health is a desktop-sized report; phones don't get the button.
-      if (!narrow && !gamingMode)
+      if (!narrow && !landscape && !gamingMode)
         IconButton(
           style: style,
           icon: const Icon(Icons.health_and_safety_outlined),
@@ -1067,9 +1078,11 @@ class _HomeScreenState extends State<HomeScreen> {
   // wider the flip-card grid; [itemBuilder] is told which to build.
   Widget _tiles(int itemCount, Widget Function(int i, bool narrow) itemBuilder) {
     final narrow = MediaQuery.sizeOf(context).width < 600;
-    // Phones show the shortcuts as chips under the search bar instead.
+    final landscape = _isLandscapePhone();
+    // Phones (portrait or landscape) show the shortcuts as chips under the
+    // search bar instead of as leading cards.
     final leading = <Widget>[
-      if (!narrow) ...[
+      if (!narrow && !landscape) ...[
         if (_subfolders.isNotEmpty) _buildAllGamesCard(narrow),
         for (final pl in _playlists) _buildPlaylistCard(pl, narrow),
       ],
@@ -1087,8 +1100,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     return GridView.builder(
       padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 260,
+      // Landscape phone gets a tighter grid so systems read slightly smaller.
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: landscape ? 200 : 260,
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
         childAspectRatio: 1.3,

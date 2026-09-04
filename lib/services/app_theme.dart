@@ -2,18 +2,32 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/ui_tokens.dart';
 
-/// Which visual theme the app uses.
-enum AppTheme { light, dark }
+/// Which visual theme the app uses. Each case carries its display [label] and
+/// its [tokens] palette; [AppTheme.values] is the ordered list the picker
+/// renders, and [name] is the key persisted to prefs.
+enum AppTheme {
+  dark('RetroAchievements', UiTokens.dark),
+  light('Light', UiTokens.light),
+  oled('OLED', UiTokens.oled),
+  nord('Nord', UiTokens.nord),
+  github('GitHub', UiTokens.github),
+  lavenderDark('Lavender Dark', UiTokens.lavenderDark),
+  monochrome('Monochrome', UiTokens.monochrome),
+  gameboy('Game Boy', UiTokens.gameboy),
+  lavenderLight('Lavender Light', UiTokens.lavenderLight),
+  slate('Slate', UiTokens.slate),
+  monochromeLight('Monochrome Light', UiTokens.monochromeLight);
+
+  const AppTheme(this.label, this.tokens);
+  final String label;
+  final UiTokens tokens;
+}
 
 const _appThemeKey = 'app_theme';
 
 /// Live theme selection, shared across screens. Settings writes it; [main]
 /// rebuilds [MaterialApp] from it so a change applies immediately.
 final ValueNotifier<AppTheme> appThemeListenable = ValueNotifier(AppTheme.dark);
-
-/// The token palette for a theme.
-UiTokens paletteFor(AppTheme theme) =>
-    theme == AppTheme.dark ? UiTokens.dark : UiTokens.light;
 
 /// Loads the saved theme, defaulting to [AppTheme.dark] (the RetroAchievements look).
 Future<AppTheme> loadAppTheme() async {

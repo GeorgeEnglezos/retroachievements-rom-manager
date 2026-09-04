@@ -22,6 +22,20 @@ void main() {
     addTearDown(tester.view.reset);
   }
 
+  // A phone held sideways: short side < 600 and wider than tall.
+  void sizeLandscapePhone(WidgetTester tester) {
+    tester.view.physicalSize = const Size(900, 400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+  }
+
+  // The landscape rail is Android-only; the shell reads Theme.platform, so
+  // tests pick the platform here instead of touching foundation debug vars.
+  Widget androidShell() => MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.android),
+        home: const AppShell(),
+      );
+
   testWidgets('phone nav names every destination for a screen reader',
       (tester) async {
     // The bottom bar is icon-only, so the destination name exists nowhere on
@@ -103,5 +117,31 @@ void main() {
     final after = tester.widget(find.byType(HomeScreen, skipOffstage: false));
 
     expect(identical(before, after), isFalse);
+  });
+
+  testWidgets('landscape phone shows the rail and drops the top title bar',
+      (tester) async {
+    sizeLandscapePhone(tester);
+    await tester.pumpWidget(androidShell());
+    await tester.pump();
+
+    expect(find.byKey(const Key('landscape_rail')), findsOneWidget);
+    // The tab-title strip belongs to the portrait layout; landscape drops it.
+    expect(find.byKey(const Key('top_title')), findsNothing);
+
+    // Nav still switches destinations from the rail (LIBRARY = index 1).
+    await tester.tap(find.byTooltip('LIBRARY'));
+    await tester.pump();
+    expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 1);
+  });
+
+  testWidgets('portrait phone keeps the top title and shows no rail',
+      (tester) async {
+    sizePhone(tester);
+    await tester.pumpWidget(androidShell());
+    await tester.pump();
+
+    expect(find.byKey(const Key('landscape_rail')), findsNothing);
+    expect(find.byKey(const Key('top_title')), findsOneWidget);
   });
 }

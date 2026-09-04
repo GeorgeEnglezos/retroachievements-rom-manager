@@ -27,7 +27,10 @@ class UiSegmented<T> extends StatelessWidget {
       opacity: enabled ? 1 : 0.4,
       child: Container(
         clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
+        decoration: BoxDecoration(borderRadius: ui.roundMd),
+        // Border on top of the (clipped) segment fills: antialiased corner
+        // clipping otherwise shaves 1-2px off the hairline at each corner.
+        foregroundDecoration: BoxDecoration(
           borderRadius: ui.roundMd,
           border: Border.all(color: ui.border, width: ui.borderWidth),
         ),

@@ -17,6 +17,7 @@ import '../services/metadata_cache.dart';
 import '../services/ra_cache.dart';
 import '../services/ra_service.dart';
 import '../services/scan_settings.dart';
+import '../services/app_mode.dart';
 import '../services/console_map.dart';
 import '../services/library.dart';
 import '../services/play_view.dart';
@@ -36,6 +37,7 @@ import '../models/folder_sort.dart';
 import '../models/rom_row.dart';
 import '../models/rom_group.dart';
 import '../widgets/android_disc_hashing_dialog.dart';
+import '../widgets/app_shell.dart';
 import '../widgets/folder_toolbar.dart';
 import '../widgets/fetch_fab.dart';
 import '../widgets/fetch_tasks_dialog.dart';
@@ -94,6 +96,10 @@ class _FolderViewState extends State<FolderView> {
   FolderSort _folderSort = FolderSort.alphabetical;
   bool _sortAscending = true;
   bool _gridView = false;
+  // Whether the search + filters toolbar is shown. Collapsing it hands the whole
+  // body to the game list, which matters most on a short landscape phone.
+  bool _toolbarVisible = false;
+  double _gridSize = FolderToolbar.gridSizeDefault;
   // The layout actually drawn. Play mode can pin it, in which case the toolbar
   // toggle is hidden and _gridView keeps whatever cleaning last chose.
   bool get _effectiveGrid => switch (playView.layout) {
@@ -234,6 +240,8 @@ class _FolderViewState extends State<FolderView> {
     final v = FolderSort.values.asNameMap()[prefs.getString(PrefKeys.folderSort)];
     final asc = prefs.getBool(PrefKeys.folderSortAsc) ?? true;
     final grid = prefs.getBool(PrefKeys.folderGridView) ?? false;
+    final size = prefs.getDouble(PrefKeys.folderGridSize) ??
+        FolderToolbar.gridSizeDefault;
     final mode = CleanupScoreMode.values
         .asNameMap()[prefs.getString(PrefKeys.cleanupMode)];
     if (mounted) {
@@ -241,6 +249,8 @@ class _FolderViewState extends State<FolderView> {
         if (v != null) _folderSort = v;
         _sortAscending = asc;
         _gridView = grid;
+        _gridSize = size.clamp(
+            FolderToolbar.gridSizeMin, FolderToolbar.gridSizeMax);
         if (mode != null) _cleanupMode = mode;
       });
     }
@@ -786,17 +796,28 @@ class _FolderViewState extends State<FolderView> {
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    return Scaffold(
-      backgroundColor: ui.surface,
-      appBar: AppBar(
-        backgroundColor: ui.surface,
-        title: Text(widget.title),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
+    final size = MediaQuery.sizeOf(context);
+    // Same gate the shell uses: an Android phone held sideways. There the top
+    // AppBar costs scarce height, so its controls move to a slim left rail that
+    // matches the shell's landscape rail. The system name is dropped: you
+    // picked the system to get here.
+    final landscapePhone =
+        Theme.of(context).platform == TargetPlatform.android &&
+            size.shortestSide < 600 &&
+            size.width > size.height;
+    final toggle = IconButton(
+      key: const Key('toolbar_toggle'),
+      icon: Icon(_toolbarVisible ? Icons.expand_less : Icons.tune),
+      tooltip:
+          _toolbarVisible ? 'Hide search & filters' : 'Show search & filters',
+      onPressed: () => setState(() => _toolbarVisible = !_toolbarVisible),
+    );
+    final content = _loading
+        ? const Center(child: CircularProgressIndicator())
+        : Column(
               children: [
-                FolderToolbar(
+                if (_toolbarVisible)
+                  FolderToolbar(
                   filter: _filter,
                   sort: _folderSort,
                   sortAscending: _sortAscending,
@@ -833,6 +854,12 @@ class _FolderViewState extends State<FolderView> {
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.setBool(PrefKeys.folderGridView, _gridView);
                   },
+                  gridSize: _gridSize,
+                  onGridSizeChanged: (v) => setState(() => _gridSize = v),
+                  onGridSizeChangeEnd: (v) async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setDouble(PrefKeys.folderGridSize, v);
+                  },
                   onDuplicatesToggle: (on) => setState(
                       () => _filter = _filter.copyWith(onlyDuplicates: on)),
                   onHotToggle: (on) => setState(() => _hot = on),
@@ -847,12 +874,11 @@ class _FolderViewState extends State<FolderView> {
                     store: _playlistStore,
                     enableSelection: true,
                     gridView: _effectiveGrid,
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: 300,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                            childAspectRatio: 0.75),
+                    gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: _gridSize,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: 0.75),
                     onDeleteRow: (r) async {
                       var any = false;
                       for (final path in _pathsOf(r)) {
@@ -875,7 +901,62 @@ class _FolderViewState extends State<FolderView> {
                   ),
                 ),
               ],
+            );
+    return Scaffold(
+      backgroundColor: ui.surface,
+      appBar: landscapePhone
+          ? null
+          : AppBar(
+              backgroundColor: ui.surface,
+              title: Text(widget.title),
+              actions: [toggle],
             ),
+      body: landscapePhone
+          ? SafeArea(
+              child: Row(
+                children: [
+                  Container(
+                    width: 64,
+                    decoration: BoxDecoration(
+                      color: ui.surface,
+                      border: Border(
+                          right: BorderSide(
+                              color: ui.border, width: ui.borderWidth)),
+                    ),
+                    // Scrolls if the full nav (cleaning's seven) outgrows a
+                    // short landscape height.
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back),
+                            tooltip: 'Back',
+                            onPressed: () => Navigator.of(context).maybePop(),
+                          ),
+                          toggle,
+                          Divider(
+                              height: 8, color: ui.border, thickness: ui.borderWidth),
+                          // The shell's tabs, so you can jump to any section from
+                          // a system's game list. Tapping pops back to the shell
+                          // and switches tabs; none is marked selected (this is
+                          // a pushed route, not one of the shell's tabs).
+                          for (final i in shellNavFor(appModeListenable.value))
+                            ShellRailTile(
+                              label: kShellDests[i].$1,
+                              icon: kShellDests[i].$2,
+                              selected: false,
+                              onTap: () => shellNavigate?.call(i),
+                            ),
+                          const SizedBox(height: 8),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Expanded(child: content),
+                ],
+              ),
+            )
+          : content,
       floatingActionButton:
           widget.showActions && (_raSupported || _metadataFetchable)
               ? FetchFab(onPressed: _showTaskDialog)
