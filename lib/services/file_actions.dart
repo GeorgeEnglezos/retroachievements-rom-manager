@@ -240,6 +240,50 @@ class FileActions {
     }
   }
 
+  /// Resolves Windows `.lnk` shortcuts to their target paths in one shell call.
+  /// Returns a map of input path -> TargetPath; a shortcut that won't resolve is
+  /// simply absent. Empty off Windows or when [lnkPaths] is empty.
+  static Future<Map<String, String>> resolveShortcuts(
+      List<String> lnkPaths) async {
+    if (!Platform.isWindows || lnkPaths.isEmpty) return {};
+    File? listFile;
+    try {
+      // Pass the paths via a temp file (one per line) so arbitrary path chars
+      // never have to survive PowerShell -Command quoting.
+      listFile = File(p.join(Directory.systemTemp.path,
+          'rarm_lnk_${DateTime.now().microsecondsSinceEpoch}.txt'));
+      await listFile.writeAsString(lnkPaths.join('\n'));
+      const script = r'''
+$ws = New-Object -ComObject WScript.Shell
+Get-Content -LiteralPath $env:RARM_LNK_LIST | ForEach-Object {
+  if ($_ -ne '') { try { $ws.CreateShortcut($_).TargetPath } catch { '' } }
+}''';
+      final result = await Process.run(
+          'powershell', ['-NoProfile', '-Command', script],
+          environment: {'RARM_LNK_LIST': listFile.path});
+      if (result.exitCode != 0) {
+        LogService.error('FileActions/resolveShortcuts',
+            'exit=${result.exitCode}: ${result.stderr}');
+        return {};
+      }
+      // One output line per input, in order; blank when it didn't resolve.
+      final targets = (result.stdout as String).split(RegExp(r'\r?\n'));
+      final out = <String, String>{};
+      for (var i = 0; i < lnkPaths.length && i < targets.length; i++) {
+        final t = targets[i].trim();
+        if (t.isNotEmpty) out[lnkPaths[i]] = t;
+      }
+      return out;
+    } catch (e) {
+      LogService.error('FileActions/resolveShortcuts', 'Failed', err: e);
+      return {};
+    } finally {
+      try {
+        listFile?.deleteSync();
+      } catch (_) {}
+    }
+  }
+
   /// Opens a URL in the default browser. Returns false on failure.
   static Future<bool> openUrl(String url) async {
     try {

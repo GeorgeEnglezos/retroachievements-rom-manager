@@ -76,6 +76,47 @@ void main() {
     expect(await findEmulators(Directory(p.join(root.path, 'nope'))), isEmpty);
   });
 
+  group('shortcuts', () {
+    // Stands in for FileActions.resolveShortcuts (Windows WScript.Shell), which
+    // can't run on Linux CI: maps each .lnk path to a fixed target.
+    Future<Map<String, String>> Function(List<String>) resolver(
+            Map<String, String> byName) =>
+        (paths) async => {
+              for (final path in paths)
+                if (byName[p.basename(path)] != null)
+                  path: byName[p.basename(path)]!,
+            };
+
+    test('resolves a .lnk to its target exe and detects the kind', () async {
+      touch('Dolphin (GC-Wii).lnk');
+
+      final found = await findEmulators(root,
+          resolveShortcuts: resolver(
+              {'Dolphin (GC-Wii).lnk': r'C:\Emu\Dolphin-x64\Dolphin.exe'}));
+
+      expect(found.single.kindId, 'dolphin');
+      // The stored path is the real target, not the shortcut.
+      expect(found.single.exePath, r'C:\Emu\Dolphin-x64\Dolphin.exe');
+    });
+
+    test('ignores shortcuts whose target is a generic launcher', () async {
+      // EmuDeck Start-Menu shortcuts point at powershell.exe running a .ps1.
+      touch('dolphin.lnk');
+
+      final found = await findEmulators(root,
+          resolveShortcuts: resolver(
+              {'dolphin.lnk': r'C:\Windows\System32\powershell.exe'}));
+
+      expect(found, isEmpty);
+    });
+
+    test('ignores a shortcut that does not resolve', () async {
+      touch('broken.lnk');
+
+      expect(await findEmulators(root, resolveShortcuts: resolver({})), isEmpty);
+    });
+  });
+
   group('android', () {
     InstalledApp app(String package, String label) =>
         InstalledApp(package: package, label: label, known: true);
