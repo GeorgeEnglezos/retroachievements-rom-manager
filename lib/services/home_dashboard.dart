@@ -87,6 +87,7 @@ final _epoch = DateTime.fromMillisecondsSinceEpoch(0);
 HomeDashboard buildHomeDashboard(
   List<RomResult> games, {
   List<SystemSummary> systems = const [],
+  int limit = 12,
 }) {
   // Two ROM libraries can hold the same game (same RA gameId, different file
   // paths); collapse to one entry so a game counts once across every bucket and
@@ -114,7 +115,7 @@ HomeDashboard buildHomeDashboard(
         hardcoreEarned: r.earnedHardcore ?? 0,
         players: r.numPlayersCasual ?? 0,
       ),
-  ]);
+  ], limit: limit);
   List<RomResult> lookup(List<RecGame> l) =>
       [for (final g in l) ?byPath[g.filePath]];
 
@@ -154,7 +155,7 @@ HomeDashboard buildHomeDashboard(
   return HomeDashboard(
     spotlight: spotlight,
     beatSpotlight: beatSpotlight,
-    continuePlaying: continuePlaying.take(12).toList(),
+    continuePlaying: continuePlaying.take(limit).toList(),
     closestToMastery: closest,
     popularUnplayed: popular,
     stats: DashboardStats(
