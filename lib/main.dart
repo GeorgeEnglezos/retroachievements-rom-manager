@@ -16,6 +16,7 @@ import 'services/pref_keys.dart';
 import 'services/single_instance.dart';
 import 'theme/ui_theme.dart';
 import 'widgets/app_shell.dart';
+import 'widgets/gamepad_navigator.dart';
 import 'widgets/scan_progress_bar.dart';
 
 void main() {
@@ -81,26 +82,38 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<AppTheme>(
       valueListenable: appThemeListenable,
-      builder: (context, theme, _) => MaterialApp(
+      builder: (context, theme, _) {
+        var themeData = uiTheme(theme.tokens);
+        // Debug builds run inside DevicePreview; adopt its simulated device
+        // platform so platform-gated layouts (the landscape-phone shell) can be
+        // previewed on desktop by picking an Android device in the toolbar.
+        // Release never enters here, so the real platform stays untouched.
+        if (kDebugMode) {
+          themeData = themeData.copyWith(platform: DevicePreview.platform(context));
+        }
+        return MaterialApp(
         title: 'Retroachievements Rom Manager',
         debugShowCheckedModeBanner: false,
         locale: DevicePreview.locale(context),
         // Mount the scan progress bar above the Navigator so it renders over
         // any route (home, folder view) while a background sweep runs.
-        builder: (context, child) => Stack(
-          children: [
-            DevicePreview.appBuilder(context, child),
-            const Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: SafeArea(top: false, child: ScanProgressBar()),
-            ),
-          ],
+        builder: (context, child) => GamepadNavigator(
+          child: Stack(
+            children: [
+              DevicePreview.appBuilder(context, child),
+              const Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: SafeArea(top: false, child: ScanProgressBar()),
+              ),
+            ],
+          ),
         ),
-        theme: uiTheme(paletteFor(theme)),
+        theme: themeData,
         home: setupDone ? const AppShell() : const SetupWizard(),
-      ),
+        );
+      },
     );
   }
 }
