@@ -420,7 +420,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
             ),
             const SizedBox(width: 16),
             Expanded(
-              flex: 4,
+              flex: 5,
               child: _panel(
                 key: const Key('gameAchievementsPanel'),
                 child: Padding(
@@ -833,11 +833,20 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
         if (_listView)
           Column(children: list.map(_buildBadgeRow).toList())
         else
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: list.map(_buildBadgeTile).toList(),
-          ),
+          // Grow each tile so a whole number of columns fills the panel width
+          // edge to edge, leaving no ragged gap on the right.
+          LayoutBuilder(builder: (context, c) {
+            const spacing = 6.0;
+            const target = 56.0;
+            final cols =
+                ((c.maxWidth + spacing) / (target + spacing)).floor().clamp(1, 99);
+            final size = (c.maxWidth - spacing * (cols - 1)) / cols;
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: list.map((a) => _buildBadgeTile(a, size)).toList(),
+            );
+          }),
       ],
     );
   }
@@ -932,8 +941,8 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     );
   }
 
-  Widget _buildBadgeTile(Achievement achievement) {
-    final image = _badgeImage(achievement, 48);
+  Widget _buildBadgeTile(Achievement achievement, double size) {
+    final image = _badgeImage(achievement, size);
     final marker = _beatMarker(achievement);
     Widget tile =
         achievement.isEarned ? image : Opacity(opacity: 0.5, child: image);
@@ -945,9 +954,10 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
         children: [
           // A colour ring frames the beaten-defining badge so it stands out
           // from the standard achievements around it; the win condition rings
-          // thicker in gold.
+          // thicker in gold. Painted as foregroundDecoration (over the badge, no
+          // added size) so ringed tiles stay 48px and align with plain ones.
           Container(
-            decoration: BoxDecoration(
+            foregroundDecoration: BoxDecoration(
               borderRadius: ui.roundSm,
               border: Border.all(color: marker.color, width: marker.ring),
             ),
