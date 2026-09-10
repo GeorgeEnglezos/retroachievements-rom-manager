@@ -451,8 +451,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
         child: SingleChildScrollView(child: child),
       );
 
-  List<Widget> _artSection() =>
-      [_buildBoxArt(), _buildScreenshots(), _buildScrapedImages()];
+  List<Widget> _artSection() => [_buildBoxArt(), _buildThumbnails()];
 
   Widget _buildInfo(BuildContext context, {bool withProgress = true}) {
     return Padding(
@@ -580,55 +579,41 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
         ),
       );
 
-  // Title-screen and in-game screenshots RA provides, shown as a strip under the
-  // box art. Rendered only when at least one is present.
-  Widget _buildScreenshots() {
-    final shots = [rom.imageTitle, rom.imageIngame].whereType<String>().toList();
-    if (shots.isEmpty) return const SizedBox.shrink();
-    return SizedBox(
-      height: 90,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        itemCount: shots.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, i) => RaImage(
-          url: raImageUrl(shots[i]),
+  // RA title/in-game screenshots and imported Skraper images (every imported
+  // type except box art, handled in _buildBoxArt, and video, not rendered) share
+  // one strip of 120x90 thumbnails that wraps to multiple rows when there are
+  // many. Box art stays on its own above.
+  Widget _buildThumbnails() {
+    final s = widget.scraped;
+    final scrapedKeys = s == null
+        ? const <String>[]
+        : (s.images.keys.where((k) => k != 'boxart' && k != 'video').toList()
+          ..sort());
+
+    final tiles = <Widget>[
+      for (final shot in [rom.imageTitle, rom.imageIngame].whereType<String>())
+        RaImage(
+          url: raImageUrl(shot),
           width: 120,
+          height: 90,
           fit: BoxFit.cover,
           zoomable: true,
           error: Container(
             width: 120,
+            height: 90,
             color: context.ui.trough,
             child: Icon(Icons.broken_image, size: 32, color: context.ui.muted),
           ),
         ),
-      ),
-    );
-  }
+      for (final k in scrapedKeys)
+        _localImage(s!.images[k]!,
+            width: 120, height: 90, fit: BoxFit.cover, errorIconSize: 32),
+    ];
+    if (tiles.isEmpty) return const SizedBox.shrink();
 
-  // Local Skraper images rendered from disk: every imported image type except
-  // box art (handled in _buildBoxArt) and video (not rendered). Sorted for a
-  // stable order across whatever media folders the scrape provided.
-  Widget _buildScrapedImages() {
-    final s = widget.scraped;
-    if (s == null) return const SizedBox.shrink();
-    final keys = s.images.keys
-        .where((k) => k != 'boxart' && k != 'video')
-        .toList()
-      ..sort();
-    final paths = [for (final k in keys) s.images[k]!];
-    if (paths.isEmpty) return const SizedBox.shrink();
-    return SizedBox(
-      height: 90,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        itemCount: paths.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, i) => _localImage(paths[i],
-            width: 120, fit: BoxFit.cover, errorIconSize: 32),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Wrap(spacing: 8, runSpacing: 8, children: tiles),
     );
   }
 

@@ -1,5 +1,7 @@
 import '../models/home_index.dart';
 import '../models/rom_result.dart';
+import 'game_lookup.dart' show romFromEntry;
+import 'library.dart';
 import 'ra_service.dart' show RaAward;
 import 'recommender.dart';
 import 'play_view.dart';
@@ -79,6 +81,31 @@ bool _beaten(RomResult r) {
 }
 
 final _epoch = DateTime.fromMillisecondsSinceEpoch(0);
+
+/// The library's matched games (each carrying its system's display name) plus the
+/// system summaries, walked once. Shared by every read-only surface: the home
+/// dashboard screen and all three big-picture content tabs derive from this.
+Future<(List<RomResult>, List<SystemSummary>)> loadMatchedGames(
+    {Library? library}) async {
+  final lib = library ?? Library.instance;
+  final summaries = await lib.summaries();
+  final games = <RomResult>[];
+  for (final s in summaries) {
+    final data = await lib.load(s.systemPath);
+    for (final e in data.games) {
+      if (e.matched && e.gameInfo != null) {
+        games.add(romFromEntry(e, consoleName: s.name));
+      }
+    }
+  }
+  return (games, summaries);
+}
+
+/// Walks the library and assembles its [HomeDashboard].
+Future<HomeDashboard> loadHomeDashboard({Library? library, int limit = 12}) async {
+  final (games, summaries) = await loadMatchedGames(library: library);
+  return buildHomeDashboard(games, systems: summaries, limit: limit);
+}
 
 /// Builds the dashboard from the supported games in the library. Pure, no I/O.
 /// The ranked buckets reuse [Recommender] so Home and Play Next agree; the

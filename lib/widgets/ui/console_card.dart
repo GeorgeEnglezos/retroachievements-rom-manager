@@ -20,11 +20,19 @@ class ConsoleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Read the surface off the real theme before the light-theme override.
+    // Read the surface + app accent off the real theme before the light-theme
+    // override, so the focus ring wears the app's accent, not light's amber.
     final color = context.ui.cardSurface;
+    final ring = context.ui.accent;
     return Theme(
       data: uiTheme(UiTokens.light),
-      child: UiCard(onTap: onTap, color: color, padding: padding, child: child),
+      child: UiCard(
+        onTap: onTap,
+        color: color,
+        padding: padding,
+        ringColor: ring,
+        child: child,
+      ),
     );
   }
 }

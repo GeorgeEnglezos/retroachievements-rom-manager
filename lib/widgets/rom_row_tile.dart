@@ -80,14 +80,16 @@ class RomRowTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    final isFavorite = row.rom != null &&
+    final isFavorite =
+        row.rom != null &&
         store.isFavorite(
-            memberKeyFor(gameId: row.rom!.gameId, filePath: row.rom!.filePath));
+          memberKeyFor(gameId: row.rom!.gameId, filePath: row.rom!.filePath),
+        );
     final cardColor = isSelected
         ? ui.accent.withValues(alpha: 0.12)
         : isFavorite
-            ? ui.favoriteFill
-            : null;
+        ? ui.favoriteFill
+        : null;
     // Favorite rows are accent-filled, so their labels flip to ui.favoriteInk
     // (the ground colour) to read against the fill.
     final fg = isFavorite ? ui.favoriteInk : null;
@@ -96,6 +98,9 @@ class RomRowTile extends StatelessWidget {
       child: UiCard(
         padding: EdgeInsets.zero,
         color: cardColor,
+        focusScale:
+            1.0, // wide row: ring only, no lift (would overflow the list)
+        flourish: FocusFlourish.jump, // rows: a light hop, not the tile tilt
         onTap: () => _onTap(context),
         child: _buildCardContent(context, ui, fg),
       ),
@@ -177,8 +182,7 @@ class RomRowTile extends StatelessWidget {
       row.title,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-          fontWeight: FontWeight.w600, fontSize: 14.5, color: fg),
+      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5, color: fg),
     );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
@@ -211,13 +215,17 @@ class RomRowTile extends StatelessWidget {
           ),
           if (row.scoreLabel != null) ...[
             const SizedBox(width: 8),
-            Text(row.scoreLabel!,
-                style: ui.mono.copyWith(fontSize: 13, color: fg)),
+            Text(
+              row.scoreLabel!,
+              style: ui.mono.copyWith(fontSize: 13, color: fg),
+            ),
           ],
           if (display.showSizeBar && row.sizeLabel != null) ...[
             const SizedBox(width: 8),
-            Text(row.sizeLabel!,
-                style: ui.mono.copyWith(fontSize: 12, color: fg)),
+            Text(
+              row.sizeLabel!,
+              style: ui.mono.copyWith(fontSize: 12, color: fg),
+            ),
           ],
           if (display.showChevron && row.showChevron) ...[
             const SizedBox(width: 4),
@@ -315,7 +323,6 @@ class RomRowTile extends StatelessWidget {
     );
   }
 
-
   Widget? _buildProgress(BuildContext context, Color? fg) {
     // Small screens (phones in any orientation, or any narrow window) drop the
     // per-row bar: the row is too tight for a bar + label, and the earned/total
@@ -330,11 +337,12 @@ class RomRowTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 5),
       child: RomProgress(
-          rom: row.rom!,
-          barHeight: 4,
-          labelSize: 10,
-          inline: true,
-          colorOverride: fg),
+        rom: row.rom!,
+        barHeight: 4,
+        labelSize: 10,
+        inline: true,
+        colorOverride: fg,
+      ),
     );
   }
 
@@ -387,9 +395,8 @@ class RomRowTile extends StatelessWidget {
     // localOnly renders like a supported row minus RA data: filename title,
     // size, no achievements/progress and no "Not fetched" status text.
     if (rom.status == RomStatus.supported || rom.isLocalOnly) {
-      final fileName = playView.fileName &&
-              row.subtitle != null &&
-              row.subtitle != row.title
+      final fileName =
+          playView.fileName && row.subtitle != null && row.subtitle != row.title
           ? row.subtitle
           : null;
       // The same earned/total read the grid's GameMetaRow shows, inline in the
@@ -411,9 +418,10 @@ class RomRowTile extends StatelessWidget {
       RomStatus.notFetched => 'Not fetched',
       RomStatus.checking => 'Checking...',
       RomStatus.unsupported => 'No achievements found',
-      RomStatus.unsupportedFormat => DiscFormats.isNkit(rom.filePath)
-          ? 'NKit format not supported'
-          : 'Compressed disc. Add Dolphin in Settings → Emulators to hash it',
+      RomStatus.unsupportedFormat =>
+        DiscFormats.isNkit(rom.filePath)
+            ? 'NKit format not supported'
+            : 'Compressed disc. Add Dolphin in Settings → Emulators to hash it',
       RomStatus.error => rom.errorMessage ?? 'Unknown error',
       _ => null,
     };
@@ -422,7 +430,8 @@ class RomRowTile extends StatelessWidget {
       ui,
       [statusText, sizeLabel],
       fg: fg,
-      firstColor: rom.status == RomStatus.error ||
+      firstColor:
+          rom.status == RomStatus.error ||
               rom.status == RomStatus.unsupportedFormat
           ? ui.warning
           : null,

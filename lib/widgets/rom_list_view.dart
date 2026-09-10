@@ -375,6 +375,12 @@ class _RomListViewState extends State<RomListView> {
           return RomGridItem(
             rom: r.rom!,
             store: widget.store,
+            // The Library grid wears Home's framed-cover design; listingExtras
+            // layers the play-view fields (size, hot/no-ach/tag chips) back on,
+            // and raName reads titles the way Home does.
+            lean: true,
+            listingExtras: true,
+            raName: true,
             isSelected: _isSelected(r),
             isSelectMode: _selected.isNotEmpty,
             onSelectToggle: _selectToggle(r),

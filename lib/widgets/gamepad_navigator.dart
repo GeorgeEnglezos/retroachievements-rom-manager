@@ -7,6 +7,7 @@ import 'package:gamepads/gamepads.dart';
 
 import '../services/gamepad.dart';
 import '../services/log_service.dart';
+import '../theme/ui_tokens.dart';
 
 // Flip to true, rebuild, and press every button to read what your controller
 // actually sends into the Logs tab — the way to check a pad the SDL mapping
@@ -15,6 +16,26 @@ const bool _logRawInput = false;
 
 const _initialRepeatDelay = Duration(milliseconds: 400);
 const _repeatInterval = Duration(milliseconds: 110);
+
+// Start and the shoulder bumpers still map to these intents, but no shell binds
+// them now that the couch shell was retired, so they dispatch as inert no-ops
+// (Actions.maybeInvoke finds no action). Kept as hooks for a future global
+// handler, e.g. Start opening an exit-to-cleaning menu.
+
+/// Fired by Start. Currently unbound (see note above).
+class MenuIntent extends Intent {
+  const MenuIntent();
+}
+
+/// Fired by the left bumper. Currently unbound (see note above).
+class TabLeftIntent extends Intent {
+  const TabLeftIntent();
+}
+
+/// Fired by the right bumper. Currently unbound (see note above).
+class TabRightIntent extends Intent {
+  const TabRightIntent();
+}
 
 /// Drives Flutter's focus system from a game controller.
 ///
@@ -36,7 +57,11 @@ class _GamepadNavigatorState extends State<GamepadNavigator> {
   final _normalizer = GamepadNormalizer();
   StreamSubscription<NormalizedGamepadEvent>? _sub;
   Timer? _repeatTimer;
+  Timer? _connectPoll;
   GamepadAction? _heldDirection;
+  // Whether at least one controller is connected, from the last poll. Drives the
+  // hint footer; the plugin has no connect/disconnect event, so we poll for it.
+  bool _connected = false;
 
   @override
   void initState() {
@@ -52,6 +77,11 @@ class _GamepadNavigatorState extends State<GamepadNavigator> {
       _sub = Gamepads.events
           .transform(_normalizer.transformer)
           .listen(_onEvent);
+      // ponytail: the plugin has no connect/disconnect event, so poll the list.
+      // 1.5s is well under human patience for "I plugged in my pad".
+      _connectPoll =
+          Timer.periodic(const Duration(milliseconds: 1500), (_) => _pollPads());
+      _pollPads();
     } catch (e) {
       // No plugin registered (e.g. under widget tests) — input just stays off.
       LogService.debug('Gamepad', 'events unavailable: $e');
@@ -62,7 +92,23 @@ class _GamepadNavigatorState extends State<GamepadNavigator> {
   void dispose() {
     _sub?.cancel();
     _repeatTimer?.cancel();
+    _connectPoll?.cancel();
     super.dispose();
+  }
+
+  // Track whether any controller is connected, so the hint footer shows only
+  // when one is. Connecting a pad no longer switches modes; it just works in
+  // whichever mode the app is in.
+  Future<void> _pollPads() async {
+    final int count;
+    try {
+      count = (await Gamepads.list()).length;
+    } catch (_) {
+      return; // listing failed; leave the last-known state alone
+    }
+    if (!mounted) return;
+    final connected = count > 0;
+    if (connected != _connected) setState(() => _connected = connected);
   }
 
   void _onEvent(NormalizedGamepadEvent e) {
@@ -95,13 +141,17 @@ class _GamepadNavigatorState extends State<GamepadNavigator> {
   void _dispatchDiscrete(GamepadAction action) {
     switch (action) {
       case GamepadAction.confirm:
-        _activate();
+        _invoke(const ActivateIntent());
       case GamepadAction.back:
         _back();
-      // menu + shoulder tabs are wired to the couch shell in phase 2.
+      // Menu + shoulder tabs dispatch as intents; nothing binds them now (the
+      // couch shell that did was retired), so maybeInvoke ignores them.
       case GamepadAction.menu:
+        _invoke(const MenuIntent());
       case GamepadAction.tabLeft:
+        _invoke(const TabLeftIntent());
       case GamepadAction.tabRight:
+        _invoke(const TabRightIntent());
       case GamepadAction.up:
       case GamepadAction.down:
       case GamepadAction.left:
@@ -130,9 +180,11 @@ class _GamepadNavigatorState extends State<GamepadNavigator> {
     primary.focusInDirection(t);
   }
 
-  void _activate() {
+  // Dispatch an intent at whatever is focused, so a shell ancestor's Actions can
+  // handle it. No focus yet (idle root scope) means nothing to invoke on.
+  void _invoke(Intent intent) {
     final ctx = FocusManager.instance.primaryFocus?.context;
-    if (ctx != null) Actions.maybeInvoke(ctx, const ActivateIntent());
+    if (ctx != null) Actions.maybeInvoke(ctx, intent);
   }
 
   void _back() {
@@ -141,5 +193,80 @@ class _GamepadNavigatorState extends State<GamepadNavigator> {
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    if (!_connected) return widget.child;
+    // A controller is plugged in: keep the app exactly as it is and add a
+    // persistent hint strip along the bottom so the pad controls are discoverable
+    // in any mode.
+    return Column(
+      children: [
+        Expanded(child: widget.child),
+        const _GamepadFooter(),
+      ],
+    );
+  }
+}
+
+/// The controller-hint strip shown at the bottom while a pad is connected. Sits
+/// above `MaterialApp`'s route content, so it carries no Material ancestor: every
+/// bit of text sets its own style from the theme tokens.
+class _GamepadFooter extends StatelessWidget {
+  const _GamepadFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    final ui = context.ui;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: ui.surface,
+        border: Border(top: BorderSide(color: ui.border, width: ui.borderWidth)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              _Hint(glyph: '↕↔', label: 'Navigate'),
+              SizedBox(width: 20),
+              _Hint(glyph: 'A', label: 'Select'),
+              SizedBox(width: 20),
+              _Hint(glyph: 'B', label: 'Back'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Hint extends StatelessWidget {
+  final String glyph;
+  final String label;
+  const _Hint({required this.glyph, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final ui = context.ui;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: ui.surfaceAlt,
+            shape: BoxShape.circle,
+            border: Border.all(color: ui.border, width: ui.borderWidth),
+          ),
+          child: Text(glyph,
+              style: ui.labelCaps.copyWith(fontSize: 11, letterSpacing: 0)),
+        ),
+        const SizedBox(width: 6),
+        Text(label, style: ui.body.copyWith(color: ui.muted)),
+      ],
+    );
+  }
 }

@@ -942,10 +942,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      // Scanning and fetching are library maintenance; gaming mode browses
-      // what is already there.
-      floatingActionButton:
-          _rootPath == null || gamingMode ? null : _buildSyncControls(),
+      // The scan/sync button is always available on the Library tab, including
+      // before a folder is picked and in Play mode.
+      floatingActionButton: _buildSyncControls(),
     );
   }
 

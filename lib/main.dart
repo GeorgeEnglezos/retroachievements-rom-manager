@@ -88,7 +88,11 @@ class MyApp extends StatelessWidget {
         // platform so platform-gated layouts (the landscape-phone shell) can be
         // previewed on desktop by picking an Android device in the toolbar.
         // Release never enters here, so the real platform stays untouched.
-        if (kDebugMode) {
+        // isEnabled guards against the store's async init: on the first frame
+        // it is still initializing and DevicePreview.platform would throw
+        // "Not initialized". Once init finishes the store notifies, this
+        // rebuilds, and the simulated platform is applied.
+        if (kDebugMode && DevicePreview.isEnabled(context)) {
           themeData = themeData.copyWith(platform: DevicePreview.platform(context));
         }
         return MaterialApp(
@@ -111,6 +115,10 @@ class MyApp extends StatelessWidget {
           ),
         ),
         theme: themeData,
+        // Every mode uses the one responsive shell; big picture is that shell in
+        // gaming trim, shown full-window and driven by the pad (the separate
+        // couch shell was retired). AppShell listens to appModeListenable itself,
+        // so a mode flip rebuilds it. Setup always runs first.
         home: setupDone ? const AppShell() : const SetupWizard(),
         );
       },

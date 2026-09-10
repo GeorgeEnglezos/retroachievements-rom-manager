@@ -232,6 +232,58 @@ void main() {
     });
   });
 
+  group('library grid tile (lean + listing extras)', () {
+    tearDown(() {
+      appModeListenable.value = AppMode.cleaning;
+      playViewListenable.value = const PlayView();
+    });
+
+    RomResult game() =>
+        RomResult(filePath: 'snes/smw.sfc', fileName: 'smw.sfc')
+          ..status = RomStatus.supported
+          ..gameTitle = 'Super Mario World'
+          ..consoleName = 'SNES'
+          ..achievementCount = 40
+          ..earnedAchievements = 10
+          ..numPlayersCasual = 100000 // over the hot threshold
+          ..fileSize = 512 * 1024;
+
+    Widget host(RomResult rom) => MaterialApp(
+          theme: uiTheme(UiTokens.light),
+          home: Scaffold(
+            body: RomGridItem(
+              rom: rom,
+              store: PlaylistStore(),
+              lean: true,
+              listingExtras: true,
+              raName: true,
+            ),
+          ),
+        );
+
+    testWidgets('wears the Home framed-cover design, not the card', (tester) async {
+      await tester.pumpWidget(host(game()));
+      expect(find.byType(GameCover), findsOneWidget);
+      expect(find.text('10/40'), findsOneWidget); // Home-style numbers
+    });
+
+    testWidgets('cleaning layers the size + hot extras onto the tile',
+        (tester) async {
+      await tester.pumpWidget(host(game()));
+      expect(find.text('🔥 HOT'), findsOneWidget); // playView all-on
+      expect(find.text('512.0 KB'), findsOneWidget);
+    });
+
+    testWidgets('play mode keeps only the extras its play view enables',
+        (tester) async {
+      appModeListenable.value = AppMode.gaming;
+      playViewListenable.value = const PlayView(); // hot on, size off
+      await tester.pumpWidget(host(game()));
+      expect(find.text('🔥 HOT'), findsOneWidget);
+      expect(find.text('512.0 KB'), findsNothing);
+    });
+  });
+
   group('cell fit', () {
     // Worst case for the text block: every optional line present, a long title,
     // and a file name carrying every tag chip the parser can produce.
@@ -252,24 +304,31 @@ void main() {
     // a phone-width viewport two columns of roughly 155x207 — the smallest cell
     // the app can produce, and the one a multi-run chip strip used to burst.
     for (final cell in const [Size(155, 207), Size(300, 400)]) {
-      testWidgets(
-          'a fully loaded tile fits a ${cell.width.toInt()}x${cell.height.toInt()} cell',
-          (tester) async {
-        await tester.pumpWidget(MaterialApp(
-          theme: uiTheme(UiTokens.light),
-          home: Scaffold(
-            body: Center(
-              child: SizedBox(
-                width: cell.width,
-                height: cell.height,
-                child: RomGridItem(rom: loaded(), store: PlaylistStore()),
+      for (final lean in const [false, true]) {
+        testWidgets(
+            '${lean ? 'lean+extras' : 'card'} fully loaded fits a '
+            '${cell.width.toInt()}x${cell.height.toInt()} cell', (tester) async {
+          await tester.pumpWidget(MaterialApp(
+            theme: uiTheme(UiTokens.light),
+            home: Scaffold(
+              body: Center(
+                child: SizedBox(
+                  width: cell.width,
+                  height: cell.height,
+                  child: RomGridItem(
+                    rom: loaded(),
+                    store: PlaylistStore(),
+                    lean: lean,
+                    listingExtras: lean,
+                  ),
+                ),
               ),
             ),
-          ),
-        ));
-        await tester.pump();
-        expect(tester.takeException(), isNull);
-      });
+          ));
+          await tester.pump();
+          expect(tester.takeException(), isNull);
+        });
+      }
     }
   });
 }

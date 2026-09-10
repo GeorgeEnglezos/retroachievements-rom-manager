@@ -46,6 +46,11 @@ class GameCover extends StatelessWidget {
   /// Inset for the text block under the art.
   final EdgeInsets textPadding;
 
+  /// Force the RetroAchievements name (falling back to the file name only when
+  /// there is none), ignoring the play-mode file-name setting. Big Picture sets
+  /// this so its shelves always read as game names.
+  final bool raName;
+
   const GameCover({
     super.key,
     required this.rom,
@@ -58,12 +63,15 @@ class GameCover extends StatelessWidget {
     this.foreground,
     this.framedArt = true,
     this.textPadding = const EdgeInsets.only(top: 8),
+    this.raName = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    final title = listingTitle(rom.gameTitle, rom.fileName);
+    final title = raName
+        ? gameDisplayName(rom.gameTitle, rom.fileName)
+        : listingTitle(rom.gameTitle, rom.fileName);
     final art = _art(ui);
 
     return SizedBox(
@@ -171,28 +179,32 @@ class GameCover extends StatelessWidget {
               ],
             ),
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: UiTokens.pill,
-                  child: SizedBox(
-                    height: 5,
-                    child: Stack(children: [
-                      ColoredBox(color: kOnScrim.withValues(alpha: 0.33)),
-                      FractionallySizedBox(
-                        widthFactor: frac.clamp(0.0, 1.0),
-                        child: const ColoredBox(color: kOnScrimAccent),
-                      ),
-                    ]),
+          child: LayoutBuilder(builder: (_, c) {
+            final bar = ClipRRect(
+              borderRadius: UiTokens.pill,
+              child: SizedBox(
+                height: 5,
+                child: Stack(children: [
+                  ColoredBox(color: kOnScrim.withValues(alpha: 0.33)),
+                  FractionallySizedBox(
+                    widthFactor: frac.clamp(0.0, 1.0),
+                    child: const ColoredBox(color: kOnScrimAccent),
                   ),
-                ),
+                ]),
               ),
-              const SizedBox(width: 8),
-              Text('${(frac * 100).round()}%',
-                  style: ui.mono.copyWith(fontSize: 10, color: kOnScrim)),
-            ],
-          ),
+            );
+            // A small tile has no room for the "%" readout beside the bar; drop
+            // it (and its gap) so the Row can't overflow the narrow tile.
+            if (c.maxWidth < 60) return SizedBox(width: double.infinity, child: bar);
+            return Row(
+              children: [
+                Expanded(child: bar),
+                const SizedBox(width: 8),
+                Text('${(frac * 100).round()}%',
+                    style: ui.mono.copyWith(fontSize: 10, color: kOnScrim)),
+              ],
+            );
+          }),
         ),
       );
 }

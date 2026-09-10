@@ -408,7 +408,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       children: [
         _heading('Mode',
             'Play hides the maintenance tabs, scans, multi-select and every '
-            'delete button, so the app is safe to hand over.'),
+            'delete button, so the app is safe to hand over. A controller '
+            'drives either mode.'),
         ValueListenableBuilder<AppMode>(
           valueListenable: appModeListenable,
           builder: (context, mode, _) => SegmentedButton<AppMode>(

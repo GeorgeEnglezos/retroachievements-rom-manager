@@ -8,7 +8,8 @@ import 'pref_keys.dart';
 /// [cleaning] is the full library-maintenance UI. [gaming] is the
 /// browse-and-play surface other frontends call kiosk mode: the maintenance
 /// tabs, scans, multi-select and every delete/exclude affordance are hidden,
-/// so handing someone the app can't cost them ROMs.
+/// so handing someone the app can't cost them ROMs. A controller drives either
+/// mode; connecting one no longer switches modes on its own.
 enum AppMode { cleaning, gaming }
 
 
@@ -16,9 +17,11 @@ enum AppMode { cleaning, gaming }
 /// rebuilds from it, which re-runs every mounted screen's build.
 final ValueNotifier<AppMode> appModeListenable = ValueNotifier(AppMode.cleaning);
 
-/// True while the play-only surface is active. Widgets read this straight,
-/// without a listener: everything below the shell rebuilds when it flips.
-bool get gamingMode => appModeListenable.value == AppMode.gaming;
+/// True while a play-only surface is active (gaming or big picture). Widgets
+/// read this straight, without a listener: everything below the shell rebuilds
+/// when the mode flips. It gates the destructive affordances, so every play
+/// surface must count as gaming.
+bool get gamingMode => appModeListenable.value != AppMode.cleaning;
 
 /// Loads the saved mode, defaulting to [AppMode.cleaning] (managing a library
 /// is what the app is for; play mode is the thing you switch into).

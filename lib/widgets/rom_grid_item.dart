@@ -9,6 +9,7 @@ import '../theme/ui_tokens.dart';
 import 'game_cover.dart';
 import 'game_detail_dialog.dart';
 import 'ui/ui_card.dart';
+import 'ui/ui_focusable.dart';
 import 'rom_actions.dart';
 import 'rom_badges.dart';
 
@@ -38,6 +39,14 @@ class RomGridItem extends StatelessWidget {
   final List<String>? groupPaths;
   // Home's lean shelf: bare framed art, numbers + console, no card/chips/status.
   final bool lean;
+  // Library grid: keep the lean (Home) design but layer the play-listing extras
+  // on top of the base numbers+console line — the size/status subline and the
+  // hot / no-ach / tag chips, each gated by [playView] (all-on while cleaning,
+  // the saved subset in play). Home leaves this off for its clean shelf.
+  final bool listingExtras;
+  // Force the RA name over the file name, ignoring the play-mode setting. Big
+  // Picture's shelves and Library set this so they always read as game names.
+  final bool raName;
   // Fixed cell size (Home's square shelf). Null lets the art fill the grid cell.
   final double? height;
   final double? width;
@@ -58,6 +67,8 @@ class RomGridItem extends StatelessWidget {
     this.discCount,
     this.groupPaths,
     this.lean = false,
+    this.listingExtras = false,
+    this.raName = false,
     this.height,
     this.width,
   });
@@ -77,33 +88,42 @@ class RomGridItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    final displayTitle = listingTitle(rom.gameTitle, rom.fileName);
+    final displayTitle = raName
+        ? gameDisplayName(rom.gameTitle, rom.fileName)
+        : listingTitle(rom.gameTitle, rom.fileName);
     final fileName = playView.fileName && displayTitle != rom.fileName
         ? rom.fileName
         : null;
 
     if (lean) {
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => _onTap(context),
-        onSecondaryTapDown: (d) =>
-            _actions.showContextMenu(context, d.globalPosition),
-        onLongPressStart: (d) =>
-            _actions.showContextMenu(context, d.globalPosition),
-        child: GameCover(
-          rom: rom,
-          height: height,
-          width: width,
-          fileName: fileName,
-          artOverlays: [?discBadge(discCount, ui), ?dupBadge(rom, ui)],
-          corner: isSelectMode ? _selectionDot(ui) : null,
-          meta: _leanMeta(ui),
+      return UiFocusable(
+        onPressed: () => _onTap(context),
+        borderRadius: ui.roundMd, // matches GameCover's framed-art corners
+        focusScale: 1.08, // square tile: zoom + ring + tilt
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _onTap(context),
+          onSecondaryTapDown: (d) =>
+              _actions.showContextMenu(context, d.globalPosition),
+          onLongPressStart: (d) =>
+              _actions.showContextMenu(context, d.globalPosition),
+          child: GameCover(
+            rom: rom,
+            height: height,
+            width: width,
+            fileName: fileName,
+            raName: raName,
+            artOverlays: [?discBadge(discCount, ui), ?dupBadge(rom, ui)],
+            corner: isSelectMode ? _selectionDot(ui) : null,
+            meta: _leanMetaBlock(ui),
+          ),
         ),
       );
     }
 
-    final isFavorite = store
-        .isFavorite(memberKeyFor(gameId: rom.gameId, filePath: rom.filePath));
+    final isFavorite = store.isFavorite(
+      memberKeyFor(gameId: rom.gameId, filePath: rom.filePath),
+    );
     // Favorite cards are accent-filled, so their labels flip to ui.favoriteInk
     // (the ground colour) to read against the fill.
     final fg = isFavorite ? ui.favoriteInk : null;
@@ -116,6 +136,7 @@ class RomGridItem extends StatelessWidget {
       child: UiCard(
         padding: EdgeInsets.zero,
         color: isFavorite ? ui.favoriteFill : null,
+        focusScale: 1.08, // square tile: zoom + ring + tilt
         onTap: () => _onTap(context),
         child: GameCover(
           rom: rom,
@@ -123,6 +144,7 @@ class RomGridItem extends StatelessWidget {
           foreground: fg,
           textPadding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
           fileName: fileName,
+          raName: raName,
           artOverlays: [?discBadge(discCount, ui), ?dupBadge(rom, ui)],
           corner: isSelectMode ? _selectionDot(ui) : null,
           meta: Column(
@@ -138,7 +160,9 @@ class RomGridItem extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontSize: 10, color: fg ?? _sublineColor(ui)),
+                      fontSize: 10,
+                      color: fg ?? _sublineColor(ui),
+                    ),
                   ),
                 ),
             ],
@@ -170,6 +194,37 @@ class RomGridItem extends StatelessWidget {
     }
   }
 
+  /// The lean tile's meta: Home's base numbers+console line, plus (Library only,
+  /// [listingExtras]) the play-listing extras layered under it — the hot/no-ach/
+  /// tag chips on a clipped line, then the status/size subline. Each extra is
+  /// [playView]-gated, so cleaning shows them all and play shows the saved
+  /// subset; Home keeps just the base line.
+  Widget _leanMetaBlock(UiTokens ui) {
+    if (!listingExtras) return _leanMeta(ui);
+    // Same numbers+chips row and status/size subline the card tile uses, so the
+    // extras keep the card's proven cell footprint; the console drops because a
+    // Library grid always sits inside one console's folder. Both are
+    // [playView]-gated, so cleaning shows the lot and play the saved subset.
+    final subline = _subline(ui);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GameMetaRow(rom: rom, trailing: _chips(ui)),
+        if (subline != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Text(
+              subline,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 10, color: _sublineColor(ui)),
+            ),
+          ),
+      ],
+    );
+  }
+
   /// Home's meta line: `earned/total` in the mono/olive, then the console name.
   /// The numbers drop when the set has none, so an unmatched tile shows just its
   /// console.
@@ -180,13 +235,17 @@ class RomGridItem extends StatelessWidget {
     return Row(
       children: [
         if (total > 0)
-          Text('$earned/$total',
-              style: ui.mono.copyWith(fontSize: 11, color: ui.accentGames)),
+          Text(
+            '$earned/$total',
+            style: ui.mono.copyWith(fontSize: 11, color: ui.accentGames),
+          ),
         Expanded(
-          child: Text(total > 0 ? '  ·  $console' : console,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11, color: ui.muted)),
+          child: Text(
+            total > 0 ? '  ·  $console' : console,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 11, color: ui.muted),
+          ),
         ),
       ],
     );
@@ -215,19 +274,19 @@ class RomGridItem extends StatelessWidget {
       rom.status == RomStatus.error ? ui.warning : ui.muted;
 
   Widget _selectionDot(UiTokens ui) => IgnorePointer(
-        child: Container(
-          // Same colors as the list tile's selection dot.
-          decoration: BoxDecoration(
-            color: isSelected ? ui.accent : ui.text.withValues(alpha: 0.5),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: Colors.white,
-            size: 22,
-          ),
-        ),
-      );
+    child: Container(
+      // Same colors as the list tile's selection dot.
+      decoration: BoxDecoration(
+        color: isSelected ? ui.accent : ui.text.withValues(alpha: 0.5),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
+        color: Colors.white,
+        size: 22,
+      ),
+    ),
+  );
 
   // No achBadge here: GameMetaRow already shows the count as `earned/total`,
   // and the height-capped meta row would clip a trailing "N ACH" chip anyway.

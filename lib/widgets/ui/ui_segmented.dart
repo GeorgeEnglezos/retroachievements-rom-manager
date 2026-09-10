@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/ui_tokens.dart';
+import 'ui_focusable.dart';
 
 typedef UiSegment<T> = ({T value, String label, IconData? icon});
 
@@ -40,34 +41,46 @@ class UiSegmented<T> extends StatelessWidget {
             for (var i = 0; i < segments.length; i++) ...[
               if (i > 0)
                 Container(width: ui.borderWidth, height: 24, color: ui.border),
-              GestureDetector(
-                onTap: enabled ? () => onChanged(segments[i].value) : null,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  color: segments[i].value == value ? ui.accent : ui.surface,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (segments[i].icon != null)
-                        Icon(segments[i].icon,
+              UiFocusable(
+                onPressed: enabled ? () => onChanged(segments[i].value) : null,
+                // Segments sit inside the control's antialias clip; a rectangular
+                // ring with no lift stays within it.
+                borderRadius: BorderRadius.zero,
+                focusScale: 1.0,
+                child: GestureDetector(
+                  onTap: enabled ? () => onChanged(segments[i].value) : null,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    color: segments[i].value == value ? ui.accent : ui.surface,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (segments[i].icon != null)
+                          Icon(
+                            segments[i].icon,
                             size: 14,
                             color: segments[i].value == value
                                 ? ui.background
-                                : ui.text),
-                      if (segments[i].icon != null && segments[i].label.isNotEmpty)
-                        const SizedBox(width: 4),
-                      if (segments[i].label.isNotEmpty)
-                        Text(
-                          segments[i].label,
-                          style: ui.labelCaps.copyWith(
-                            color: segments[i].value == value
-                                ? ui.background
                                 : ui.text,
-                            letterSpacing: 0.5,
                           ),
-                        ),
-                    ],
+                        if (segments[i].icon != null &&
+                            segments[i].label.isNotEmpty)
+                          const SizedBox(width: 4),
+                        if (segments[i].label.isNotEmpty)
+                          Text(
+                            segments[i].label,
+                            style: ui.labelCaps.copyWith(
+                              color: segments[i].value == value
+                                  ? ui.background
+                                  : ui.text,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
