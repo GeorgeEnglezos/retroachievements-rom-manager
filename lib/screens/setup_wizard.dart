@@ -17,6 +17,7 @@ import '../services/scraper/scraped_store.dart';
 import '../theme/ui_tokens.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/pick_library_folder.dart';
+import '../widgets/ui_scale_control.dart';
 import '../widgets/ui/ui_button.dart';
 import '../widgets/ui/ui_dropdown.dart';
 import 'home_screen.dart';
@@ -244,6 +245,10 @@ class _WelcomeStep extends StatelessWidget {
           'your ROM folder, and a first scan.',
           style: ui.body,
         ),
+        const SizedBox(height: 24),
+        Text('UI scale', style: ui.labelCaps.copyWith(color: ui.muted)),
+        const SizedBox(height: 8),
+        const UiScaleControl(),
       ],
     );
   }

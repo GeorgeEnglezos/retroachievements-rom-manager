@@ -25,6 +25,7 @@ import '../services/scraper/scraped_store.dart';
 import '../widgets/pick_library_folder.dart';
 import '../services/scan_settings.dart';
 import '../widgets/pick_emulator.dart';
+import '../widgets/ui_scale_control.dart';
 import 'setup_wizard.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -398,6 +399,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: saveCombineSystems,
           ),
         ),
+        const SizedBox(height: 12),
+        Text('UI scale', style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 2),
+        Text('Zoom the whole app in or out. Applies immediately.',
+            style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 8),
+        const UiScaleControl(),
       ],
     );
   }
