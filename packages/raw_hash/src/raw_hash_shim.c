@@ -45,7 +45,7 @@ FFI_PLUGIN_EXPORT void raw_hash_set_log_callback(raw_hash_log_callback callback)
  * Process-global like g_log_callback, so it's only safe while hashing is
  * sequential (FetchEngine hashes one file at a time). Concurrent hashing would
  * need this made thread-local, same as the log callback. */
-static rc_hash_filereader_t g_filereader;
+static rc_hash_filereader_t g_vfilereader;
 static int g_filereader_set = 0;
 
 FFI_PLUGIN_EXPORT void raw_hash_set_filereader(raw_hash_vr_open open_fn,
@@ -53,11 +53,11 @@ FFI_PLUGIN_EXPORT void raw_hash_set_filereader(raw_hash_vr_open open_fn,
                                                raw_hash_vr_tell tell_fn,
                                                raw_hash_vr_read read_fn,
                                                raw_hash_vr_close close_fn) {
-  g_filereader.open = (rc_hash_filereader_open_file_handler)open_fn;
-  g_filereader.seek = (rc_hash_filereader_seek_handler)seek_fn;
-  g_filereader.tell = (rc_hash_filereader_tell_handler)tell_fn;
-  g_filereader.read = (rc_hash_filereader_read_handler)read_fn;
-  g_filereader.close = (rc_hash_filereader_close_file_handler)close_fn;
+  g_vfilereader.open = (rc_hash_filereader_open_file_handler)open_fn;
+  g_vfilereader.seek = (rc_hash_filereader_seek_handler)seek_fn;
+  g_vfilereader.tell = (rc_hash_filereader_tell_handler)tell_fn;
+  g_vfilereader.read = (rc_hash_filereader_read_handler)read_fn;
+  g_vfilereader.close = (rc_hash_filereader_close_file_handler)close_fn;
   g_filereader_set = (open_fn != NULL);
 }
 
@@ -83,7 +83,7 @@ FFI_PLUGIN_EXPORT int raw_hash_file_vreader(char* out33, uint32_t console_id, co
   /* set callbacks AFTER init (init resets the iterator) */
   iterator.callbacks.verbose_message = raw_hash_forward_message;
   iterator.callbacks.error_message = raw_hash_forward_message;
-  iterator.callbacks.filereader = g_filereader;
+  iterator.callbacks.filereader = g_vfilereader;
 
   ok = rc_hash_generate(out33, console_id, &iterator);
 
