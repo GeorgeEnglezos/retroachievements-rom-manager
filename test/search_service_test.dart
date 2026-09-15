@@ -67,4 +67,31 @@ void main() {
             'blahblah');
     expect(hits.single.rom.status, RomStatus.notFetched);
   });
+
+  SystemSummary sys(String name, {int? consoleId}) => SystemSummary(
+        systemPath: 'D:/roms/$name',
+        systemId: name,
+        name: name,
+        consoleId: consoleId,
+        totalGames: 5,
+        gamesScanned: 5,
+        gamesWithAchievements: 5,
+        totalSizeBytes: 0,
+        lastScanned: null,
+      );
+
+  test('matchFolders matches the short folder name', () {
+    final systems = [sys('gba', consoleId: 5), sys('snes', consoleId: 3)];
+    expect(matchFolders(systems, 'gba').map((s) => s.name), ['gba']);
+  });
+
+  test('matchFolders matches the long console name', () {
+    final systems = [sys('gba', consoleId: 5), sys('snes', consoleId: 3)];
+    // "advance" only appears in the long name "Game Boy Advance".
+    expect(matchFolders(systems, 'advance').map((s) => s.name), ['gba']);
+  });
+
+  test('matchFolders is empty for a blank query', () {
+    expect(matchFolders([sys('gba', consoleId: 5)], '  '), isEmpty);
+  });
 }

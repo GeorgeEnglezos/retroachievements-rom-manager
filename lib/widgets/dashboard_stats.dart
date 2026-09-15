@@ -11,10 +11,15 @@ class DashboardStatStrip extends StatelessWidget {
   final DashboardStats stats;
   final bool narrow;
 
+  /// Landscape phone: one horizontal row that scrolls sideways, instead of a
+  /// grid that wraps onto a second line the short screen can't spare.
+  final bool landscape;
+
   const DashboardStatStrip({
     super.key,
     required this.stats,
     this.narrow = false,
+    this.landscape = false,
   });
 
   static const _gap = 14.0;
@@ -37,6 +42,28 @@ class DashboardStatStrip extends StatelessWidget {
       ),
       (value: '${stats.systems}', label: 'Systems', color: null),
     ];
+
+    if (landscape) {
+      // One scrolling row of content-sized pills; never a second line.
+      return Padding(
+        padding: const EdgeInsets.only(top: 14),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          clipBehavior: Clip.none,
+          child: Row(
+            children: [
+              for (var i = 0; i < tiles.length; i++) ...[
+                if (i > 0) const SizedBox(width: _gap),
+                DashboardStatTile(
+                    value: tiles[i].value,
+                    label: tiles[i].label,
+                    color: tiles[i].color),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
 
     return Padding(
       padding: EdgeInsets.only(top: narrow ? 16 : 20),

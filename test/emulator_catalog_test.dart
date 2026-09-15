@@ -16,6 +16,24 @@ void main() {
     test('unknown exe falls back to custom', () {
       expect(EmulatorCatalog.detectKind(r'C:\e\weird.exe'), 'custom');
     });
+    test('matches the standalone (non-RetroArch) emulators by exe name', () {
+      // Real exe names from an EmuDeck install (the shortcut targets).
+      const cases = {
+        r'C:\e\azahar\azahar.exe': 'azahar',
+        r'C:\e\melonDS\melonDS.exe': 'melonds',
+        r'C:\e\cemu\Cemu.exe': 'cemu',
+        r'C:\e\Ryujinx\Ryujinx.exe': 'ryujinx',
+        r'C:\e\citron\citron.exe': 'citron',
+        r'C:\e\eden-windows-msvc\eden.exe': 'eden',
+        r'C:\e\RPCS3\rpcs3.exe': 'rpcs3',
+        r'C:\e\ShadPS4-qt\shadPS4QtLauncher.exe': 'shadps4',
+        r'C:\e\Vita3K\Vita3K.exe': 'vita3k',
+        r'C:\e\xemu\xemu.exe': 'xemu',
+        r'C:\e\xenia\xenia_canary.exe': 'xenia',
+      };
+      cases.forEach((path, kind) =>
+          expect(EmulatorCatalog.detectKind(path), kind, reason: path));
+    });
   });
 
   group('detectKindFromPackage', () {
@@ -97,6 +115,33 @@ void main() {
       final ids = EmulatorCatalog.consolesForKind('retroarch');
       expect(ids.contains(4), isTrue);
       expect(ids.contains(21), isFalse); // PS2 defaults to pcsx2
+    });
+    test('standalone kinds default their non-RA display consoles', () {
+      // Negative ids are ConsoleMap.displayNames (Switch, Wii U, ...).
+      expect(EmulatorCatalog.consolesForKind('ryujinx'), [-1]); // Switch
+      expect(EmulatorCatalog.consolesForKind('cemu'), [-2]); // Wii U
+      expect(EmulatorCatalog.consolesForKind('xenia'), [-7]); // Xbox 360
+      expect(EmulatorCatalog.consolesForKind('azahar'), [62]); // 3DS
+    });
+  });
+
+  group('standalone launch args', () {
+    // These verified args are the whole point of the kind, so they get pinned.
+    test('Cemu boots with -g and goes fullscreen with -f', () {
+      expect(EmulatorCatalog.defaultArgsFor(-2, 'cemu', r'C:\e\Cemu.exe'),
+          '-g "{file.path}"');
+      expect(EmulatorCatalog.fullscreenFlag('cemu'), '-f');
+    });
+    test('xemu boots an ISO with -dvd_path and -full-screen', () {
+      expect(EmulatorCatalog.defaultArgsFor(-6, 'xemu', r'C:\e\xemu.exe'),
+          '-dvd_path "{file.path}"');
+      expect(EmulatorCatalog.fullscreenFlag('xemu'), '-full-screen');
+    });
+    test('path-only kinds pass just the quoted ROM', () {
+      for (final kind in ['rpcs3', 'xenia', 'vita3k', 'azahar', 'ryujinx']) {
+        expect(EmulatorCatalog.defaultArgsFor(-3, kind, r'C:\e\emu.exe'),
+            '"{file.path}"', reason: kind);
+      }
     });
   });
 

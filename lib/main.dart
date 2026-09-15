@@ -13,9 +13,11 @@ import 'services/library.dart';
 import 'services/library_folder.dart';
 import 'services/log_service.dart';
 import 'services/pref_keys.dart';
+import 'services/ui_scale.dart';
 import 'services/single_instance.dart';
 import 'theme/ui_theme.dart';
 import 'widgets/app_shell.dart';
+import 'widgets/gamepad_navigator.dart';
 import 'widgets/scan_progress_bar.dart';
 
 void main() {
@@ -30,6 +32,7 @@ void main() {
     await initNameMode();
     await initCombineSystems();
     await initAppTheme();
+    await initUiScale();
     await initAppMode();
     await initPlayView();
     await initLibraryFolder();
@@ -72,6 +75,39 @@ void main() {
   });
 }
 
+/// Browser-style zoom for the whole app. Shrinks the logical viewport by
+/// [scale] so the UI reflows to the smaller size, then paints it back up to
+/// fill the window: zooming in makes everything bigger and rewraps content,
+/// rather than just cropping.
+class UiZoom extends StatelessWidget {
+  final double scale;
+  final Widget child;
+
+  const UiZoom({super.key, required this.scale, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    if (scale == 1.0) return child;
+    final mq = MediaQuery.of(context);
+    final logical = mq.size / scale;
+    return MediaQuery(
+      // Insets (safe areas, the on-screen keyboard) live in the same scaled
+      // space as the size, so divide them too or padded content drifts.
+      data: mq.copyWith(
+        size: logical,
+        padding: mq.padding / scale,
+        viewPadding: mq.viewPadding / scale,
+        viewInsets: mq.viewInsets / scale,
+      ),
+      child: FittedBox(
+        fit: BoxFit.fill,
+        alignment: Alignment.topLeft,
+        child: SizedBox.fromSize(size: logical, child: child),
+      ),
+    );
+  }
+}
+
 class MyApp extends StatelessWidget {
   final bool setupDone;
 
@@ -81,26 +117,52 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<AppTheme>(
       valueListenable: appThemeListenable,
-      builder: (context, theme, _) => MaterialApp(
+      builder: (context, theme, _) {
+        var themeData = uiTheme(theme.tokens);
+        // Debug builds run inside DevicePreview; adopt its simulated device
+        // platform so platform-gated layouts (the landscape-phone shell) can be
+        // previewed on desktop by picking an Android device in the toolbar.
+        // Release never enters here, so the real platform stays untouched.
+        // isEnabled guards against the store's async init: on the first frame
+        // it is still initializing and DevicePreview.platform would throw
+        // "Not initialized". Once init finishes the store notifies, this
+        // rebuilds, and the simulated platform is applied.
+        if (kDebugMode && DevicePreview.isEnabled(context)) {
+          themeData = themeData.copyWith(platform: DevicePreview.platform(context));
+        }
+        return MaterialApp(
         title: 'Retroachievements Rom Manager',
         debugShowCheckedModeBanner: false,
         locale: DevicePreview.locale(context),
         // Mount the scan progress bar above the Navigator so it renders over
         // any route (home, folder view) while a background sweep runs.
-        builder: (context, child) => Stack(
-          children: [
-            DevicePreview.appBuilder(context, child),
-            const Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: SafeArea(top: false, child: ScanProgressBar()),
+        builder: (context, child) => GamepadNavigator(
+          child: ValueListenableBuilder<double>(
+            valueListenable: uiScaleListenable,
+            builder: (context, scale, _) => UiZoom(
+              scale: scale,
+              child: Stack(
+                children: [
+                  DevicePreview.appBuilder(context, child),
+                  const Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: SafeArea(top: false, child: ScanProgressBar()),
+                  ),
+                ],
+              ),
             ),
-          ],
+          ),
         ),
-        theme: uiTheme(paletteFor(theme)),
+        theme: themeData,
+        // Every mode uses the one responsive shell; big picture is that shell in
+        // gaming trim, shown full-window and driven by the pad (the separate
+        // couch shell was retired). AppShell listens to appModeListenable itself,
+        // so a mode flip rebuilds it. Setup always runs first.
         home: setupDone ? const AppShell() : const SetupWizard(),
-      ),
+        );
+      },
     );
   }
 }

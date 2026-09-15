@@ -1,8 +1,11 @@
+import '../models/folder_stats.dart' show achievementFraction;
+
 /// One game reduced to just the signals the recommender scores on.
 class RecGame {
   final String title;
   final String systemName;
   final String filePath;
+  final int? gameId; // RA game identity; same across copies in different folders
   final int total; // total achievements in the set
   final int earned; // achievements the user has earned (casual)
   final int hardcoreEarned; // achievements earned in hardcore mode
@@ -12,6 +15,7 @@ class RecGame {
     required this.title,
     required this.systemName,
     required this.filePath,
+    this.gameId,
     required this.total,
     required this.earned,
     this.hardcoreEarned = 0,
@@ -19,8 +23,8 @@ class RecGame {
   });
 
   int get remaining => total - earned;
-  double get ratio => total == 0 ? 0 : earned / total;
-  double get hardcoreRatio => total == 0 ? 0 : hardcoreEarned / total;
+  double get ratio => achievementFraction(earned, total);
+  double get hardcoreRatio => achievementFraction(hardcoreEarned, total);
   bool get mastered => total > 0 && earned >= total;
   bool get hardcoreMastered => total > 0 && hardcoreEarned >= total;
   bool get unplayed => earned == 0;
@@ -50,7 +54,18 @@ class Recommender {
   Recommender._();
 
   static Recommendations build(List<RecGame> games, {int limit = 10}) {
-    final supported = games.where((g) => g.total > 0).toList();
+    // Two ROM libraries can hold the same game (same RA gameId, different file
+    // paths); collapse to one entry so a game is recommended once. Keep the
+    // most-progressed copy. Fall back to filePath when a matched game has no id
+    // so genuinely distinct games never merge.
+    final byGame = <Object, RecGame>{};
+    for (final g in games) {
+      if (g.total <= 0) continue;
+      final key = g.gameId ?? g.filePath;
+      final prev = byGame[key];
+      if (prev == null || g.earned > prev.earned) byGame[key] = g;
+    }
+    final supported = byGame.values.toList();
 
     // Started but not finished, highest completion first; the fastest masteries.
     final closest = supported

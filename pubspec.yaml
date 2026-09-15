@@ -40,6 +40,9 @@ dependencies:
   crypto: ^3.0.3
   cached_network_image: ^3.4.1
   flutter_cache_manager: ^3.4.1
+  # Direct now (was transitive via flutter_cache_manager): the RA cache
+  # manager's persistent FileSystem needs package:file's File/Directory types.
+  file: ^7.0.1
   image: ^4.3.0
   url_launcher: ^6.3.1
 
@@ -51,6 +54,7 @@ dependencies:
   pdf: ^3.11.0
   package_info_plus: ^8.1.1
   flutter_secure_storage: ^10.3.1
+  gamepads: ^0.1.11
 
 dev_dependencies:
   flutter_test:

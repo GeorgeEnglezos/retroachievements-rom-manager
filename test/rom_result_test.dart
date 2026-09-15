@@ -24,5 +24,24 @@ void main() {
       expect(r.thumbArt, '/Images/icon.png');
       expect(r.boxArt, '/Images/box.png');
     });
+
+    test('heroArt prefers an in-game screenshot over the title screen and box art',
+        () {
+      final r = RomResult(filePath: 'snes/x.sfc', fileName: 'x.sfc')
+        ..imageBoxArt = '/Images/box.png'
+        ..imageTitle = '/Images/title.png'
+        ..imageIngame = '/Images/ingame.png';
+      expect(r.heroArt, '/Images/ingame.png');
+    });
+
+    test('heroArt falls back to the title screen, then box art', () {
+      final r = RomResult(filePath: 'snes/x.sfc', fileName: 'x.sfc')
+        ..imageBoxArt = '/Images/box.png'
+        ..imageTitle = '/Images/title.png';
+      expect(r.heroArt, '/Images/title.png');
+
+      r.imageTitle = null;
+      expect(r.heroArt, '/Images/box.png');
+    });
   });
 }

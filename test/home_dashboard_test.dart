@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 import 'package:rarm/models/home_index.dart';
 import 'package:rarm/models/rom_result.dart';
 import 'package:rarm/services/home_dashboard.dart';
+import 'package:rarm/services/member_key.dart';
 import 'package:rarm/services/ra_service.dart';
 
 RomResult _game(
@@ -14,9 +15,11 @@ RomResult _game(
   String? title,
   DateTime? lastPlayed,
   RaAward? award,
+  int? gameId,
 }) {
   return RomResult(filePath: path, fileName: p.basename(path))
     ..status = RomStatus.supported
+    ..gameId = gameId
     ..gameTitle = title
     ..consoleName = 'SNES'
     ..achievementCount = total
@@ -82,6 +85,36 @@ void main() {
     expect(d.beatSpotlight, isNull);
   });
 
+  test('an ignored mastery candidate falls through to the next', () {
+    final games = [
+      _game('/best.sfc', total: 10, earned: 9, gameId: 1), // 90%
+      _game('/next.sfc', total: 10, earned: 5, gameId: 2), // 50%
+    ];
+    final key = memberKeyFor(gameId: 1, filePath: '/best.sfc');
+    final d = buildHomeDashboard(games, ignoredKeys: {key});
+    expect(d.spotlight!.filePath, '/next.sfc');
+  });
+
+  test('an ignored beat candidate falls through to the next', () {
+    final games = [
+      _game('/mastery.sfc', total: 10, earned: 9, gameId: 1), // mastery hero
+      _game('/beat1.sfc', total: 10, earned: 7, gameId: 2), // 70%
+      _game('/beat2.sfc', total: 10, earned: 4, gameId: 3), // 40%
+    ];
+    final key = memberKeyFor(gameId: 2, filePath: '/beat1.sfc');
+    final d = buildHomeDashboard(games, ignoredKeys: {key});
+    expect(d.beatSpotlight!.filePath, '/beat2.sfc');
+  });
+
+  test('ignoring every candidate leaves the spotlight null', () {
+    final games = [
+      _game('/only.sfc', total: 10, earned: 5, gameId: 1),
+    ];
+    final key = memberKeyFor(gameId: 1, filePath: '/only.sfc');
+    final d = buildHomeDashboard(games, ignoredKeys: {key});
+    expect(d.spotlight, isNull);
+  });
+
   test('unplayed games fall to popular, biggest community first', () {
     final d = buildHomeDashboard([
       _game('/small.sfc', total: 10, earned: 0, players: 100),
@@ -92,6 +125,18 @@ void main() {
         ['/big.sfc', '/small.sfc']);
     // No in-progress games, so the hero falls back to the most-wanted unplayed.
     expect(d.spotlight!.filePath, '/big.sfc');
+  });
+
+  test('the same game across two ROM libraries is counted once', () {
+    // Two library folders hold the same RA game (same gameId) as different
+    // files. It must not double up in any bucket or the stat strip.
+    final d = buildHomeDashboard([
+      _game('/libA/gow.chd', total: 40, earned: 10, gameId: 2782),
+      _game('/libB/gow.chd', total: 40, earned: 10, gameId: 2782),
+    ]);
+    expect(d.continuePlaying.length, 1);
+    expect(d.closestToMastery.length, 1);
+    expect(d.stats.achievementsEarned, 10);
   });
 
   test('games without an achievement set are ignored', () {

@@ -38,6 +38,36 @@ class EmulatorCatalog {
     EmulatorKind('ppsspp', 'PPSSPP',
         RegExp(r'ppsspp', caseSensitive: false),
         '"{file.path}" --pause-menu-exit', '--fullscreen'),
+    // Standalone emulators for systems RetroArch doesn't cover. Args from
+    // Playnite's emulator database (or the emulator's own docs for the newer
+    // forks). Exe patterns anchored, since these names are short and generic.
+    // Beta: not all launch end to end yet — the connection args are editable.
+    EmulatorKind('azahar', 'Azahar', // 3DS (Citra fork)
+        RegExp(r'^azahar\.exe$', caseSensitive: false), '"{file.path}"', null),
+    EmulatorKind('melonds', 'melonDS', // DS / DSi
+        RegExp(r'^melonds\.exe$', caseSensitive: false), '"{file.path}"', '-f'),
+    EmulatorKind('cemu', 'Cemu', // Wii U
+        RegExp(r'^cemu.*\.exe$', caseSensitive: false),
+        '-g "{file.path}"', '-f'),
+    EmulatorKind('ryujinx', 'Ryujinx', // Switch
+        RegExp(r'^ryujinx(\.ava)?\.exe$', caseSensitive: false),
+        '"{file.path}"', '--fullscreen'),
+    EmulatorKind('citron', 'Citron', // Switch (yuzu fork)
+        RegExp(r'^citron\.exe$', caseSensitive: false), '"{file.path}"', null),
+    EmulatorKind('eden', 'Eden', // Switch (yuzu fork)
+        RegExp(r'^eden\.exe$', caseSensitive: false), '"{file.path}"', null),
+    EmulatorKind('rpcs3', 'RPCS3', // PS3
+        RegExp(r'^rpcs3.*\.exe$', caseSensitive: false), '"{file.path}"', null),
+    EmulatorKind('shadps4', 'shadPS4', // PS4
+        RegExp(r'^shadps4.*\.exe$', caseSensitive: false),
+        '"{file.path}"', null),
+    EmulatorKind('vita3k', 'Vita3K', // PS Vita
+        RegExp(r'^vita3k.*\.exe$', caseSensitive: false), '"{file.path}"', null),
+    EmulatorKind('xemu', 'xemu', // Original Xbox
+        RegExp(r'^xemu\.exe$', caseSensitive: false),
+        '-dvd_path "{file.path}"', '-full-screen'),
+    EmulatorKind('xenia', 'Xenia', // Xbox 360
+        RegExp(r'^xenia.*\.exe$', caseSensitive: false), '"{file.path}"', null),
   ];
 
   /// RA console id -> default emulator kind id.
@@ -50,6 +80,12 @@ class EmulatorCatalog {
     25: 'retroarch', 27: 'retroarch', 28: 'retroarch', 39: 'retroarch',
     40: 'retroarch', 41: 'ppsspp', 43: 'retroarch', 19: 'dolphin',
     51: 'retroarch', 53: 'retroarch', 76: 'retroarch',
+    // Standalone-only systems. 62 (3DS) has no libretro core; the negative ids
+    // are the non-RA display consoles (see ConsoleMap.displayNames). DS (18)
+    // stays on RetroArch's melonDS core; standalone melonDS defaults DSi (78).
+    62: 'azahar', 78: 'melonds',
+    -2: 'cemu', -1: 'ryujinx', -3: 'rpcs3', -4: 'shadps4',
+    -5: 'vita3k', -6: 'xemu', -7: 'xenia',
   };
 
   /// RA console id -> RetroArch core base name (gets `_libretro.dll`).

@@ -17,6 +17,7 @@ import '../services/metadata_cache.dart';
 import '../services/ra_cache.dart';
 import '../services/ra_service.dart';
 import '../services/scan_settings.dart';
+import '../services/app_mode.dart';
 import '../services/console_map.dart';
 import '../services/library.dart';
 import '../services/play_view.dart';
@@ -36,6 +37,7 @@ import '../models/folder_sort.dart';
 import '../models/rom_row.dart';
 import '../models/rom_group.dart';
 import '../widgets/android_disc_hashing_dialog.dart';
+import '../widgets/app_shell.dart';
 import '../widgets/folder_toolbar.dart';
 import '../widgets/fetch_fab.dart';
 import '../widgets/fetch_tasks_dialog.dart';
@@ -44,7 +46,6 @@ import '../widgets/row_display.dart';
 import '../widgets/require_credentials.dart';
 import '../widgets/rom_list_view.dart';
 import '../theme/ui_tokens.dart';
-
 
 class _GroupHeader {
   final Color color;
@@ -94,13 +95,17 @@ class _FolderViewState extends State<FolderView> {
   FolderSort _folderSort = FolderSort.alphabetical;
   bool _sortAscending = true;
   bool _gridView = false;
+  // Whether the search + filters toolbar is shown. Collapsing it hands the whole
+  // body to the game list, which matters most on a short landscape phone.
+  bool _toolbarVisible = false;
+  double _gridSize = FolderToolbar.gridSizeDefault;
   // The layout actually drawn. Play mode can pin it, in which case the toolbar
   // toggle is hidden and _gridView keeps whatever cleaning last chose.
   bool get _effectiveGrid => switch (playView.layout) {
-        PlayLayout.follow => _gridView,
-        PlayLayout.list => false,
-        PlayLayout.grid => true,
-      };
+    PlayLayout.follow => _gridView,
+    PlayLayout.list => false,
+    PlayLayout.grid => true,
+  };
   CleanupScoreMode _cleanupMode = CleanupScoreMode.logDampened;
   // Sort override; a flag (not a FolderSort) so toggling off restores the
   // previous sort.
@@ -110,49 +115,13 @@ class _FolderViewState extends State<FolderView> {
   List<String> get _availableTags => availableTags(_roms);
   List<RomResult> get _visibleRoms => visibleRoms(_roms, _filter, _membership);
 
-  // Nulls always sink to the bottom regardless of direction.
-  static int _nullsLast<T extends Comparable<Object>>(T? a, T? b, int dir) {
-    if (a == null && b == null) return 0;
-    if (a == null) return 1;
-    if (b == null) return -1;
-    return dir * a.compareTo(b);
-  }
-
-  List<RomResult> get _sortedRoms {
-    final list = _visibleRoms;
-    if (_hot) {
-      list.sort((a, b) =>
-          (b.numPlayersCasual ?? 0).compareTo(a.numPlayersCasual ?? 0));
-      return list;
-    }
-    final dir = _sortAscending ? 1 : -1;
-    switch (_folderSort) {
-      case FolderSort.alphabetical:
-        list.sort((a, b) =>
-            dir *
-            a.fileName.toLowerCase().compareTo(b.fileName.toLowerCase()));
-      case FolderSort.achievementCount:
-        list.sort(
-            (a, b) => _nullsLast(a.achievementCount, b.achievementCount, dir));
-      case FolderSort.points:
-        list.sort((a, b) => _nullsLast(a.points, b.points, dir));
-      case FolderSort.progress:
-        double? ratio(RomResult r) => (r.achievementCount ?? 0) > 0
-            ? (r.earnedAchievements ?? 0) / r.achievementCount!
-            : null;
-        list.sort((a, b) => _nullsLast(ratio(a), ratio(b), dir));
-      case FolderSort.lastPlayed:
-        list.sort((a, b) => _nullsLast(a.lastPlayed, b.lastPlayed, dir));
-      case FolderSort.cleanup:
-        double? cleanup(RomResult r) => cleanupScore(
-              players: r.numPlayersCasual ?? 0,
-              setCreated: r.setCreated,
-              mode: _cleanupMode,
-            );
-        list.sort((a, b) => _nullsLast(cleanup(a), cleanup(b), dir));
-    }
-    return list;
-  }
+  List<RomResult> get _sortedRoms => sortRoms(
+    _visibleRoms,
+    sort: _folderSort,
+    ascending: _sortAscending,
+    hot: _hot,
+    cleanupMode: _cleanupMode,
+  );
 
   bool get _anyDuplicates => _roms.any((r) => r.duplicateGroupId != null);
   bool get _anyProgress => _roms.any((r) => r.earnedAchievements != null);
@@ -231,9 +200,13 @@ class _FolderViewState extends State<FolderView> {
 
   Future<void> _loadSortPref() async {
     final prefs = await SharedPreferences.getInstance();
-    final v = FolderSort.values.asNameMap()[prefs.getString(PrefKeys.folderSort)];
+    final v = FolderSort.values
+        .asNameMap()[prefs.getString(PrefKeys.folderSort)];
     final asc = prefs.getBool(PrefKeys.folderSortAsc) ?? true;
     final grid = prefs.getBool(PrefKeys.folderGridView) ?? false;
+    final size =
+        prefs.getDouble(PrefKeys.folderGridSize) ??
+        FolderToolbar.gridSizeDefault;
     final mode = CleanupScoreMode.values
         .asNameMap()[prefs.getString(PrefKeys.cleanupMode)];
     if (mounted) {
@@ -241,11 +214,14 @@ class _FolderViewState extends State<FolderView> {
         if (v != null) _folderSort = v;
         _sortAscending = asc;
         _gridView = grid;
+        _gridSize = size.clamp(
+          FolderToolbar.gridSizeMin,
+          FolderToolbar.gridSizeMax,
+        );
         if (mode != null) _cleanupMode = mode;
       });
     }
   }
-
 
   Future<void> _loadPlaylists() async {
     _playlists = await _playlistStore.all();
@@ -261,7 +237,10 @@ class _FolderViewState extends State<FolderView> {
   // One file read per system; the directory is still listed so outside
   // changes surface.
   Future<void> _loadPersisted() async {
-    final files = await listRomFiles(widget.folderPaths, widget.enabledExtensions);
+    final files = await listRomFiles(
+      widget.folderPaths,
+      widget.enabledExtensions,
+    );
 
     final entryByPath = <String, GameEntry>{};
     final consoleIdByPath = <String, int?>{};
@@ -277,14 +256,16 @@ class _FolderViewState extends State<FolderView> {
 
     // If no folder in this view is on RA, nothing here can be fetched. Hide the
     // Actions button. (Mixed views keep it: some ROMs are still fetchable.)
-    _raSupported = widget.folderPaths
-        .any((path) => ConsoleMap.isRaSupported(consoleIdByPath[path]));
+    _raSupported = widget.folderPaths.any(
+      (path) => ConsoleMap.isRaSupported(consoleIdByPath[path]),
+    );
 
     // A display-only folder is still fetchable if a third-party metadata
     // provider is configured and supports its console.
     if (!_raSupported) {
       final provider = await savedMetadataProvider();
-      _metadataFetchable = provider != null &&
+      _metadataFetchable =
+          provider != null &&
           widget.folderPaths.any((path) {
             final id = consoleIdByPath[path];
             return id != null && provider.supports(id);
@@ -307,11 +288,11 @@ class _FolderViewState extends State<FolderView> {
       final fileConsoleId = consoleForFile(f.path);
       final rom = entry == null
           ? (RomResult(filePath: f.path, fileName: p.basename(f.path))
-            ..consoleId = fileConsoleId
-            ..consoleName = ConsoleMap.nameFor(fileConsoleId)
-            ..status = ConsoleMap.isRaSupported(fileConsoleId)
-                ? RomStatus.notFetched
-                : RomStatus.localOnly)
+              ..consoleId = fileConsoleId
+              ..consoleName = ConsoleMap.nameFor(fileConsoleId)
+              ..status = ConsoleMap.isRaSupported(fileConsoleId)
+                  ? RomStatus.notFetched
+                  : RomStatus.localOnly)
           : romFromEntry(entry, consoleId: fileConsoleId);
       rom.fileSize = f.size; // listing is fresher than the persisted size
       roms.add(rom);
@@ -332,32 +313,34 @@ class _FolderViewState extends State<FolderView> {
     final existing = _systemData[systemPath];
     final games = <GameEntry>[];
     for (final r in _roms.where((r) => p.isWithin(systemPath, r.filePath))) {
-      games.add(GameEntry(
-        filePath: r.filePath,
-        fileName: r.fileName,
-        fileSize: r.fileSize,
-        md5: r.md5Hash,
-        gameId: r.gameId,
-        matched: r.status == RomStatus.supported,
-        noMatch: r.status == RomStatus.unsupported,
-        lastScanned: DateTime.now(),
-        hashConsoleId: r.hashConsoleId,
-        metadata: r.metadata,
-        gameInfo: _romToGameInfo(r),
-        progress: r.earnedAchievements == null
-            ? null
-            : UserProgress(
-                gameId: r.gameId ?? 0,
-                earnedAchievements: r.earnedAchievements!,
-                earnedHardcore: r.earnedHardcore ?? 0,
-                lastPlayed: r.lastPlayed,
-                highestAward: r.highestAward ?? RaAward.none,
-                highestAwardDate: r.highestAwardDate,
-              ),
-      ));
+      games.add(
+        GameEntry(
+          filePath: r.filePath,
+          fileName: r.fileName,
+          fileSize: r.fileSize,
+          md5: r.md5Hash,
+          gameId: r.gameId,
+          matched: r.status == RomStatus.supported,
+          noMatch: r.status == RomStatus.unsupported,
+          lastScanned: DateTime.now(),
+          hashConsoleId: r.hashConsoleId,
+          metadata: r.metadata,
+          gameInfo: _romToGameInfo(r),
+          progress: r.earnedAchievements == null
+              ? null
+              : UserProgress(
+                  gameId: r.gameId ?? 0,
+                  earnedAchievements: r.earnedAchievements!,
+                  earnedHardcore: r.earnedHardcore ?? 0,
+                  lastPlayed: r.lastPlayed,
+                  highestAward: r.highestAward ?? RaAward.none,
+                  highestAwardDate: r.highestAwardDate,
+                ),
+        ),
+      );
     }
-    final consoleId = widget.consoleId ??
-        await ScanSettings.consoleIdForFolder(systemPath);
+    final consoleId =
+        widget.consoleId ?? await ScanSettings.consoleIdForFolder(systemPath);
     final data = SystemData(
       systemId: existing?.systemId ?? '',
       systemPath: systemPath,
@@ -415,9 +398,13 @@ class _FolderViewState extends State<FolderView> {
     final consoleId = await _resolveConsoleId();
     if (consoleId == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
           content: Text(
-              'Unknown console for this folder. Set it in Settings → System mapping.')));
+            'Unknown console for this folder. Set it in Settings → System mapping.',
+          ),
+        ),
+      );
       return;
     }
 
@@ -438,11 +425,16 @@ class _FolderViewState extends State<FolderView> {
         (metadataProvider == null || !metadataProvider.supports(consoleId))) {
       if (!mounted) return;
       final name = ConsoleMap.nameFor(consoleId) ?? 'This system';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(metadataProvider == null
-              ? "$name isn't on RetroAchievements. Add a metadata source in "
-                  'Settings to fetch game info.'
-              : "$name isn't supported by the selected metadata source.")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            metadataProvider == null
+                ? "$name isn't on RetroAchievements. Add a metadata source in "
+                      'Settings to fetch game info.'
+                : "$name isn't supported by the selected metadata source.",
+          ),
+        ),
+      );
       return;
     }
     // A progress-only pass over rows that were never matched has nothing to
@@ -467,8 +459,8 @@ class _FolderViewState extends State<FolderView> {
         if (!mounted || run.cancelled) break;
         // Each folder is mapped on its own, so a combined view maps every row
         // against its own system rather than the first folder's.
-        final folderConsoleId = widget.consoleId ??
-            await ScanSettings.consoleIdForFolder(sysPath);
+        final folderConsoleId =
+            widget.consoleId ?? await ScanSettings.consoleIdForFolder(sysPath);
         final result = await runFolderFetch(
           folderPath: sysPath,
           plan: plan,
@@ -508,8 +500,9 @@ class _FolderViewState extends State<FolderView> {
           await showAndroidDiscHashingUnsupported(context);
         }
         if (result.message != null && mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(result.message!)));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(result.message!)));
         }
       }
     } finally {
@@ -524,8 +517,10 @@ class _FolderViewState extends State<FolderView> {
 
   // Re-walks the folder; new files show as not-fetched, removed drop out.
   Future<void> _refreshFiles() async {
-    final files =
-        await listRomFiles(widget.folderPaths, widget.enabledExtensions);
+    final files = await listRomFiles(
+      widget.folderPaths,
+      widget.enabledExtensions,
+    );
 
     final existingPaths = {for (final r in _roms) r.filePath};
     final newPaths = {for (final f in files) f.path};
@@ -560,8 +555,9 @@ class _FolderViewState extends State<FolderView> {
     // Already matched, just refresh progress.
     if (rom.gameId != null) {
       try {
-        final (info, progress) =
-            await service.getGameInfoAndUserProgress(rom.gameId!);
+        final (info, progress) = await service.getGameInfoAndUserProgress(
+          rom.gameId!,
+        );
         if (mounted) {
           setState(() {
             applyGameInfo(rom, info);
@@ -581,8 +577,9 @@ class _FolderViewState extends State<FolderView> {
         }
       }
       final sysPathEarly = widget.folderPaths.firstWhere(
-          (s) => p.isWithin(s, rom.filePath),
-          orElse: () => widget.folderPaths.first);
+        (s) => p.isWithin(s, rom.filePath),
+        orElse: () => widget.folderPaths.first,
+      );
       await _persistSystem(sysPathEarly);
       return;
     }
@@ -594,9 +591,12 @@ class _FolderViewState extends State<FolderView> {
       final name = ConsoleMap.nameFor(consoleId);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(name != null
+          content: Text(
+            name != null
                 ? '$name is not supported by RetroAchievements.'
-                : 'Unknown console for this folder.')),
+                : 'Unknown console for this folder.',
+          ),
+        ),
       );
       return;
     }
@@ -619,9 +619,10 @@ class _FolderViewState extends State<FolderView> {
     final raCache = RaCache();
     final engine = FetchEngine(
       hash: romHasher(
-          consoleId: consoleId,
-          dolphinToolPath: dolphinToolPath,
-          logContext: 'FolderView/fetchSingle'),
+        consoleId: consoleId,
+        dolphinToolPath: dolphinToolPath,
+        logContext: 'FolderView/fetchSingle',
+      ),
       lookupGameId: (md5) => raCache.resolveGameId(service, consoleId, md5),
       onResult: (res) async {
         // Reuse persisted rich info; network only the first time.
@@ -647,8 +648,9 @@ class _FolderViewState extends State<FolderView> {
 
     await engine.run([rom.filePath]);
     final sysPath = widget.folderPaths.firstWhere(
-        (s) => p.isWithin(s, rom.filePath),
-        orElse: () => widget.folderPaths.first);
+      (s) => p.isWithin(s, rom.filePath),
+      orElse: () => widget.folderPaths.first,
+    );
     await _persistSystem(sysPath);
   }
 
@@ -667,7 +669,9 @@ class _FolderViewState extends State<FolderView> {
     final n = paths.length;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Excluded $n file${n == 1 ? '' : 's'}. Manage in Settings.'),
+        content: Text(
+          'Excluded $n file${n == 1 ? '' : 's'}. Manage in Settings.',
+        ),
         action: SnackBarAction(
           label: 'Undo',
           onPressed: () async {
@@ -680,7 +684,6 @@ class _FolderViewState extends State<FolderView> {
       ),
     );
   }
-
 
   RomRow _toRow(RomResult rom) =>
       RomRow.fromRom(rom, scoreLabel: _cleanupScoreLabel(rom));
@@ -758,7 +761,9 @@ class _FolderViewState extends State<FolderView> {
         i++;
       } else {
         final start = i;
-        while (i < roms.length && roms[i].duplicateGroupId == gid) { i++; }
+        while (i < roms.length && roms[i].duplicateGroupId == gid) {
+          i++;
+        }
         final end = i;
         final accents = context.ui.accents;
         final color = accents[gid % accents.length];
@@ -786,16 +791,24 @@ class _FolderViewState extends State<FolderView> {
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    return Scaffold(
-      backgroundColor: ui.surface,
-      appBar: AppBar(
-        backgroundColor: ui.surface,
-        title: Text(widget.title),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
+    // Same gate the shell uses: an Android phone held sideways. There the top
+    // AppBar costs scarce height, so its controls move to a slim left rail that
+    // matches the shell's landscape rail. The system name is dropped: you
+    // picked the system to get here.
+    final landscapePhone = context.isLandscapePhone;
+    final toggle = IconButton(
+      key: const Key('toolbar_toggle'),
+      icon: Icon(_toolbarVisible ? Icons.expand_less : Icons.tune),
+      tooltip: _toolbarVisible
+          ? 'Hide search & filters'
+          : 'Show search & filters',
+      onPressed: () => setState(() => _toolbarVisible = !_toolbarVisible),
+    );
+    final content = _loading
+        ? const Center(child: CircularProgressIndicator())
+        : Column(
+            children: [
+              if (_toolbarVisible)
                 FolderToolbar(
                   filter: _filter,
                   sort: _folderSort,
@@ -810,7 +823,7 @@ class _FolderViewState extends State<FolderView> {
                   showHot: _roms.any((r) => (r.numPlayersCasual ?? 0) > 0),
                   cleanupMode: _cleanupMode,
                   playlists: [
-                    for (final pl in _playlists) (id: pl.id, name: pl.name)
+                    for (final pl in _playlists) (id: pl.id, name: pl.name),
                   ],
                   onFilterChanged: (f) => setState(() => _filter = f),
                   onSortChanged: (s) async {
@@ -833,53 +846,140 @@ class _FolderViewState extends State<FolderView> {
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.setBool(PrefKeys.folderGridView, _gridView);
                   },
+                  gridSize: _gridSize,
+                  onGridSizeChanged: (v) => setState(() => _gridSize = v),
+                  onGridSizeChangeEnd: (v) async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setDouble(PrefKeys.folderGridSize, v);
+                  },
                   onDuplicatesToggle: (on) => setState(
-                      () => _filter = _filter.copyWith(onlyDuplicates: on)),
+                    () => _filter = _filter.copyWith(onlyDuplicates: on),
+                  ),
                   onHotToggle: (on) => setState(() => _hot = on),
                 ),
-                Expanded(
-                  child: RomListView(
-                    rows: _filter.onlyDuplicates ? const [] : _listingRows(),
-                    groups: _filter.onlyDuplicates ? _buildDupGroups() : null,
-                    display: _filter.onlyDuplicates
-                        ? RowDisplay.roms.copyWith(showDupBadge: false)
-                        : RowDisplay.roms,
-                    store: _playlistStore,
-                    enableSelection: true,
-                    gridView: _effectiveGrid,
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: 300,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                            childAspectRatio: 0.75),
-                    onDeleteRow: (r) async {
-                      var any = false;
-                      for (final path in _pathsOf(r)) {
-                        if (await _lib.deleteRom(path)) any = true;
-                      }
-                      return any;
-                    },
-                    onRowsRemoved: (removed) => setState(() {
-                      final paths = {for (final r in removed) ..._pathsOf(r)};
-                      _roms.removeWhere((x) => paths.contains(x.filePath));
-                    }),
-                    bulkFavorites: true,
-                    bulkPlaylist: true,
-                    onRowsExcluded: (rows) =>
-                        _onExcluded([for (final r in rows) ..._pathsOf(r)]),
-                    onRowExcluded: (r) => _onExcluded(_pathsOf(r)),
-                    onRowFetch: (r) => _fetchSingleRom(r.rom!),
-                    onRowDismissDuplicate: (r) => _onDismissSingle(r.rom!),
-                    onPlaylistChanged: _loadPlaylists,
-                  ),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    // Square covers, matching Home's shelves: derive the real
+                    // column width, then size each cell to that width plus the
+                    // text block so the art box comes out square at any tile
+                    // size (a fixed childAspectRatio can't, since the text is a
+                    // constant height while the art scales with width).
+                    // A tiny margin around the grid gives popped-out edge tiles
+                    // room before they clip, so its width comes off the space
+                    // the column math divides up.
+                    const gridPadding = EdgeInsets.all(8);
+                    final gridWidth = _effectiveGrid
+                        ? c.maxWidth - gridPadding.horizontal
+                        : c.maxWidth;
+                    final cols = gridColumns(gridWidth, _gridSize, 10);
+                    final tileW = (gridWidth - 10 * (cols - 1)) / cols;
+                    return RomListView(
+                      rows: _filter.onlyDuplicates ? const [] : _listingRows(),
+                      groups: _filter.onlyDuplicates ? _buildDupGroups() : null,
+                      display: _filter.onlyDuplicates
+                          ? RowDisplay.roms.copyWith(showDupBadge: false)
+                          : RowDisplay.roms,
+                      store: _playlistStore,
+                      enableSelection: true,
+                      gridView: _effectiveGrid,
+                      padding: _effectiveGrid ? gridPadding : null,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: cols,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        mainAxisExtent: tileW + kGridTextBlock,
+                      ),
+                      onDeleteRow: (r) async {
+                        var any = false;
+                        for (final path in _pathsOf(r)) {
+                          if (await _lib.deleteRom(path)) any = true;
+                        }
+                        return any;
+                      },
+                      onRowsRemoved: (removed) => setState(() {
+                        final paths = {for (final r in removed) ..._pathsOf(r)};
+                        _roms.removeWhere((x) => paths.contains(x.filePath));
+                      }),
+                      bulkFavorites: true,
+                      bulkPlaylist: true,
+                      onRowsExcluded: (rows) =>
+                          _onExcluded([for (final r in rows) ..._pathsOf(r)]),
+                      onRowExcluded: (r) => _onExcluded(_pathsOf(r)),
+                      onRowFetch: (r) => _fetchSingleRom(r.rom!),
+                      onRowDismissDuplicate: (r) => _onDismissSingle(r.rom!),
+                      onPlaylistChanged: _loadPlaylists,
+                    );
+                  },
                 ),
-              ],
+              ),
+            ],
+          );
+    return Scaffold(
+      backgroundColor: ui.surface,
+      appBar: landscapePhone
+          ? null
+          : AppBar(
+              backgroundColor: ui.surface,
+              title: Text(widget.title),
+              actions: [toggle],
             ),
+      body: landscapePhone
+          ? SafeArea(
+              child: Row(
+                children: [
+                  Container(
+                    width: 64,
+                    decoration: BoxDecoration(
+                      color: ui.surface,
+                      border: Border(
+                        right: BorderSide(
+                          color: ui.border,
+                          width: ui.borderWidth,
+                        ),
+                      ),
+                    ),
+                    // Scrolls if the full nav (cleaning's seven) outgrows a
+                    // short landscape height.
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back),
+                            tooltip: 'Back',
+                            onPressed: () => Navigator.of(context).maybePop(),
+                          ),
+                          toggle,
+                          Divider(
+                            height: 8,
+                            color: ui.border,
+                            thickness: ui.borderWidth,
+                          ),
+                          // The shell's tabs, so you can jump to any section from
+                          // a system's game list. Tapping pops back to the shell
+                          // and switches tabs; none is marked selected (this is
+                          // a pushed route, not one of the shell's tabs).
+                          for (final i in shellNavFor(appModeListenable.value))
+                            ShellRailTile(
+                              label: kShellDests[i].$1,
+                              icon: kShellDests[i].$2,
+                              selected: false,
+                              onTap: () => shellNavigate?.call(i),
+                            ),
+                          const SizedBox(height: 8),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Expanded(child: content),
+                ],
+              ),
+            )
+          : content,
       floatingActionButton:
           widget.showActions && (_raSupported || _metadataFetchable)
-              ? FetchFab(onPressed: _showTaskDialog)
-              : null,
+          ? FetchFab(onPressed: _showTaskDialog)
+          : null,
     );
   }
 }

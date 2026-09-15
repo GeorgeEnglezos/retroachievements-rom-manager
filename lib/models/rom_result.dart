@@ -87,6 +87,10 @@ class RomResult {
   String? get thumbArt => imageUrl ?? imageIcon;
   // Larger art for the detail view: third-party cover else RA box art.
   String? get boxArt => imageUrl ?? imageBoxArt;
+  // Home's featured banners: an actual gameplay screenshot reads truer than
+  // box art at that size, so prefer the in-game shot, then the title screen,
+  // then fall back to boxArt (a third-party cover has neither).
+  String? get heroArt => imageIngame ?? imageTitle ?? boxArt;
 
   RomResult({required this.filePath, required this.fileName})
       : status = RomStatus.notFetched;

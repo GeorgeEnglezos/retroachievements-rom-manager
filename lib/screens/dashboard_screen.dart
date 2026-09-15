@@ -1,25 +1,22 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/rom_result.dart';
-import '../services/game_lookup.dart';
 import '../services/home_dashboard.dart';
+import '../services/ignored_candidates.dart';
 import '../services/library.dart';
+import '../services/member_key.dart';
 import '../services/playlist_store.dart';
-import '../services/pref_keys.dart';
 import '../services/scraper/scraped_store.dart';
 import '../theme/ui_tokens.dart';
-import '../widgets/dashboard_sections.dart';
-import '../widgets/dashboard_stats.dart';
+import '../widgets/bigpicture/couch_home.dart';
 import '../widgets/game_detail_dialog.dart';
-import '../widgets/spotlight_hero.dart';
-import '../widgets/ui/ui_segmented.dart';
 
-/// The Home tab: a cover-art dashboard over the whole scanned library —
-/// spotlight, at-a-glance stats, and "jump back in" rails. Browsing by system
-/// and running scans lives on the Library tab; this surface is read-first.
+/// The Home tab for Cleaning and Play modes. It loads the dashboard and opens a
+/// game's detail dialog on tap, then hands the layout to [CouchHome], the single
+/// Home component shared by every mode (Big Picture renders the same widget from
+/// its own shell). Browsing by system and scanning live on the Library tab.
 class DashboardScreen extends StatefulWidget {
   /// Sends the user to the Library tab (owned by the shell) from the empty
   /// state. Null falls back to a plain message.
@@ -40,7 +37,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   HomeDashboard? _dash;
   bool _loading = true;
   Timer? _debounce;
-  DashboardLayout _layout = DashboardLayout.grid;
 
   @override
   void initState() {
@@ -49,7 +45,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Warm the scraped store so a game's detail dialog can fall back to imported
     // artwork, matching the folder/storage screens.
     ScrapedStore.instance.load();
-    _loadLayoutPref();
     _load();
   }
 
@@ -60,19 +55,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
-  Future<void> _loadLayoutPref() async {
-    final prefs = await SharedPreferences.getInstance();
-    final v = DashboardLayout.values
-        .asNameMap()[prefs.getString(PrefKeys.dashboardLayout)];
-    if (v != null && mounted) setState(() => _layout = v);
-  }
-
-  Future<void> _setLayout(DashboardLayout v) async {
-    setState(() => _layout = v);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(PrefKeys.dashboardLayout, v.name);
-  }
-
   // A scan saves once per system in a burst; coalesce like the other tabs.
   void _scheduleLoad() {
     _debounce?.cancel();
@@ -80,21 +62,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _load() async {
-    final summaries = await _lib.summaries();
-    final games = <RomResult>[];
-    for (final s in summaries) {
-      final data = await _lib.load(s.systemPath);
-      for (final e in data.games) {
-        if (e.matched && e.gameInfo != null) {
-          games.add(romFromEntry(e, consoleName: s.name));
-        }
-      }
-    }
+    // A wide Home row shows well over a dozen covers; load enough to fill it.
+    final dash = await loadHomeDashboard(library: _lib, limit: 30);
     if (!mounted) return;
     setState(() {
-      _dash = buildHomeDashboard(games, systems: summaries);
+      _dash = dash;
       _loading = false;
     });
+  }
+
+  Future<void> _ignore(RomResult rom) async {
+    final key = memberKeyFor(gameId: rom.gameId, filePath: rom.filePath);
+    await IgnoredCandidates.instance.ignore(key);
+    if (mounted) {
+      final title = gameDisplayName(rom.gameTitle, rom.fileName);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Won\'t suggest "$title" here again'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () async {
+            await IgnoredCandidates.instance.unignore(key);
+            _load();
+          },
+        ),
+      ));
+    }
+    await _load();
   }
 
   void _open(RomResult rom) {
@@ -110,72 +103,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// One bucket, rendered the way this width wants it. Wide windows fill one
-  /// row with as many covers as fit and stop there; phones use the picked
-  /// vertical layout.
-  Widget _section(
-    String title,
-    List<RomResult> games, {
-    required bool narrow,
-  }) {
-    if (!narrow) {
-      return DashboardCoverSection(
-        title: title,
-        games: games,
-        onOpen: _open,
-      );
-    }
-    return switch (_layout) {
-      DashboardLayout.list => DashboardListSection(
-          title: title,
-          games: games,
-          onOpen: _open,
-        ),
-      DashboardLayout.grid => DashboardCoverSection(
-          title: title,
-          games: games,
-          onOpen: _open,
-          columns: 3,
-          rows: 2,
-        ),
-    };
-  }
-
-  /// The featured banners: the mastery hero, plus a "closest to beat" hero when
-  /// one exists. Side by side once there's room ([wide]); stacked below that.
-  List<Widget> _heroes(HomeDashboard dash,
-      {required bool narrow, required bool wide}) {
-    final mastery = dash.spotlight;
-    if (mastery == null) return const [];
-    final masteryHero = SpotlightHero(
-        rom: mastery, compact: narrow, onOpen: () => _open(mastery));
-
-    final beat = dash.beatSpotlight;
-    if (beat == null) return [masteryHero];
-    final beatHero = SpotlightHero(
-      rom: beat,
-      compact: narrow,
-      eyebrow: 'CLOSEST TO BEAT',
-      onOpen: () => _open(beat),
-    );
-
-    if (wide) {
-      return [
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: masteryHero),
-              const SizedBox(width: 16),
-              Expanded(child: beatHero),
-            ],
-          ),
-        ),
-      ];
-    }
-    return [masteryHero, const SizedBox(height: 16), beatHero];
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -185,51 +112,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (dash == null || !dash.hasContent) {
       return _EmptyDashboard(onOpenLibrary: widget.onOpenLibrary);
     }
-    final width = MediaQuery.sizeOf(context).width;
-    final narrow = width < 600;
-
-    return ListView(
-      padding: narrow
-          ? const EdgeInsets.fromLTRB(16, 16, 16, 32)
-          : const EdgeInsets.fromLTRB(20, 20, 20, 40),
-      children: [
-        ..._heroes(dash, narrow: narrow, wide: width >= 900),
-        const SizedBox(height: 8),
-        DashboardStatStrip(stats: dash.stats, narrow: narrow),
-        if (narrow) _LayoutPicker(value: _layout, onChanged: _setLayout),
-        _section('Jump back in', dash.continuePlaying, narrow: narrow),
-        _section('Closest to mastery', dash.closestToMastery, narrow: narrow),
-        _section('Popular & unplayed', dash.popularUnplayed, narrow: narrow),
-      ],
-    );
+    return CouchHome(dashboard: dash, onOpen: _open, onIgnore: _ignore);
   }
-}
-
-/// Flips the phone dashboard between its section layouts. The choice persists
-/// (PrefKeys.dashboardLayout); wide windows never show it.
-class _LayoutPicker extends StatelessWidget {
-  final DashboardLayout value;
-  final ValueChanged<DashboardLayout> onChanged;
-
-  const _LayoutPicker({required this.value, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 22),
-        // Align keeps the control at its content width; a ListView child is
-        // otherwise stretched to the full row.
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: UiSegmented<DashboardLayout>(
-            value: value,
-            onChanged: onChanged,
-            segments: const [
-              (value: DashboardLayout.list, label: 'List', icon: null),
-              (value: DashboardLayout.grid, label: 'Grid', icon: null),
-            ],
-          ),
-        ),
-      );
 }
 
 class _EmptyDashboard extends StatelessWidget {

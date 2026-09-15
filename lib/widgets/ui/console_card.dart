@@ -11,20 +11,47 @@ class ConsoleCard extends StatelessWidget {
   final Widget child;
   final VoidCallback? onTap;
   final EdgeInsetsGeometry padding;
+  final Color? borderColor;
+  final FocusFlourish flourish;
+
+  /// Focus/hover zoom factor. Use > 1.0 for square grid tiles to get the
+  /// "pop" effect (zoom + elevated shadow). Leave at 1.0 for list rows.
+  final double focusScale;
+
+  /// Whether to render the accent ring on focus/hover. Set to false for
+  /// grid tiles using the pure zoom + shadow style.
+  final bool showRing;
+
   const ConsoleCard({
     super.key,
     required this.child,
     this.onTap,
     this.padding = const EdgeInsets.all(14),
+    this.borderColor,
+    this.flourish = FocusFlourish.tilt,
+    this.focusScale = 1.0,
+    this.showRing = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Read the surface off the real theme before the light-theme override.
+    // Read the surface + app accent off the real theme before the light-theme
+    // override, so the focus ring wears the app's accent, not light's amber.
     final color = context.ui.cardSurface;
+    final ring = context.ui.accent;
     return Theme(
       data: uiTheme(UiTokens.light),
-      child: UiCard(onTap: onTap, color: color, padding: padding, child: child),
+      child: UiCard(
+        onTap: onTap,
+        color: color,
+        borderColor: borderColor,
+        padding: padding,
+        ringColor: ring,
+        flourish: flourish,
+        focusScale: focusScale,
+        showRing: showRing,
+        child: child,
+      ),
     );
   }
 }

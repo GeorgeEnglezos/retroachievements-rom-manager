@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'android_emulators.dart';
 import 'emulator_catalog.dart';
 import 'emulator_store.dart';
+import 'file_actions.dart';
 
 /// Extensions worth testing against the catalog patterns. Most patterns are
 /// unanchored, so without this filter `retroarch` also matches the retroarch.cfg
@@ -21,11 +22,23 @@ Future<List<Emulator>> findEmulators(
   Directory root, {
   List<Emulator> existing = const [],
   int maxFiles = 50000,
+  Future<Map<String, String>> Function(List<String>) resolveShortcuts =
+      FileActions.resolveShortcuts,
 }) async {
   if (!await root.exists()) return [];
   final taken = {for (final e in existing) e.kindId};
   final best = <String, String>{}; // kind id -> exe path
+  final shortcuts = <String>[]; // .lnk paths, resolved after the walk
   var seen = 0;
+
+  void consider(String exePath) {
+    final kindId = EmulatorCatalog.detectKind(exePath);
+    if (kindId == EmulatorCatalog.customKindId || taken.contains(kindId)) return;
+    final current = best[kindId];
+    if (current == null || _depth(exePath) < _depth(current)) {
+      best[kindId] = exePath;
+    }
+  }
 
   try {
     await for (final entity in root.list(recursive: true, followLinks: false)) {
@@ -33,21 +46,32 @@ Future<List<Emulator>> findEmulators(
       // ponytail: a flat file cap rather than a depth limit, so pointing this
       // at a whole drive still finishes. Raise it if real layouts hit it.
       if (++seen > maxFiles) break;
-      if (!_exeExtensions
-          .contains(p.windows.extension(entity.path).toLowerCase())) {
-        continue;
-      }
-      final kindId = EmulatorCatalog.detectKind(entity.path);
-      if (kindId == EmulatorCatalog.customKindId || taken.contains(kindId)) {
-        continue;
-      }
-      final current = best[kindId];
-      if (current == null || _depth(entity.path) < _depth(current)) {
-        best[kindId] = entity.path;
+      final ext = p.windows.extension(entity.path).toLowerCase();
+      if (ext == '.lnk') {
+        shortcuts.add(entity.path);
+      } else if (_exeExtensions.contains(ext)) {
+        consider(entity.path);
       }
     }
   } on FileSystemException {
     // Permission error, or the folder went away mid-walk: keep what we found.
+  }
+
+  // Windows shortcuts (e.g. an EmuDeck folder of .lnk files) resolve to the real
+  // exe elsewhere; store that target so launching works unchanged. Generic
+  // launchers (a .ps1 behind powershell.exe) fall out via detectKind. Depth for
+  // the shallowest-wins tiebreak comes from the target, not the .lnk — only
+  // matters when one kind shows up as both a direct exe and a shortcut, rare.
+  if (shortcuts.isNotEmpty) {
+    final targets = await resolveShortcuts(shortcuts);
+    for (final lnk in shortcuts) {
+      final target = targets[lnk];
+      if (target != null &&
+          _exeExtensions
+              .contains(p.windows.extension(target).toLowerCase())) {
+        consider(target);
+      }
+    }
   }
 
   final stamp = DateTime.now().millisecondsSinceEpoch;

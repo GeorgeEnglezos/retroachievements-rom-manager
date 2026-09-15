@@ -95,7 +95,7 @@ class _LogsScreenState extends State<LogsScreen> {
   Widget build(BuildContext context) {
     final secondary = Theme.of(context).colorScheme.onSurfaceVariant;
     // The shell already shows the tab title on mobile; avoid a doubled header.
-    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final wide = MediaQuery.sizeOf(context).width >= kBreakWide;
 
     return Scaffold(
       appBar: AppBar(
@@ -139,7 +139,7 @@ class _LogsScreenState extends State<LogsScreen> {
                 // Left: file list
                 SizedBox(
                   // Narrower sidebar on phones so the detail pane isn't squeezed.
-                  width: MediaQuery.sizeOf(context).width < 600 ? 120 : 200,
+                  width: MediaQuery.sizeOf(context).width < kBreakCompact ? 120 : 200,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

@@ -25,6 +25,7 @@ import '../services/scraper/scraped_store.dart';
 import '../widgets/pick_library_folder.dart';
 import '../services/scan_settings.dart';
 import '../widgets/pick_emulator.dart';
+import '../widgets/ui_scale_control.dart';
 import 'setup_wizard.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -155,6 +156,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirm != true) return;
     await (widget.library ?? Library.instance).clear();
     _toast('All scanned data cleared.');
+  }
+
+  Future<void> _pruneMissing() async {
+    final removed =
+        await (widget.library ?? Library.instance).pruneMissingSystems();
+    _toast(removed == 0
+        ? 'No missing systems to remove.'
+        : 'Removed $removed missing system${removed == 1 ? '' : 's'}.');
   }
 
   Future<void> _backup() async {
@@ -390,6 +399,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: saveCombineSystems,
           ),
         ),
+        const SizedBox(height: 12),
+        Text('UI scale', style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 2),
+        Text('Zoom the whole app in or out. Applies immediately.',
+            style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 8),
+        const UiScaleControl(),
       ],
     );
   }
@@ -400,7 +416,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       children: [
         _heading('Mode',
             'Play hides the maintenance tabs, scans, multi-select and every '
-            'delete button, so the app is safe to hand over.'),
+            'delete button, so the app is safe to hand over. A controller '
+            'drives either mode.'),
         ValueListenableBuilder<AppMode>(
           valueListenable: appModeListenable,
           builder: (context, mode, _) => SegmentedButton<AppMode>(
@@ -481,19 +498,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _heading('Theme',
-            'Light or RetroAchievements (dark). Applies immediately.'),
+        _heading('Theme', 'Pick a colour palette. Applies immediately.'),
         ValueListenableBuilder<AppTheme>(
           valueListenable: appThemeListenable,
-          builder: (context, theme, _) => SegmentedButton<AppTheme>(
-            segments: const [
-              ButtonSegment(value: AppTheme.light, label: Text('Light')),
-              ButtonSegment(
-                  value: AppTheme.dark, label: Text('RetroAchievements')),
+          builder: (context, current, _) => Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (final theme in AppTheme.values)
+                _ThemeSwatch(
+                  theme: theme,
+                  selected: theme == current,
+                  onTap: () => saveAppTheme(theme),
+                ),
             ],
-            selected: {theme},
-            showSelectedIcon: false,
-            onSelectionChanged: (s) => saveAppTheme(s.first),
           ),
         ),
       ],
@@ -632,6 +650,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             Tooltip(
+              message: 'Deletes scan results for library folders that no longer '
+                  'exist (e.g. after moving or renaming your ROMs). Folders '
+                  'still on disk are untouched.',
+              child: OutlinedButton.icon(
+                onPressed: _pruneMissing,
+                icon: const Icon(Icons.folder_off_outlined),
+                label: const Text('Remove missing systems'),
+              ),
+            ),
+            Tooltip(
               message: 'Deletes every scan result, hash and match from the app. '
                   'Your ROM files stay on disk, but you have to re-scan.',
               child: OutlinedButton(
@@ -712,7 +740,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     // Shell already shows the title on mobile; AppBar keeps only the tabs.
-    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final wide = MediaQuery.sizeOf(context).width >= kBreakWide;
 
     final general = [
       _accountSection(),
@@ -820,38 +848,19 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
     final emulators = await EmulatorStore.emulators();
     final connections = await EmulatorStore.connections();
     final fullscreen = await EmulatorStore.launchFullscreen();
+    // The library's filtered systems are the single source, so this list
+    // matches the home grid / badge: ignored, missing, out-of-root, and
+    // never-scanned folders never leak in here.
     final summaries =
         await (widget.library ?? Library.instance).summaries();
-    // Scanned consoles + folder-mapped consoles, so an emulator can be set
-    // before any scan.
     final consoleIds = <int>{
       for (final s in summaries)
         if (s.consoleId != null && ConsoleMap.consoleNames[s.consoleId!] != null)
           s.consoleId!,
-      ...await _mappedConsoleIds(),
     }.toList()
       ..sort((a, b) => ConsoleMap.consoleNames[a]!
           .compareTo(ConsoleMap.consoleNames[b]!));
     return _EmulatorData(emulators, connections, consoleIds, fullscreen);
-  }
-
-  // Console ids for the root subfolders: overrides first, then name detection.
-  Future<Set<int>> _mappedConsoleIds() async {
-    final prefs = await SharedPreferences.getInstance();
-    final root = prefs.getString(PrefKeys.lastFolder);
-    if (root == null || !Directory(root).existsSync()) return {};
-    final overrides = await ScanSettings.folderConsoleOverrides();
-    final ignored = (await ScanSettings.ignoredFolders())
-        .map((e) => e.toLowerCase())
-        .toSet();
-    final ids = <int>{};
-    for (final d in Directory(root).listSync().whereType<Directory>()) {
-      final name = p.basename(d.path);
-      if (ignored.contains(name.toLowerCase())) continue;
-      final id = overrides[name] ?? ConsoleMap.idForFolder(name);
-      if (id != null && ConsoleMap.consoleNames[id] != null) ids.add(id);
-    }
-    return ids;
   }
 
   Future<void> _addEmulator() async {
@@ -1219,6 +1228,89 @@ class _SystemRow extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// One tappable palette card in the theme picker. Painted in the palette's own
+/// colours so it previews the theme; the selection ring uses the *current*
+/// theme's accent so it reads against the live UI.
+class _ThemeSwatch extends StatelessWidget {
+  final AppTheme theme;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ThemeSwatch({
+    required this.theme,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ui = context.ui; // live theme, for the selection ring
+    final t = theme.tokens; // this card's palette, for the preview
+    final dots = [t.accent, t.supported, t.accentAlt, t.accentGames];
+    return InkWell(
+      onTap: onTap,
+      borderRadius: ui.roundMd,
+      child: Container(
+        width: 152,
+        decoration: BoxDecoration(
+          borderRadius: ui.roundMd,
+          border: Border.all(
+            color: selected ? ui.accent : t.border,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: ui.roundMd,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 46,
+                width: double.infinity,
+                color: t.background,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  children: [
+                    for (final c in dots)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: Container(
+                          width: 14,
+                          height: 14,
+                          decoration:
+                              BoxDecoration(color: c, shape: BoxShape.circle),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Container(
+                width: double.infinity,
+                color: t.surface,
+                padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        theme.label,
+                        style: t.body.copyWith(fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (selected)
+                      Icon(Icons.check_circle, size: 16, color: ui.accent),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

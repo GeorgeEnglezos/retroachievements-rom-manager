@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rarm/models/folder_sort.dart';
 import 'package:rarm/models/rom_result.dart';
+import 'package:rarm/services/cleanup_score.dart';
 import 'package:rarm/services/rom_filter.dart';
 
 void main() {
@@ -214,6 +216,71 @@ void main() {
       expect(f.matches(played('a', recent), playlistIdsForRom: {}), isTrue);
       expect(f.matches(played('b', old), playlistIdsForRom: {}), isFalse);
       expect(f.matches(played('c', null), playlistIdsForRom: {}), isFalse);
+    });
+  });
+
+  group('sortRoms', () {
+    RomResult withPoints(String name, int? points, {int players = 0}) {
+      final r = rom(name);
+      r.points = points;
+      r.numPlayersCasual = players;
+      return r;
+    }
+
+    List<String> names(List<RomResult> roms) => [for (final r in roms) r.fileName];
+
+    test('alphabetical respects direction', () {
+      final roms = [rom('c'), rom('a'), rom('b')];
+      expect(
+          names(sortRoms(roms,
+              sort: FolderSort.alphabetical,
+              ascending: true,
+              hot: false,
+              cleanupMode: CleanupScoreMode.logDampened)),
+          ['a', 'b', 'c']);
+      expect(
+          names(sortRoms(roms,
+              sort: FolderSort.alphabetical,
+              ascending: false,
+              hot: false,
+              cleanupMode: CleanupScoreMode.logDampened)),
+          ['c', 'b', 'a']);
+    });
+
+    test('null keys sink to the bottom regardless of direction', () {
+      final roms = [withPoints('none', null), withPoints('low', 10), withPoints('high', 90)];
+      for (final asc in [true, false]) {
+        final sorted = names(sortRoms(roms,
+            sort: FolderSort.points,
+            ascending: asc,
+            hot: false,
+            cleanupMode: CleanupScoreMode.logDampened));
+        expect(sorted.last, 'none');
+      }
+    });
+
+    test('hot overrides sort and ranks by casual players', () {
+      final roms = [
+        withPoints('a', 90, players: 5),
+        withPoints('b', 10, players: 50),
+      ];
+      expect(
+          names(sortRoms(roms,
+              sort: FolderSort.alphabetical,
+              ascending: true,
+              hot: true,
+              cleanupMode: CleanupScoreMode.logDampened)),
+          ['b', 'a']);
+    });
+
+    test('does not mutate the input list', () {
+      final roms = [rom('c'), rom('a')];
+      sortRoms(roms,
+          sort: FolderSort.alphabetical,
+          ascending: true,
+          hot: false,
+          cleanupMode: CleanupScoreMode.logDampened);
+      expect(names(roms), ['c', 'a']);
     });
   });
 }

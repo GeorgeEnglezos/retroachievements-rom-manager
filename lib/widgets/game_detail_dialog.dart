@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../models/folder_stats.dart' show compactCount;
 import '../models/rom_result.dart';
 import '../models/scraped_game.dart';
 import '../services/credentials.dart';
@@ -352,7 +353,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final wide = MediaQuery.sizeOf(context).width >= kBreakWide;
     return wide && _hasAchievementPanel
         ? _splitLayout(context)
         : _singleLayout(context);
@@ -419,7 +420,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
             ),
             const SizedBox(width: 16),
             Expanded(
-              flex: 4,
+              flex: 5,
               child: _panel(
                 key: const Key('gameAchievementsPanel'),
                 child: Padding(
@@ -450,8 +451,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
         child: SingleChildScrollView(child: child),
       );
 
-  List<Widget> _artSection() =>
-      [_buildBoxArt(), _buildScreenshots(), _buildScrapedImages()];
+  List<Widget> _artSection() => [_buildBoxArt(), _buildThumbnails()];
 
   Widget _buildInfo(BuildContext context, {bool withProgress = true}) {
     return Padding(
@@ -579,55 +579,41 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
         ),
       );
 
-  // Title-screen and in-game screenshots RA provides, shown as a strip under the
-  // box art. Rendered only when at least one is present.
-  Widget _buildScreenshots() {
-    final shots = [rom.imageTitle, rom.imageIngame].whereType<String>().toList();
-    if (shots.isEmpty) return const SizedBox.shrink();
-    return SizedBox(
-      height: 90,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        itemCount: shots.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, i) => RaImage(
-          url: raImageUrl(shots[i]),
+  // RA title/in-game screenshots and imported Skraper images (every imported
+  // type except box art, handled in _buildBoxArt, and video, not rendered) share
+  // one strip of 120x90 thumbnails that wraps to multiple rows when there are
+  // many. Box art stays on its own above.
+  Widget _buildThumbnails() {
+    final s = widget.scraped;
+    final scrapedKeys = s == null
+        ? const <String>[]
+        : (s.images.keys.where((k) => k != 'boxart' && k != 'video').toList()
+          ..sort());
+
+    final tiles = <Widget>[
+      for (final shot in [rom.imageTitle, rom.imageIngame].whereType<String>())
+        RaImage(
+          url: raImageUrl(shot),
           width: 120,
+          height: 90,
           fit: BoxFit.cover,
           zoomable: true,
           error: Container(
             width: 120,
+            height: 90,
             color: context.ui.trough,
             child: Icon(Icons.broken_image, size: 32, color: context.ui.muted),
           ),
         ),
-      ),
-    );
-  }
+      for (final k in scrapedKeys)
+        _localImage(s!.images[k]!,
+            width: 120, height: 90, fit: BoxFit.cover, errorIconSize: 32),
+    ];
+    if (tiles.isEmpty) return const SizedBox.shrink();
 
-  // Local Skraper images rendered from disk: every imported image type except
-  // box art (handled in _buildBoxArt) and video (not rendered). Sorted for a
-  // stable order across whatever media folders the scrape provided.
-  Widget _buildScrapedImages() {
-    final s = widget.scraped;
-    if (s == null) return const SizedBox.shrink();
-    final keys = s.images.keys
-        .where((k) => k != 'boxart' && k != 'video')
-        .toList()
-      ..sort();
-    final paths = [for (final k in keys) s.images[k]!];
-    if (paths.isEmpty) return const SizedBox.shrink();
-    return SizedBox(
-      height: 90,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        itemCount: paths.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, i) => _localImage(paths[i],
-            width: 120, fit: BoxFit.cover, errorIconSize: 32),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Wrap(spacing: 8, runSpacing: 8, children: tiles),
     );
   }
 
@@ -832,11 +818,20 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
         if (_listView)
           Column(children: list.map(_buildBadgeRow).toList())
         else
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: list.map(_buildBadgeTile).toList(),
-          ),
+          // Grow each tile so a whole number of columns fills the panel width
+          // edge to edge, leaving no ragged gap on the right.
+          LayoutBuilder(builder: (context, c) {
+            const spacing = 6.0;
+            const target = 56.0;
+            final cols =
+                ((c.maxWidth + spacing) / (target + spacing)).floor().clamp(1, 99);
+            final size = (c.maxWidth - spacing * (cols - 1)) / cols;
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: list.map((a) => _buildBadgeTile(a, size)).toList(),
+            );
+          }),
       ],
     );
   }
@@ -931,8 +926,8 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     );
   }
 
-  Widget _buildBadgeTile(Achievement achievement) {
-    final image = _badgeImage(achievement, 48);
+  Widget _buildBadgeTile(Achievement achievement, double size) {
+    final image = _badgeImage(achievement, size);
     final marker = _beatMarker(achievement);
     Widget tile =
         achievement.isEarned ? image : Opacity(opacity: 0.5, child: image);
@@ -944,9 +939,10 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
         children: [
           // A colour ring frames the beaten-defining badge so it stands out
           // from the standard achievements around it; the win condition rings
-          // thicker in gold.
+          // thicker in gold. Painted as foregroundDecoration (over the badge, no
+          // added size) so ringed tiles stay 48px and align with plain ones.
           Container(
-            decoration: BoxDecoration(
+            foregroundDecoration: BoxDecoration(
               borderRadius: ui.roundSm,
               border: Border.all(color: marker.color, width: marker.ring),
             ),
@@ -993,10 +989,5 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     return '${months[dt.month - 1]} ${dt.day} ${dt.year}';
   }
 
-  String _fmt(int? n) {
-    if (n == null || n == 0) return '0';
-    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
-    return n.toString();
-  }
+  String _fmt(int? n) => n == null ? '0' : compactCount(n);
 }

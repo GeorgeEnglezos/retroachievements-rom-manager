@@ -70,15 +70,25 @@ void main() {
     await lib.save(SystemData(
       systemId: '', systemPath: path,
       dismissedDuplicatePairs: <String>{}, consoleId: 3,
-      games: const [],
+      games: [GameEntry.unscanned(p.join(path, 'game.sfc'))],
     ));
     final summaries = await lib.summaries();
     expect(summaries, hasLength(1));
     expect(summaries.first.systemPath, path);
     expect(summaries.first.consoleId, 3);
+    expect(summaries.first.totalGames, 1);
 
     final rows = await lib.searchIndex();
-    expect(rows, isEmpty); // no games yet
+    expect(rows, hasLength(1));
+  });
+
+  test('a system with no games left is hidden from summaries', () async {
+    await lib.save(SystemData(
+      systemId: '', systemPath: p.join(tmp.path, 'snes'),
+      dismissedDuplicatePairs: <String>{}, consoleId: 3,
+      games: const [],
+    ));
+    expect(await lib.summaries(), isEmpty);
   });
 
   test('removeGame drops the entry from memory and disk', () async {
@@ -210,6 +220,25 @@ void main() {
     expect(await lib.summaries(), isEmpty);
   });
 
+  test('systems outside the current library root drop out of summaries',
+      () async {
+    final root = p.join(tmp.path, 'current');
+    SharedPreferences.setMockInitialValues({'last_folder': root});
+    final inRoot = p.join(root, 'snes');
+    final stale = p.join(tmp.path, 'old', 'nes');
+    for (final path in [inRoot, stale]) {
+      await lib.save(SystemData(
+        systemId: '', systemPath: path,
+        dismissedDuplicatePairs: <String>{}, consoleId: 3,
+        games: [GameEntry.unscanned(p.join(path, 'game.sfc'))],
+      ));
+    }
+
+    final summaries = await lib.summaries();
+    expect(summaries, hasLength(1));
+    expect(summaries.first.systemPath, inRoot);
+  });
+
   test('a system whose folder is gone drops out of every derived view',
       () async {
     final dir = await Directory(p.join(tmp.path, 'ps4')).create();
@@ -237,6 +266,31 @@ void main() {
     await Directory(dir.path).create();
     await lib.refreshMissingSystems();
     expect(await lib.summaries(), hasLength(1));
+  });
+
+  test('pruneMissingSystems deletes only systems whose folder is gone',
+      () async {
+    final live = await Directory(p.join(tmp.path, 'snes')).create();
+    final gone = await Directory(p.join(tmp.path, 'ps4')).create();
+    for (final d in [live, gone]) {
+      await lib.save(SystemData(
+        systemId: '', systemPath: d.path,
+        dismissedDuplicatePairs: <String>{}, consoleId: 3,
+        games: [GameEntry.unscanned(p.join(d.path, 'game.iso'))],
+      ));
+    }
+
+    await gone.delete(recursive: true);
+    expect(await lib.pruneMissingSystems(), 1);
+
+    // The live system survives; the missing one is gone from a fresh instance.
+    final fresh = Library(baseDir: tmp);
+    expect(await fresh.summaries(), hasLength(1));
+    expect((await fresh.load(gone.path)).games, isEmpty);
+    expect((await fresh.load(live.path)).games, hasLength(1));
+
+    // Idempotent: nothing left to prune.
+    expect(await lib.pruneMissingSystems(), 0);
   });
 
   test('gamesFor of an unscanned path is empty', () async {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/ui_tokens.dart';
+import 'ui_focusable.dart';
 
 enum UiButtonVariant { primary, secondary }
 
@@ -40,42 +41,48 @@ class _ButtonState extends State<UiButton> {
     final bg = !enabled
         ? ui.trough
         : primary
-            ? ui.accent
-            : ui.surface;
+        ? ui.accent
+        : ui.surface;
     final fg = primary && enabled ? ui.background : ui.text;
     final pressed = _pressed && enabled;
 
-    return GestureDetector(
-      onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
-      onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
-      onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
-      onTap: widget.onPressed,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 60),
-        transform: Matrix4.translationValues(
+    return UiFocusable(
+      onPressed: widget.onPressed,
+      borderRadius: ui.roundMd,
+      flourish: FocusFlourish.none,
+      child: GestureDetector(
+        onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+        onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
+        onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
+        onTap: widget.onPressed,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 60),
+          transform: Matrix4.translationValues(
             pressed ? ui.controlShadow.dx : 0,
             pressed ? ui.controlShadow.dy : 0,
-            0),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: ui.roundMd,
-          border: Border.all(color: ui.border, width: ui.borderWidth),
-          boxShadow: pressed ? const [] : ui.shadow(ui.controlShadow),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (widget.leading != null) ...[
-              widget.leading!,
-              if (widget.label.isNotEmpty) const SizedBox(width: 8),
-            ] else if (widget.icon != null) ...[
-              Icon(widget.icon, size: 16, color: fg),
-              const SizedBox(width: 8),
+            0,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: ui.roundMd,
+            border: Border.all(color: ui.border, width: ui.borderWidth),
+            boxShadow: pressed ? const [] : ui.shadow(ui.controlShadow),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.leading != null) ...[
+                widget.leading!,
+                if (widget.label.isNotEmpty) const SizedBox(width: 8),
+              ] else if (widget.icon != null) ...[
+                Icon(widget.icon, size: 16, color: fg),
+                const SizedBox(width: 8),
+              ],
+              if (widget.label.isNotEmpty)
+                Text(widget.label, style: ui.labelCaps.copyWith(color: fg)),
             ],
-            if (widget.label.isNotEmpty)
-              Text(widget.label, style: ui.labelCaps.copyWith(color: fg)),
-          ],
+          ),
         ),
       ),
     );

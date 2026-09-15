@@ -80,22 +80,27 @@ class RomRowTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    final isFavorite = row.rom != null &&
+    final isFavorite =
+        row.rom != null &&
         store.isFavorite(
-            memberKeyFor(gameId: row.rom!.gameId, filePath: row.rom!.filePath));
+          memberKeyFor(gameId: row.rom!.gameId, filePath: row.rom!.filePath),
+        );
     final cardColor = isSelected
         ? ui.accent.withValues(alpha: 0.12)
         : isFavorite
-            ? ui.favoriteHighlight
-            : null;
-    // Favorite rows flip their labels to ui.favoriteText (white on the light
-    // theme's black wash; unchanged on dark).
-    final fg = isFavorite ? ui.favoriteText : null;
+        ? ui.favoriteFill
+        : null;
+    // Favorite rows are accent-filled, so their labels flip to ui.favoriteInk
+    // (the ground colour) to read against the fill.
+    final fg = isFavorite ? ui.favoriteInk : null;
     Widget body = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: UiCard(
         padding: EdgeInsets.zero,
         color: cardColor,
+        focusScale:
+            1.0, // wide row: ring only, no lift (would overflow the list)
+        flourish: FocusFlourish.jump, // rows: a light hop, not the tile tilt
         onTap: () => _onTap(context),
         child: _buildCardContent(context, ui, fg),
       ),
@@ -172,13 +177,12 @@ class RomRowTile extends StatelessWidget {
 
   Widget _tileContent(BuildContext context, UiTokens ui, Color? fg) {
     final chips = display.showChips ? _chips(ui) : <Widget>[];
-    final subtitle = _buildSubtitle(ui, fg);
+    final subtitle = _buildSubtitle(context, ui, fg);
     final title = Text(
       row.title,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-          fontWeight: FontWeight.w600, fontSize: 14.5, color: fg),
+      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5, color: fg),
     );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
@@ -211,13 +215,17 @@ class RomRowTile extends StatelessWidget {
           ),
           if (row.scoreLabel != null) ...[
             const SizedBox(width: 8),
-            Text(row.scoreLabel!,
-                style: ui.mono.copyWith(fontSize: 13, color: fg)),
+            Text(
+              row.scoreLabel!,
+              style: ui.mono.copyWith(fontSize: 13, color: fg),
+            ),
           ],
           if (display.showSizeBar && row.sizeLabel != null) ...[
             const SizedBox(width: 8),
-            Text(row.sizeLabel!,
-                style: ui.mono.copyWith(fontSize: 12, color: fg)),
+            Text(
+              row.sizeLabel!,
+              style: ui.mono.copyWith(fontSize: 12, color: fg),
+            ),
           ],
           if (display.showChevron && row.showChevron) ...[
             const SizedBox(width: 4),
@@ -315,8 +323,11 @@ class RomRowTile extends StatelessWidget {
     );
   }
 
-
-  Widget? _buildProgress() {
+  Widget? _buildProgress(BuildContext context, Color? fg) {
+    // Small screens (phones in any orientation, or any narrow window) drop the
+    // per-row bar: the row is too tight for a bar + label, and the earned/total
+    // read in the meta line already carries how far in the game is.
+    if (MediaQuery.sizeOf(context).shortestSide < kBreakCompact) return null;
     if (!display.showProgress ||
         row.rom == null ||
         row.earnedAchievements == null) {
@@ -325,8 +336,13 @@ class RomRowTile extends StatelessWidget {
     if (!RomProgress.hasProgress(row.rom!)) return null;
     return Padding(
       padding: const EdgeInsets.only(top: 5),
-      child:
-          RomProgress(rom: row.rom!, barHeight: 4, labelSize: 10, inline: true),
+      child: RomProgress(
+        rom: row.rom!,
+        barHeight: 4,
+        labelSize: 10,
+        inline: true,
+        colorOverride: fg,
+      ),
     );
   }
 
@@ -364,7 +380,7 @@ class RomRowTile extends StatelessWidget {
     );
   }
 
-  Widget? _buildSubtitle(UiTokens ui, Color? fg) {
+  Widget? _buildSubtitle(BuildContext context, UiTokens ui, Color? fg) {
     if (row.rom == null) {
       return row.subtitle != null
           ? Text(row.subtitle!, style: TextStyle(color: fg))
@@ -379,13 +395,18 @@ class RomRowTile extends StatelessWidget {
     // localOnly renders like a supported row minus RA data: filename title,
     // size, no achievements/progress and no "Not fetched" status text.
     if (rom.status == RomStatus.supported || rom.isLocalOnly) {
-      final fileName = playView.fileName &&
-              row.subtitle != null &&
-              row.subtitle != row.title
+      final fileName =
+          playView.fileName && row.subtitle != null && row.subtitle != row.title
           ? row.subtitle
           : null;
-      final meta = _metaLine(ui, [fileName, sizeLabel], fg: fg);
-      final progress = _buildProgress();
+      // The same earned/total read the grid's GameMetaRow shows, inline in the
+      // meta line alongside any progress bar below.
+      final total = rom.achievementCount ?? 0;
+      final achLabel = playView.achievementCount && total > 0
+          ? '${rom.earnedAchievements ?? 0}/$total'
+          : null;
+      final meta = _metaLine(ui, [fileName, sizeLabel, achLabel], fg: fg);
+      final progress = _buildProgress(context, fg);
       if (meta == null && progress == null) return null;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -397,9 +418,10 @@ class RomRowTile extends StatelessWidget {
       RomStatus.notFetched => 'Not fetched',
       RomStatus.checking => 'Checking...',
       RomStatus.unsupported => 'No achievements found',
-      RomStatus.unsupportedFormat => DiscFormats.isNkit(rom.filePath)
-          ? 'NKit format not supported'
-          : 'Compressed disc. Add Dolphin in Settings → Emulators to hash it',
+      RomStatus.unsupportedFormat =>
+        DiscFormats.isNkit(rom.filePath)
+            ? 'NKit format not supported'
+            : 'Compressed disc. Add Dolphin in Settings → Emulators to hash it',
       RomStatus.error => rom.errorMessage ?? 'Unknown error',
       _ => null,
     };
@@ -408,7 +430,8 @@ class RomRowTile extends StatelessWidget {
       ui,
       [statusText, sizeLabel],
       fg: fg,
-      firstColor: rom.status == RomStatus.error ||
+      firstColor:
+          rom.status == RomStatus.error ||
               rom.status == RomStatus.unsupportedFormat
           ? ui.warning
           : null,
@@ -422,7 +445,6 @@ class RomRowTile extends StatelessWidget {
       ?discBadge(row.discCount, ui),
       if (display.showDupBadge) ?dupBadge(rom, ui),
       ?hotBadge(rom),
-      ?achBadge(rom, ui),
       ?noAchBadge(rom),
       ...tagBadges(rom.fileName),
     ];

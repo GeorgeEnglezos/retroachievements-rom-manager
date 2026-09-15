@@ -59,16 +59,20 @@ class _FetchFabState extends State<FetchFab> {
           heroTag: 'updateLibrary',
           tooltip: 'Update library (rescan & sync progress)',
           onPressed: busy ? null : widget.onPressed,
+          // Fill the whole FAB with the avatar, clipped to the FAB's shape.
+          // ponytail: 56/16 are the M3 default regular-FAB size and corner
+          // radius; revisit if the FAB is ever themed or resized.
           child: path == null
               ? const Icon(Icons.refresh)
-              : ClipOval(
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
                   child: RaImage(
                     url: raAvatarUrl(path, version: _avatarVersion),
-                    width: 40,
-                    height: 40,
+                    width: 56,
+                    height: 56,
                     fit: BoxFit.cover,
                     error: Image.asset('assets/ra-icon.webp',
-                        width: 40, height: 40),
+                        width: 56, height: 56),
                   ),
                 ),
         );

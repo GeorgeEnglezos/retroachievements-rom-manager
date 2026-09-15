@@ -37,3 +37,11 @@ String compactCount(int n) {
   if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
   return '$n';
 }
+
+// Fraction of achievements earned, clamped to [0, 1]; 0 when there is no set.
+double achievementFraction(int earned, int total) =>
+    total == 0 ? 0.0 : (earned / total).clamp(0.0, 1.0);
+
+// At or above this ratio (but not yet mastered) a game counts as "near
+// complete": the quickest mastery candidates.
+const kNearMasteryRatio = 0.8;

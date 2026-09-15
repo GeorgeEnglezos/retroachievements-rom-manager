@@ -146,4 +146,32 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('a'), findsOneWidget);
   });
+
+  group('gridColumns', () {
+    test('caps tile width at the target, adding a column as width grows', () {
+      // 4*150 + 3*10 gaps = 630 fits 4 columns exactly at the target width...
+      expect(gridColumns(630, 150, 10), 4);
+      // ...a hair under still gives 4 (tiles a touch narrower than target)...
+      expect(gridColumns(629, 150, 10), 4);
+      // ...and a hair over adds a fifth (tiles shrink below the target),
+      // matching maxCrossAxisExtent's cap-the-width behaviour.
+      expect(gridColumns(631, 150, 10), 5);
+    });
+
+    test('the derived tile width never exceeds the target', () {
+      const width = 800.0, target = 150.0, spacing = 10.0;
+      final cols = gridColumns(width, target, spacing);
+      final tileW = (width - spacing * (cols - 1)) / cols;
+      expect(tileW, lessThanOrEqualTo(target));
+    });
+
+    test('never drops below one column, even below one tile wide', () {
+      expect(gridColumns(80, 150, 10), 1);
+      expect(gridColumns(0, 150, 10), 1);
+    });
+
+    test('guards against a non-positive target', () {
+      expect(gridColumns(800, 0, 10), 1);
+    });
+  });
 }

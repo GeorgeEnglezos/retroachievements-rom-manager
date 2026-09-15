@@ -170,7 +170,7 @@ packages:
     source: hosted
     version: "2.2.0"
   file:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: file
       sha256: a3b4f84adafef897088c160faf7dfffb7696046cb13ae90b508c2cbc95d3b8d4
@@ -301,6 +301,70 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.0"
+  gamepads:
+    dependency: "direct main"
+    description:
+      name: gamepads
+      sha256: "8134c967c29496cbc20e73c88b31c6d11765e846b8e465c52b436fe6e88339ce"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.11"
+  gamepads_android:
+    dependency: transitive
+    description:
+      name: gamepads_android
+      sha256: f3a600e1212374771bdd47206088940a36fb75791b3c4223eccfa487dfd1ed0f
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.9"
+  gamepads_darwin:
+    dependency: transitive
+    description:
+      name: gamepads_darwin
+      sha256: "113d50ad327aa5f1b5df6807310a4f23865c01330f7a62d5c53c9df8933f948a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.3"
+  gamepads_ios:
+    dependency: transitive
+    description:
+      name: gamepads_ios
+      sha256: "9a65f16797c7479d2bc6d7967d45e8b2448c6302b128fcf3231460f839021a37"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.4"
+  gamepads_linux:
+    dependency: transitive
+    description:
+      name: gamepads_linux
+      sha256: "80bf70df6da6185926e6d8b2feb98e725e6fe99290afafaea91dba471e8c1c1e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.2"
+  gamepads_platform_interface:
+    dependency: transitive
+    description:
+      name: gamepads_platform_interface
+      sha256: "9ddb3b61c780284a17739d759929d2e32b912d12d9145ee493ffe2b43fc6256a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.3"
+  gamepads_web:
+    dependency: transitive
+    description:
+      name: gamepads_web
+      sha256: "4f044a6003b34a8d5c5854924fbbfd64b6653bcb49169cf2aca26938f812672e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.2"
+  gamepads_windows:
+    dependency: transitive
+    description:
+      name: gamepads_windows
+      sha256: ecd1dc845a0ad6260a3016cd74f3e365c4006a458ae2c5c5eed7a72d33dd5738
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.1"
   hooks:
     dependency: transitive
     description:

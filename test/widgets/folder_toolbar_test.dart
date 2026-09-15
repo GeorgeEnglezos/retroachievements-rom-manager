@@ -12,12 +12,14 @@ void main() {
     FolderSort sort = FolderSort.alphabetical,
     bool anyDuplicates = true,
     bool showViewToggle = true,
+    bool gridView = false,
     CleanupScoreMode cleanupMode = CleanupScoreMode.logDampened,
     void Function(RomFilter)? onFilterChanged,
     void Function(FolderSort)? onSortChanged,
     void Function(CleanupScoreMode)? onCleanupModeChanged,
     void Function(bool)? onDuplicatesToggle,
     void Function(bool)? onHotToggle,
+    void Function(double)? onGridSizeChanged,
   }) =>
       MaterialApp(
         home: Scaffold(
@@ -25,12 +27,14 @@ void main() {
             filter: filter,
             sort: sort,
             sortAscending: true,
-            gridView: false,
+            gridView: gridView,
             showViewToggle: showViewToggle,
             availableGenres: const ['Action'],
             showProgress: true,
             anyDuplicates: anyDuplicates,
             cleanupMode: cleanupMode,
+            gridSize: FolderToolbar.gridSizeDefault,
+            onGridSizeChanged: onGridSizeChanged,
             playlists: const [(id: 'fav', name: 'Favorites')],
             onFilterChanged: onFilterChanged ?? (_) {},
             onSortChanged: onSortChanged ?? (_) {},
@@ -114,6 +118,22 @@ void main() {
     ));
     await tester.tap(find.byIcon(Icons.close).first);
     expect(got?.statuses.contains(RomStatus.supported), isFalse);
+  });
+
+  testWidgets('the grid-size slider shows only in grid view and reports drags',
+      (tester) async {
+    double? got;
+    // List view: no slider.
+    await tester.pumpWidget(host(onGridSizeChanged: (v) => got = v));
+    expect(find.byType(Slider), findsNothing);
+
+    // Grid view: the slider appears and a drag fires onGridSizeChanged.
+    await tester.pumpWidget(
+        host(gridView: true, onGridSizeChanged: (v) => got = v));
+    expect(find.byType(Slider), findsOneWidget);
+    await tester.drag(find.byType(Slider), const Offset(-40, 0));
+    expect(got, isNotNull);
+    expect(got, lessThan(FolderToolbar.gridSizeDefault)); // dragged smaller
   });
 
   testWidgets('a pinned play layout hides the list/grid toggle', (tester) async {

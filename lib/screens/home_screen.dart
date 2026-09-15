@@ -4,11 +4,12 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import '../services/ra_image_cache.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/ui_tokens.dart';
 import '../models/fetch_plan.dart';
 import '../models/folder_stats.dart';
+import '../models/home_sort.dart';
 import '../services/credentials.dart';
 import '../services/folder_grouping.dart';
 import '../services/fetch_run.dart';
@@ -44,8 +45,6 @@ import '../widgets/ra_image.dart';
 import '../widgets/require_credentials.dart';
 import 'playlist_view.dart';
 import 'scan_health_screen.dart';
-
-enum _HomeSort { alphabetical, size, fileCount, system }
 
 /// Set by the setup wizard to ask for a full first sweep, and cleared by
 /// whichever [HomeScreen] takes it.
@@ -84,44 +83,32 @@ class _HomeScreenState extends State<HomeScreen> {
   // Resolved RA console id per subfolder path, used to pick its picture.
   final Map<String, int?> _folderConsoleIds = {};
 
-  _HomeSort _homeSort = _HomeSort.alphabetical;
+  HomeSort _homeSort = HomeSort.alphabetical;
   bool get _combineSystems => combineSystemsListenable.value;
   NameMode get _nameMode => nameModeListenable.value;
 
-  // Folders whose directory is gone keep their card until the next re-listing,
-  // showing stats for something that isn't there; the library already knows
-  // which those are. A folder we have counted and found empty is hidden too:
-  // no stats yet (null) means "not listed", not "empty", so it stays. Scans
-  // still walk `_subfolders`, so a folder that gains ROMs comes back.
+  // The grid mirrors Library.summaries(), the single source of truth for which
+  // systems exist: a folder shows only when it's a non-empty system there (a
+  // positive stat). Ignored, missing, out-of-root, and empty systems are all
+  // dropped by summaries, so they never get a stat and never show. Scans still
+  // walk `_subfolders` (the raw disk list), so a folder that gains ROMs comes
+  // back on the next stats load.
   List<Directory> get _presentSubfolders => [
         for (final d in _subfolders)
-          if (!_lib.isSystemMissing(d.path) && _stats[d.path]?.totalGames != 0)
-            d
+          if ((_stats[d.path]?.totalGames ?? 0) > 0) d
       ];
 
   List<Directory> get _sortedSubfolders {
     final list = List<Directory>.from(_presentSubfolders);
-    switch (_homeSort) {
-      case _HomeSort.alphabetical:
-        list.sort((a, b) => p.basename(a.path)
-            .toLowerCase()
-            .compareTo(p.basename(b.path).toLowerCase()));
-      case _HomeSort.size:
-        list.sort((a, b) => (_stats[b.path]?.totalSizeBytes ?? 0)
-            .compareTo(_stats[a.path]?.totalSizeBytes ?? 0));
-      case _HomeSort.fileCount:
-        list.sort((a, b) => (_stats[b.path]?.totalGames ?? 0)
-            .compareTo(_stats[a.path]?.totalGames ?? 0));
-      case _HomeSort.system:
-        list.sort((a, b) {
-          final ka = ConsoleMap.manufacturerSortKey(_folderConsoleIds[a.path]);
-          final kb = ConsoleMap.manufacturerSortKey(_folderConsoleIds[b.path]);
-          if (ka != kb) return ka.compareTo(kb);
-          return p.basename(a.path)
-              .toLowerCase()
-              .compareTo(p.basename(b.path).toLowerCase());
-        });
-    }
+    list.sort((a, b) => compareByHomeSort(
+          a,
+          b,
+          sort: _homeSort,
+          name: (d) => p.basename(d.path),
+          sizeBytes: (d) => _stats[d.path]?.totalSizeBytes ?? 0,
+          gameCount: (d) => _stats[d.path]?.totalGames ?? 0,
+          consoleId: (d) => _folderConsoleIds[d.path],
+        ));
     return list;
   }
 
@@ -145,23 +132,15 @@ class _HomeScreenState extends State<HomeScreen> {
       return (group: g, agg: agg, label: label);
     }).toList();
 
-    switch (_homeSort) {
-      case _HomeSort.alphabetical:
-        entries.sort(
-            (a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
-      case _HomeSort.size:
-        entries.sort(
-            (a, b) => b.agg.totalSizeBytes.compareTo(a.agg.totalSizeBytes));
-      case _HomeSort.fileCount:
-        entries.sort((a, b) => b.agg.totalGames.compareTo(a.agg.totalGames));
-      case _HomeSort.system:
-        entries.sort((a, b) {
-          final ka = ConsoleMap.manufacturerSortKey(a.group.consoleId);
-          final kb = ConsoleMap.manufacturerSortKey(b.group.consoleId);
-          if (ka != kb) return ka.compareTo(kb);
-          return a.label.toLowerCase().compareTo(b.label.toLowerCase());
-        });
-    }
+    entries.sort((a, b) => compareByHomeSort(
+          a,
+          b,
+          sort: _homeSort,
+          name: (e) => e.label,
+          sizeBytes: (e) => e.agg.totalSizeBytes,
+          gameCount: (e) => e.agg.totalGames,
+          consoleId: (e) => e.group.consoleId,
+        ));
     return entries;
   }
 
@@ -393,7 +372,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadHomeSortPref() async {
     final prefs = await SharedPreferences.getInstance();
-    final v = _HomeSort.values.asNameMap()[prefs.getString(PrefKeys.homeSort)];
+    final v = HomeSort.values.asNameMap()[prefs.getString(PrefKeys.homeSort)];
     if (v != null && mounted) setState(() => _homeSort = v);
   }
 
@@ -418,8 +397,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final path =
           await RaService(username: username, apiKey: apiKey).getUserPicPath();
       final version = DateTime.now().millisecondsSinceEpoch;
-      await DefaultCacheManager()
-          .downloadFile(raAvatarUrl(path, version: version));
+      await raCacheManager.downloadFile(raAvatarUrl(path, version: version));
       await prefs.setString(PrefKeys.raAvatarPath, path);
       await prefs.setInt(PrefKeys.raAvatarVersion, version);
       // Tell any mounted FetchFab to re-read; it cached the old prefs when it
@@ -932,6 +910,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return total;
   }
 
+  // Phone held sideways: show the shortcuts as chips (like portrait) and a
+  // tighter system grid, rather than the desktop's big leading cards.
+  bool _isLandscapePhone() => context.isLandscapePhone;
+
   @override
   Widget build(BuildContext context) {
     final grid = _combineSystems ? _buildCombinedGrid() : _buildSubfolderGrid();
@@ -948,15 +930,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     onPlaylistChanged: _refreshPlaylists,
                     idleActions: _idleActions(),
                     idleTrailing: [_buildSortButton()],
+                    onOpenFolder: _openSubfolder,
                     child: grid,
                   ),
           ),
         ],
       ),
-      // Scanning and fetching are library maintenance; gaming mode browses
-      // what is already there.
-      floatingActionButton:
-          _rootPath == null || gamingMode ? null : _buildSyncControls(),
+      // The scan/sync button is always available on the Library tab, including
+      // before a folder is picked and in Play mode.
+      floatingActionButton: _buildSyncControls(),
     );
   }
 
@@ -967,13 +949,14 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: EdgeInsets.zero,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
-    final narrow = MediaQuery.sizeOf(context).width < 600;
+    final narrow = MediaQuery.sizeOf(context).width < kBreakCompact;
+    final landscape = _isLandscapePhone();
     return [
-      // On phones the shortcuts live here as buttons instead of eating the top
-      // of the list, so the systems stay in reach.
-      if (narrow) ..._shortcutChips(),
+      // On phones (portrait or landscape) the shortcuts live here as buttons
+      // instead of eating the grid, so the systems stay in reach.
+      if (narrow || landscape) ..._shortcutChips(),
       // Scan health is a desktop-sized report; phones don't get the button.
-      if (!narrow && !gamingMode)
+      if (!narrow && !landscape && !gamingMode)
         IconButton(
           style: style,
           icon: const Icon(Icons.health_and_safety_outlined),
@@ -1007,13 +990,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
   Widget _buildSortButton() {
-    const labels = {
-      _HomeSort.alphabetical: 'Name',
-      _HomeSort.size: 'Size',
-      _HomeSort.fileCount: 'Files',
-      _HomeSort.system: 'System',
-    };
-    return PopupMenuButton<_HomeSort>(
+    return PopupMenuButton<HomeSort>(
       tooltip: 'Sort folders',
       child: Container(
         height: 40,
@@ -1022,7 +999,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           const Icon(Icons.sort, size: 18),
           const SizedBox(width: 4),
-          Text(labels[_homeSort]!, style: const TextStyle(fontSize: 13)),
+          Text(homeSortLabel(_homeSort), style: const TextStyle(fontSize: 13)),
         ]),
       ),
       onSelected: (v) async {
@@ -1031,16 +1008,16 @@ class _HomeScreenState extends State<HomeScreen> {
         await prefs.setString(PrefKeys.homeSort, v.name);
       },
       itemBuilder: (_) => [
-        for (final entry in labels.entries)
-          PopupMenuItem<_HomeSort>(
-            value: entry.key,
+        for (final sort in HomeSort.values)
+          PopupMenuItem<HomeSort>(
+            value: sort,
             child: Row(children: [
-              if (_homeSort == entry.key) ...[
+              if (_homeSort == sort) ...[
                 const Icon(Icons.check, size: 16),
                 const SizedBox(width: 6),
               ] else
                 const SizedBox(width: 22),
-              Text(entry.value),
+              Text(homeSortLabel(sort)),
             ]),
           ),
       ],
@@ -1066,10 +1043,12 @@ class _HomeScreenState extends State<HomeScreen> {
   // [itemCount] folder entries. Phones get a one-column list of rows, anything
   // wider the flip-card grid; [itemBuilder] is told which to build.
   Widget _tiles(int itemCount, Widget Function(int i, bool narrow) itemBuilder) {
-    final narrow = MediaQuery.sizeOf(context).width < 600;
-    // Phones show the shortcuts as chips under the search bar instead.
+    final narrow = MediaQuery.sizeOf(context).width < kBreakCompact;
+    final landscape = _isLandscapePhone();
+    // Phones (portrait or landscape) show the shortcuts as chips under the
+    // search bar instead of as leading cards.
     final leading = <Widget>[
-      if (!narrow) ...[
+      if (!narrow && !landscape) ...[
         if (_subfolders.isNotEmpty) _buildAllGamesCard(narrow),
         for (final pl in _playlists) _buildPlaylistCard(pl, narrow),
       ],
@@ -1087,8 +1066,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     return GridView.builder(
       padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 260,
+      // Default (hardEdge) clip: a popped card still overlaps its neighbours,
+      // but clips at the viewport edge instead of painting over the search
+      // bar above it.
+      // Landscape phone gets a tighter grid so systems read slightly smaller.
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: landscape ? 200 : 260,
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
         childAspectRatio: 1.3,
@@ -1110,6 +1093,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!narrow) {
       return ConsoleCard(
         onTap: onTap,
+        focusScale: 1.05,
+        showRing: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisAlignment: MainAxisAlignment.center,

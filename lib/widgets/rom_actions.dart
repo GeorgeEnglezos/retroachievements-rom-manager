@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import '../services/ra_image_cache.dart';
 import 'package:path/path.dart' as p;
 import '../models/rom_result.dart';
 import '../services/android_emulators.dart';
@@ -14,6 +14,7 @@ import '../services/icon_service.dart';
 import '../services/library.dart';
 import '../services/log_service.dart';
 import 'confirm_recycle_dialog.dart';
+import 'positioned_menu.dart';
 import 'ra_image.dart';
 import '../services/emulator_store.dart';
 import '../services/scan_settings.dart';
@@ -77,15 +78,8 @@ class RomActions {
   List<String> get _paths => groupPaths ?? [rom.filePath];
 
   Future<void> showContextMenu(BuildContext context, Offset position) async {
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final canOpenRa = rom.status == RomStatus.supported && rom.gameId != null;
-    final choice = await showMenu<String>(
-      context: context,
-      position: RelativeRect.fromRect(
-        position & const Size(40, 40),
-        Offset.zero & overlay.size,
-      ),
-      items: [
+    final choice = await showPositionedMenu<String>(context, position, [
         // Beta: only a handful of emulators have been tested end to end.
         _item('play', Icons.play_arrow, 'Play (beta)'),
         if (Platform.isWindows)
@@ -365,7 +359,7 @@ class RomActions {
     final art = rom.thumbArt;
     if (art != null) {
       try {
-        return await DefaultCacheManager().getSingleFile(raImageUrl(art));
+        return await raCacheManager.getSingleFile(raImageUrl(art));
       } catch (_) {
         return null;
       }

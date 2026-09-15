@@ -24,6 +24,28 @@ RaAward raAwardFromKind(String? kind) => switch (kind) {
 RaAward raAwardByName(String? name) =>
     RaAward.values.firstWhere((a) => a.name == name, orElse: () => RaAward.none);
 
+/// Recovers a "beaten" tier from typed achievements when RA's own award field is
+/// empty. RA's per-game endpoint (GetGameInfoAndUserProgress) sometimes omits a
+/// beaten award that the completion endpoint reports, so a truly-beaten game can
+/// otherwise read as unbeaten forever. The beaten rule is well defined: every
+/// progression achievement earned plus at least one win condition; hardcore only
+/// if every one of those was earned in hardcore.
+///
+/// [fromApi] is returned untouched unless it is [RaAward.none] and the set is
+/// provably beaten, so an explicit RA award (including higher tiers) always wins,
+/// and an untyped set (no win condition) falls through unchanged.
+RaAward deriveBeatenAward(List<Achievement> achievements, RaAward fromApi) {
+  if (fromApi != RaAward.none) return fromApi;
+  final progression = achievements.where((a) => a.type == 'progression');
+  final winConditions = achievements.where((a) => a.type == 'win_condition');
+  if (winConditions.isEmpty) return fromApi; // Untyped set: nothing to derive.
+  if (!progression.every((a) => a.dateEarned != null)) return fromApi;
+  if (!winConditions.any((a) => a.dateEarned != null)) return fromApi;
+  final allHardcore = progression.every((a) => a.dateEarnedHardcore != null) &&
+      winConditions.any((a) => a.dateEarnedHardcore != null);
+  return allHardcore ? RaAward.beatenHardcore : RaAward.beatenSoftcore;
+}
+
 class Achievement {
   final int id;
   final String title;
@@ -229,6 +251,55 @@ class CompletedGame {
       );
 }
 
+/// One recently earned achievement from `API_GetUserRecentAchievements`, newest
+/// first. Feeds the unlock-history panel shown on Home in every UX mode.
+class RecentUnlock {
+  final String title; // achievement name
+  final String description; // what the achievement is for
+  final String gameTitle;
+  final String badgeName; // RA badge id; art at media/Badge/<id>.png
+  final int points;
+  final bool hardcore;
+  final DateTime? date;
+
+  const RecentUnlock({
+    required this.title,
+    this.description = '',
+    required this.gameTitle,
+    required this.badgeName,
+    required this.points,
+    required this.hardcore,
+    required this.date,
+  });
+
+  /// Full badge art URL. Badges live on the media host, not under the site path.
+  String get badgeUrl =>
+      'https://media.retroachievements.org/Badge/$badgeName.png';
+
+  factory RecentUnlock.fromJson(Map<String, dynamic> j) => RecentUnlock(
+        title: j['Title'] as String? ?? '',
+        description: j['Description'] as String? ?? '',
+        gameTitle: j['GameTitle'] as String? ?? '',
+        badgeName: j['BadgeName'] as String? ?? '',
+        points: (j['Points'] as num?)?.toInt() ?? 0,
+        hardcore: ((j['HardcoreMode'] as num?)?.toInt() ?? 0) == 1,
+        date: (j['Date'] as String?)?.isNotEmpty ?? false
+            ? DateTime.tryParse(j['Date'] as String)
+            : null,
+      );
+
+  /// RA's field names, so a cached blob round-trips back through [fromJson].
+  Map<String, dynamic> toJson() => {
+        'Title': title,
+        'Description': description,
+        'GameTitle': gameTitle,
+        'BadgeName': badgeName,
+        'Points': points,
+        'HardcoreMode': hardcore ? 1 : 0,
+        'Date': date?.toIso8601String() ?? '',
+      };
+}
+
 /// One game from `API_GetGameList`: enough for offline matching + basic rows.
 class RaGameListEntry {
   final int gameId;
@@ -408,6 +479,48 @@ class RaService {
     return all;
   }
 
+  /// Every achievement the user earned between [from] and [to], as RA returns
+  /// them (oldest first). Unlike the recent-minutes feed, this reaches back
+  /// years, so it can surface a player's latest unlocks even when they last
+  /// played months ago. Backs the Home unlock-history panel.
+  Future<List<RecentUnlock>> getAchievementsEarnedBetween({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final uri = Uri.https(
+      'retroachievements.org',
+      '/API/API_GetAchievementsEarnedBetween.php',
+      {
+        'z': username,
+        'y': apiKey,
+        'u': username,
+        'f': '${from.millisecondsSinceEpoch ~/ 1000}',
+        't': '${to.millisecondsSinceEpoch ~/ 1000}',
+      },
+    );
+    final response = await _get(uri, timeout: _listTimeout);
+    if (response.statusCode != 200) {
+      final body = response.body.length > 300
+          ? response.body.substring(0, 300)
+          : response.body;
+      LogService.error('RaService/getAchievementsEarnedBetween',
+          'HTTP ${response.statusCode}: $body');
+      throw Exception('HTTP ${response.statusCode}');
+    }
+    final unlocks = parseRecentAchievements(jsonDecode(response.body));
+    LogService.debug('RaService/getAchievementsEarnedBetween',
+        'returned ${unlocks.length} unlocks (${response.body.length}B)');
+    return unlocks;
+  }
+
+  static List<RecentUnlock> parseRecentAchievements(dynamic results) {
+    if (results is! List) return const [];
+    return [
+      for (final r in results)
+        if (r is Map) RecentUnlock.fromJson(Map<String, dynamic>.from(r)),
+    ];
+  }
+
   static List<CompletedGame> parseCompletionProgress(
       Map<String, dynamic> data) {
     final results = data['Results'];
@@ -537,7 +650,10 @@ class RaService {
       earnedAchievements: earnedCasual,
       earnedHardcore: earnedHardcore,
       lastPlayed: lastPlayed,
-      highestAward: raAwardFromKind(data['HighestAwardKind'] as String?),
+      // Fall back to a derived beaten tier when RA's field is empty; this
+      // endpoint under-reports beaten awards the completion sweep records.
+      highestAward: deriveBeatenAward(
+          achievementsList, raAwardFromKind(data['HighestAwardKind'] as String?)),
       highestAwardDate: (data['HighestAwardDate'] as String?)?.isNotEmpty ?? false
           ? DateTime.tryParse(data['HighestAwardDate'] as String)
           : null,

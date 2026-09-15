@@ -209,7 +209,7 @@ class _CullDeckState extends State<CullDeck> {
                     // readout all get room; phones keep the single-cover card,
                     // where the cap is wider than the screen anyway.
                     constraints: BoxConstraints(
-                        maxWidth: MediaQuery.sizeOf(context).width >= 900
+                        maxWidth: MediaQuery.sizeOf(context).width >= kBreakWide
                             ? 1320
                             : 520),
                     child: Stack(
@@ -266,7 +266,7 @@ class _CullDeckState extends State<CullDeck> {
         decoration: BoxDecoration(color: color, borderRadius: ui.roundLg),
         alignment: align,
         padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Icon(icon, color: ui.navSelectedFg, size: 36),
+        child: Icon(icon, color: kOnScrim, size: 36),
       );
 
   // Desktop/mouse path for the two swipe verdicts, with favorite (which also

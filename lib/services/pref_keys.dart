@@ -35,9 +35,13 @@ abstract final class PrefKeys {
   static const folderSort = 'folder_sort';
   static const folderSortAsc = 'folder_sort_asc';
   static const folderGridView = 'folder_grid_view';
+  // Grid tile size (max cross-axis extent, px) for the folder game grid.
+  static const folderGridSize = 'folder_grid_size';
   static const cleanupMode = 'cleanup_mode';
   // Play-mode listing settings, one JSON blob (see play_view.dart).
   static const playView = 'play_view';
-  // Home dashboard section layout on phones (DashboardLayout.name).
-  static const dashboardLayout = 'dashboard_layout';
+
+  // Games dismissed from Home's mastery/beat spotlight banners (owned by
+  // ignored_candidates.dart), a list of member keys.
+  static const homeIgnoredSpotlights = 'home_ignored_spotlights';
 }

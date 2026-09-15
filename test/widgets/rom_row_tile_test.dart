@@ -9,11 +9,14 @@ import 'package:rarm/models/rom_row.dart';
 import 'package:rarm/models/scraped_game.dart';
 import 'package:rarm/services/app_mode.dart';
 import 'package:rarm/services/play_view.dart';
+import 'package:rarm/services/member_key.dart';
 import 'package:rarm/services/playlist_store.dart';
 import 'package:rarm/services/scraper/scraped_store.dart';
 import 'package:rarm/services/storage_treemap.dart' show TreemapItem;
+import 'package:rarm/theme/ui_tokens.dart';
 import 'package:rarm/widgets/rom_row_tile.dart';
 import 'package:rarm/widgets/row_display.dart';
+import 'package:rarm/widgets/ui/ui_progress_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/fixtures.dart';
@@ -112,8 +115,8 @@ void main() {
 
     testWidgets('chip strip wraps instead of overflowing on a narrow row',
         (tester) async {
-      // Many chips (region + several language tags + a hack tag + ACH badge) on
-      // a narrow mobile-width row used to overflow the subtitle Row.
+      // Many chips (region + several language tags + a hack tag) on a narrow
+      // mobile-width row used to overflow the subtitle Row.
       final r = RomResult(
         filePath: 'snes/game.zip',
         fileName: 'Game (Europe) (En,Fr,De,Es,It,Pt) [Hack].zip',
@@ -287,6 +290,64 @@ void main() {
       await tester.pumpWidget(hostRom(named()));
       expect(find.text('Super Mario World'), findsNothing);
       expect(find.text('smw.sfc'), findsOneWidget);
+    });
+  });
+
+  group('progress bar colour', () {
+    RomResult inProgress(String path) =>
+        RomResult(filePath: path, fileName: 'ff.sfc')
+          ..status = RomStatus.supported
+          ..achievementCount = 10
+          ..earnedAchievements = 4;
+
+    UiProgressBar barOf(WidgetTester tester) =>
+        tester.widget<UiProgressBar>(find.byType(UiProgressBar));
+
+    testWidgets('a normal row keeps its award colour', (tester) async {
+      PlaylistStore().resetForTest();
+      await tester.pumpWidget(hostRom(inProgress('C:\\roms\\snes\\plain.sfc')));
+      await tester.pump();
+      // In-progress, no award -> the supported hue, not the favorite ink.
+      expect(barOf(tester).color, UiTokens.standard.supported);
+    });
+
+    testWidgets('a favorite row flips the bar to favoriteInk', (tester) async {
+      final store = PlaylistStore()..resetForTest();
+      final r = inProgress('C:\\roms\\snes\\fav.sfc');
+      await store.toggleMember(
+          favoritesId, memberKeyFor(gameId: r.gameId, filePath: r.filePath));
+      await tester.pumpWidget(hostRom(r));
+      await tester.pump();
+      expect(barOf(tester).color, UiTokens.standard.favoriteInk);
+    });
+  });
+
+  group('progress bar on small screens', () {
+    RomResult inProgress() => RomResult(filePath: 'C:\\r\\g.sfc', fileName: 'g.sfc')
+      ..status = RomStatus.supported
+      ..achievementCount = 10
+      ..earnedAchievements = 4;
+
+    testWidgets('a phone-sized screen drops the per-row bar', (tester) async {
+      // shortestSide 400 < 600 -> no bar; the earned/total read stays.
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(hostRom(inProgress()));
+      await tester.pump();
+      expect(find.byType(UiProgressBar), findsNothing);
+      expect(find.text('4/10'), findsOneWidget);
+    });
+
+    testWidgets('a larger screen keeps the bar', (tester) async {
+      tester.view.physicalSize = const Size(800, 700);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(hostRom(inProgress()));
+      await tester.pump();
+      expect(find.byType(UiProgressBar), findsOneWidget);
     });
   });
 }

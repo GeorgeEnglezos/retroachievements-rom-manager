@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rarm/services/app_theme.dart';
 import 'package:rarm/theme/ui_tokens.dart';
 
 import 'support/contrast.dart';
 
 void main() {
-  test('neither palette draws offset shadows', () {
-    for (final ui in [UiTokens.light, UiTokens.dark]) {
+  // Every shipped theme, keyed by its picker label, so a new AppTheme case is
+  // held to the same geometry and WCAG invariants without editing this file.
+  final palettes = {for (final t in AppTheme.values) t.label: t.tokens};
+
+  test('no palette draws offset shadows', () {
+    for (final ui in palettes.values) {
       expect(ui.cardShadow, Offset.zero);
       expect(ui.controlShadow, Offset.zero);
       expect(ui.shadow(), isEmpty);
@@ -14,8 +19,8 @@ void main() {
     }
   });
 
-  test('both palettes share the rounded, hairline geometry', () {
-    for (final ui in [UiTokens.light, UiTokens.dark]) {
+  test('every palette shares the rounded, hairline geometry', () {
+    for (final ui in palettes.values) {
       expect(ui.borderWidth, 1);
       expect(ui.radius, 16);
       expect(ui.roundSm, BorderRadius.circular(10));
@@ -25,7 +30,7 @@ void main() {
   });
 
   test('accents expose five distinct hues per palette', () {
-    for (final ui in [UiTokens.light, UiTokens.dark]) {
+    for (final ui in palettes.values) {
       expect(ui.accents, hasLength(5));
       expect(ui.accents.toSet(), hasLength(5));
     }
@@ -46,10 +51,7 @@ void main() {
   // Contrast is asserted as a ratio, never as a hex, so retuning a palette
   // stays free as long as it stays legible. WCAG 2.1 asks 4.5:1 for body text
   // and 3:1 for the boundary of a UI component (1.4.11).
-  for (final (name, ui) in [
-    ('light', UiTokens.light),
-    ('dark', UiTokens.dark),
-  ]) {
+  palettes.forEach((name, ui) {
     test('$name ink clears AA on both grounds', () {
       final inks = {
         'text': ui.text,
@@ -88,7 +90,7 @@ void main() {
         reason: '$name border on surface',
       );
     });
-  }
+  });
 
   test('on-scrim inks clear AA against the scrim', () {
     // The scrim is theme-independent, so palette ink cannot be used on it:

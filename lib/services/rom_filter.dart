@@ -1,5 +1,8 @@
+import '../models/folder_sort.dart';
+import '../models/folder_stats.dart' show achievementFraction, kNearMasteryRatio;
 import '../models/rom_result.dart';
 import '../models/rom_tags.dart';
+import 'cleanup_score.dart';
 import 'member_key.dart';
 
 enum ProgressState { notStarted, started, nearComplete, mastered }
@@ -32,9 +35,56 @@ List<RomResult> visibleRoms(List<RomResult> roms, RomFilter filter,
   }).toList();
 }
 
-/// At or above this earned/total ratio (but not yet mastered) a game counts as
-/// "near complete": the quickest mastery candidates.
-const _nearCompleteRatio = 0.8;
+/// Sorts [roms] for the folder list, returning a new list. [hot] overrides
+/// [sort] and [ascending], ranking by casual player count (most popular first).
+/// Null keys always sink to the bottom regardless of direction.
+List<RomResult> sortRoms(
+  List<RomResult> roms, {
+  required FolderSort sort,
+  required bool ascending,
+  required bool hot,
+  required CleanupScoreMode cleanupMode,
+}) {
+  final list = [...roms];
+  if (hot) {
+    list.sort((a, b) =>
+        (b.numPlayersCasual ?? 0).compareTo(a.numPlayersCasual ?? 0));
+    return list;
+  }
+  final dir = ascending ? 1 : -1;
+  switch (sort) {
+    case FolderSort.alphabetical:
+      list.sort((a, b) =>
+          dir * a.fileName.toLowerCase().compareTo(b.fileName.toLowerCase()));
+    case FolderSort.achievementCount:
+      list.sort(
+          (a, b) => _nullsLast(a.achievementCount, b.achievementCount, dir));
+    case FolderSort.points:
+      list.sort((a, b) => _nullsLast(a.points, b.points, dir));
+    case FolderSort.progress:
+      double? ratio(RomResult r) => (r.achievementCount ?? 0) > 0
+          ? (r.earnedAchievements ?? 0) / r.achievementCount!
+          : null;
+      list.sort((a, b) => _nullsLast(ratio(a), ratio(b), dir));
+    case FolderSort.lastPlayed:
+      list.sort((a, b) => _nullsLast(a.lastPlayed, b.lastPlayed, dir));
+    case FolderSort.cleanup:
+      double? cleanup(RomResult r) => cleanupScore(
+            players: r.numPlayersCasual ?? 0,
+            setCreated: r.setCreated,
+            mode: cleanupMode,
+          );
+      list.sort((a, b) => _nullsLast(cleanup(a), cleanup(b), dir));
+  }
+  return list;
+}
+
+int _nullsLast<T extends Comparable<Object>>(T? a, T? b, int dir) {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  return dir * a.compareTo(b);
+}
 
 /// A game counts as "recently played" if RA last-played is within this window.
 const _recentlyPlayedWindow = Duration(days: 90);
@@ -121,7 +171,7 @@ class RomFilter {
           ? ProgressState.mastered
           : earned == 0
               ? ProgressState.notStarted
-              : earned / total >= _nearCompleteRatio
+              : achievementFraction(earned, total) >= kNearMasteryRatio
                   ? ProgressState.nearComplete
                   : ProgressState.started;
       if (!progressStates.contains(state)) return false;

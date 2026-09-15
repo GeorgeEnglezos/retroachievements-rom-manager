@@ -195,6 +195,82 @@ void main() {
       final (_, progress) = parseHelper(response());
       expect(progress.highestAward, RaAward.none);
     });
+
+    // Regression: RA's per-game endpoint returned an empty HighestAwardKind for
+    // a beaten game (all progression + a win condition earned), so it read as
+    // unbeaten. The award must be recovered from the achievements instead.
+    test('derives beaten-softcore when RA omits the award', () {
+      final (_, progress) = parseHelper(response(
+        achievements: {
+          '1': {
+            'ID': 1,
+            'Type': 'progression',
+            'DateEarned': '2026-05-01 10:00:00',
+            'DateEarnedHardcore': null, // softcore-only -> not hardcore beaten
+          },
+          '2': {
+            'ID': 2,
+            'Type': 'win_condition',
+            'DateEarned': '2026-05-02 10:00:00',
+            'DateEarnedHardcore': '2026-05-02 10:00:00',
+          },
+        },
+      ));
+      expect(progress.highestAward, RaAward.beatenSoftcore);
+    });
+
+    test('derives beaten-hardcore when every requirement is hardcore', () {
+      final (_, progress) = parseHelper(response(
+        achievements: {
+          '1': {
+            'ID': 1,
+            'Type': 'progression',
+            'DateEarned': '2026-05-01 10:00:00',
+            'DateEarnedHardcore': '2026-05-01 10:00:00',
+          },
+          '2': {
+            'ID': 2,
+            'Type': 'win_condition',
+            'DateEarned': '2026-05-02 10:00:00',
+            'DateEarnedHardcore': '2026-05-02 10:00:00',
+          },
+        },
+      ));
+      expect(progress.highestAward, RaAward.beatenHardcore);
+    });
+
+    test('does not derive beaten when a progression is unearned', () {
+      final (_, progress) = parseHelper(response(
+        achievements: {
+          '1': {'ID': 1, 'Type': 'progression', 'DateEarned': null},
+          '2': {
+            'ID': 2,
+            'Type': 'win_condition',
+            'DateEarned': '2026-05-02 10:00:00',
+          },
+        },
+      ));
+      expect(progress.highestAward, RaAward.none);
+    });
+
+    test('an explicit RA award is never downgraded by derivation', () {
+      final data = response(
+        achievements: {
+          '1': {
+            'ID': 1,
+            'Type': 'progression',
+            'DateEarned': '2026-05-01 10:00:00',
+          },
+          '2': {
+            'ID': 2,
+            'Type': 'win_condition',
+            'DateEarned': '2026-05-02 10:00:00',
+          },
+        },
+      )..['HighestAwardKind'] = 'mastered';
+      final (_, progress) = parseHelper(data);
+      expect(progress.highestAward, RaAward.mastered);
+    });
   });
 
   group('Achievement.fromJson', () {
@@ -373,6 +449,46 @@ void main() {
       final g = RaService.parseCompletionProgress(payload()).single;
       expect(g.highestAward, RaAward.none);
       expect(g.highestAwardDate, isNull);
+    });
+  });
+
+  group('parseRecentAchievements', () {
+    List<dynamic> sample() => [
+          {
+            'Title': 'First Blood',
+            'Description': 'Kill the first demon',
+            'GameTitle': 'Doom',
+            'BadgeName': '12345',
+            'Points': 10,
+            'HardcoreMode': 1,
+            'Date': '2026-05-03 12:00:00',
+          },
+        ];
+
+    test('maps fields, hardcore flag, date and badge url', () {
+      final u = RaService.parseRecentAchievements(sample()).single;
+      expect(u.title, 'First Blood');
+      expect(u.description, 'Kill the first demon');
+      expect(u.gameTitle, 'Doom');
+      expect(u.points, 10);
+      expect(u.hardcore, isTrue);
+      expect(u.date, DateTime.parse('2026-05-03 12:00:00'));
+      expect(u.badgeUrl,
+          'https://media.retroachievements.org/Badge/12345.png');
+    });
+
+    test('softcore flag and missing date parse safely', () {
+      final data = sample();
+      (data.first as Map)
+        ..['HardcoreMode'] = 0
+        ..remove('Date');
+      final u = RaService.parseRecentAchievements(data).single;
+      expect(u.hardcore, isFalse);
+      expect(u.date, isNull);
+    });
+
+    test('a non-list payload yields no unlocks', () {
+      expect(RaService.parseRecentAchievements(<String, dynamic>{}), isEmpty);
     });
   });
 

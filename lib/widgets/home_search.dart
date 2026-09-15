@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../models/home_index.dart';
 import '../models/rom_group.dart';
 import '../models/rom_row.dart';
+import '../services/console_map.dart';
 import '../services/game_lookup.dart';
 import '../services/library.dart';
 import '../services/log_service.dart';
@@ -12,6 +14,7 @@ import '../services/ra_service.dart';
 import '../services/scan_settings.dart';
 import '../services/scraper/scraped_store.dart';
 import '../services/search_service.dart';
+import '../theme/ui_tokens.dart';
 import 'game_detail_dialog.dart';
 import 'require_credentials.dart';
 import 'rom_list_view.dart';
@@ -31,6 +34,10 @@ class HomeSearch extends StatefulWidget {
   /// Injectable for tests; the app always searches the shared library.
   final Library? library;
 
+  /// Opens the system folder at the given path. When null, folder results are
+  /// not shown (nothing could open them).
+  final void Function(String systemPath)? onOpenFolder;
+
   const HomeSearch({
     super.key,
     required this.store,
@@ -39,6 +46,7 @@ class HomeSearch extends StatefulWidget {
     this.idleTrailing = const [],
     required this.child,
     this.library,
+    this.onOpenFolder,
   });
 
   @override
@@ -53,6 +61,7 @@ class _HomeSearchState extends State<HomeSearch> {
   final List<String> _excludeTerms = [];
   bool _searchSectioned = true;
   List<SearchHit> _searchHits = [];
+  List<SystemSummary> _folderHits = [];
   bool _searchPending = false;
   Timer? _debounceTimer;
 
@@ -72,6 +81,7 @@ class _HomeSearchState extends State<HomeSearch> {
         _excludeTerms.clear();
         _excludeController.clear();
         _searchHits = [];
+        _folderHits = [];
         _searchPending = false;
       } else {
         _searchPending = true;
@@ -99,15 +109,20 @@ class _HomeSearchState extends State<HomeSearch> {
 
   Future<void> _runSearch(String query) async {
     final rows = await _lib.searchIndex();
+    // Only bother resolving folder matches when a tap can actually open them.
+    final systems =
+        widget.onOpenFolder == null ? const <SystemSummary>[] : await _lib.summaries();
     if (query != _searchQuery || !mounted) return;
     final hits = buildSearchHits(
       rows,
       query,
       excludeTerms: List<String>.from(_excludeTerms),
     );
+    final folders = matchFolders(systems, query);
     if (mounted && query == _searchQuery) {
       setState(() {
         _searchHits = hits;
+        _folderHits = folders;
         _searchPending = false;
       });
     }
@@ -198,7 +213,7 @@ class _HomeSearchState extends State<HomeSearch> {
     final trailing =
         _searchQuery.isNotEmpty ? const <Widget>[] : widget.idleTrailing;
     // Narrow: full-width field, actions below. Wide: centered 60% row.
-    final wide = MediaQuery.sizeOf(context).width >= 600;
+    final wide = MediaQuery.sizeOf(context).width >= kBreakCompact;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
       child: wide
@@ -261,8 +276,12 @@ class _HomeSearchState extends State<HomeSearch> {
     if (_searchPending) {
       return const Center(child: CircularProgressIndicator());
     }
+    if (_searchHits.isEmpty && _folderHits.isEmpty) {
+      return Center(child: Text('Nothing found for "$_searchQuery"'));
+    }
     if (_searchHits.isEmpty) {
-      return Center(child: Text('No ROMs found for "$_searchQuery"'));
+      // Folder matches only (e.g. an empty or unscanned system).
+      return ListView(children: _folderResultTiles());
     }
 
     List<RomGroup>? groups;
@@ -289,7 +308,7 @@ class _HomeSearchState extends State<HomeSearch> {
           .toList();
     }
 
-    return RomListView(
+    final romList = RomListView(
       key: ValueKey(_searchQuery),
       rows: rows,
       groups: groups,
@@ -305,7 +324,31 @@ class _HomeSearchState extends State<HomeSearch> {
       onRowExcluded: (r) => _removeFromSearch([r.filePath!]),
       onPlaylistChanged: widget.onPlaylistChanged,
     );
+    if (_folderHits.isEmpty) return romList;
+    // Folder matches ride above the ROM results as a short, tappable list.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ..._folderResultTiles(),
+        Expanded(child: romList),
+      ],
+    );
   }
+
+  // One tappable tile per matched system folder: the console (long) name over
+  // the folder (short) name, opening the folder on tap. ponytail: a plain
+  // (unscrolled) list; a query rarely matches more than a handful of systems.
+  List<Widget> _folderResultTiles() => [
+        for (final s in _folderHits)
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.folder_open),
+            title: Text(ConsoleMap.nameFor(s.consoleId) ?? s.name),
+            subtitle: Text('${s.name} · ${s.totalGames} '
+                '${s.totalGames == 1 ? 'game' : 'games'}'),
+            onTap: () => widget.onOpenFolder?.call(s.systemPath),
+          ),
+      ];
 
   // Drops rows from results AND the persisted index so removal sticks
   // across the next keystroke.

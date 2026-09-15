@@ -1,30 +1,13 @@
 import 'dart:typed_data';
 
-/// Minimal AES-128 (FIPS-197) with CBC, enough to reconstruct Wii partition
-/// data: decrypt a ticket's title key and encrypt disc clusters. Keys are 16
-/// bytes; blocks are 16 bytes. Not constant-time — fine for offline hashing,
-/// never use for secrets in a hostile timing context.
+/// Minimal AES-128 (FIPS-197) with CBC encryption, enough to reconstruct Wii
+/// partition clusters. Keys are 16 bytes; blocks are 16 bytes. Not constant-time,
+/// fine for offline hashing, never use for secrets in a hostile timing context.
 class Aes128 {
   final Uint8List _roundKeys; // 176 bytes = 11 round keys
 
   Aes128(Uint8List key) : _roundKeys = _expandKey(key) {
     if (key.length != 16) throw ArgumentError('AES-128 key must be 16 bytes');
-  }
-
-  /// CBC-decrypts [data] (a multiple of 16 bytes) with initial vector [iv].
-  Uint8List cbcDecrypt(Uint8List data, Uint8List iv) {
-    final out = Uint8List(data.length);
-    var prev = Uint8List.fromList(iv);
-    final block = Uint8List(16);
-    for (var off = 0; off < data.length; off += 16) {
-      block.setRange(0, 16, data, off);
-      final dec = _decryptBlock(block);
-      for (var i = 0; i < 16; i++) {
-        out[off + i] = dec[i] ^ prev[i];
-      }
-      prev = Uint8List.fromList(data.sublist(off, off + 16));
-    }
-    return out;
   }
 
   /// CBC-encrypts [data] (a multiple of 16 bytes) with initial vector [iv].
@@ -58,21 +41,6 @@ class Aes128 {
     return s;
   }
 
-  Uint8List _decryptBlock(Uint8List input) {
-    final s = Uint8List.fromList(input);
-    _addRoundKey(s, 10);
-    for (var round = 9; round >= 1; round--) {
-      _invShiftRows(s);
-      _subBytes(s, _invSbox);
-      _addRoundKey(s, round);
-      _invMixColumns(s);
-    }
-    _invShiftRows(s);
-    _subBytes(s, _invSbox);
-    _addRoundKey(s, 0);
-    return s;
-  }
-
   void _addRoundKey(Uint8List s, int round) {
     final base = round * 16;
     for (var i = 0; i < 16; i++) {
@@ -96,15 +64,6 @@ class Aes128 {
     }
   }
 
-  static void _invShiftRows(Uint8List s) {
-    final t = Uint8List.fromList(s);
-    for (var r = 1; r < 4; r++) {
-      for (var c = 0; c < 4; c++) {
-        s[r + 4 * c] = t[r + 4 * ((c - r + 4) % 4)];
-      }
-    }
-  }
-
   static void _mixColumns(Uint8List s) {
     for (var c = 0; c < 4; c++) {
       final i = 4 * c;
@@ -113,17 +72,6 @@ class Aes128 {
       s[i + 1] = a0 ^ _x2(a1) ^ _x3(a2) ^ a3;
       s[i + 2] = a0 ^ a1 ^ _x2(a2) ^ _x3(a3);
       s[i + 3] = _x3(a0) ^ a1 ^ a2 ^ _x2(a3);
-    }
-  }
-
-  static void _invMixColumns(Uint8List s) {
-    for (var c = 0; c < 4; c++) {
-      final i = 4 * c;
-      final a0 = s[i], a1 = s[i + 1], a2 = s[i + 2], a3 = s[i + 3];
-      s[i] = _mul(a0, 14) ^ _mul(a1, 11) ^ _mul(a2, 13) ^ _mul(a3, 9);
-      s[i + 1] = _mul(a0, 9) ^ _mul(a1, 14) ^ _mul(a2, 11) ^ _mul(a3, 13);
-      s[i + 2] = _mul(a0, 13) ^ _mul(a1, 9) ^ _mul(a2, 14) ^ _mul(a3, 11);
-      s[i + 3] = _mul(a0, 11) ^ _mul(a1, 13) ^ _mul(a2, 9) ^ _mul(a3, 14);
     }
   }
 
@@ -172,7 +120,6 @@ class Aes128 {
   }
 
   static final Uint8List _sbox = _buildSbox();
-  static final Uint8List _invSbox = _buildInvSbox();
 
   // Generates the AES S-box from first principles (inverse in GF(2^8) + affine),
   // so we don't hand-transcribe a 256-entry table.
@@ -197,14 +144,5 @@ class Aes128 {
       box[i] = s ^ 0x63;
     }
     return box;
-  }
-
-  static Uint8List _buildInvSbox() {
-    final sbox = _sbox;
-    final inv = Uint8List(256);
-    for (var i = 0; i < 256; i++) {
-      inv[sbox[i]] = i;
-    }
-    return inv;
   }
 }

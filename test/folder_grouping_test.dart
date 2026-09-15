@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rarm/models/folder_stats.dart';
+import 'package:rarm/models/home_sort.dart';
 import 'package:rarm/services/folder_grouping.dart';
 
 void main() {
@@ -69,6 +70,41 @@ void main() {
       final agg = aggregateFolderStats(7, []);
       expect(agg.totalGames, 0);
       expect(agg.lastScanned, isNull);
+    });
+  });
+
+  group('compareByHomeSort', () {
+    // All share console 3, so the system sort falls back to name.
+    final items = [
+      (name: 'Zelda', size: 100, games: 5, console: 3),
+      (name: 'Aardvark', size: 300, games: 1, console: 3),
+      (name: 'Mario', size: 200, games: 9, console: 3),
+    ];
+
+    List<String> sortedNames(HomeSort s) {
+      final list = [...items]..sort((a, b) => compareByHomeSort(
+            a,
+            b,
+            sort: s,
+            name: (i) => i.name,
+            sizeBytes: (i) => i.size,
+            gameCount: (i) => i.games,
+            consoleId: (i) => i.console,
+          ));
+      return [for (final i in list) i.name];
+    }
+
+    test('alphabetical sorts A-Z', () {
+      expect(sortedNames(HomeSort.alphabetical), ['Aardvark', 'Mario', 'Zelda']);
+    });
+    test('size sorts largest first', () {
+      expect(sortedNames(HomeSort.size), ['Aardvark', 'Mario', 'Zelda']);
+    });
+    test('fileCount sorts most games first', () {
+      expect(sortedNames(HomeSort.fileCount), ['Mario', 'Zelda', 'Aardvark']);
+    });
+    test('system falls back to name within one manufacturer', () {
+      expect(sortedNames(HomeSort.system), ['Aardvark', 'Mario', 'Zelda']);
     });
   });
 }
