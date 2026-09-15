@@ -33,6 +33,7 @@ Native RetroAchievements hashing via rcheevos + libchdr, exposed over FFI.
       '"$(PODS_TARGET_SRCROOT)/../src/vendor/rcheevos/include"',
       '"$(PODS_TARGET_SRCROOT)/../src/vendor/rcheevos/src/rhash"',
       '"$(PODS_TARGET_SRCROOT)/../src/vendor/libchdr/include"',
+      '"$(PODS_TARGET_SRCROOT)/../src/vendor/libchdr/deps/zstd-1.5.7"',
     ].join(' '),
   }
   # Vendored C (rcheevos / libchdr / codecs) is not warning-clean; never let a
