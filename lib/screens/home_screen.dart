@@ -4,7 +4,7 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import '../services/ra_image_cache.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/ui_tokens.dart';
 import '../models/fetch_plan.dart';
@@ -397,8 +397,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final path =
           await RaService(username: username, apiKey: apiKey).getUserPicPath();
       final version = DateTime.now().millisecondsSinceEpoch;
-      await DefaultCacheManager()
-          .downloadFile(raAvatarUrl(path, version: version));
+      await raCacheManager.downloadFile(raAvatarUrl(path, version: version));
       await prefs.setString(PrefKeys.raAvatarPath, path);
       await prefs.setInt(PrefKeys.raAvatarVersion, version);
       // Tell any mounted FetchFab to re-read; it cached the old prefs when it
@@ -913,12 +912,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Phone held sideways: show the shortcuts as chips (like portrait) and a
   // tighter system grid, rather than the desktop's big leading cards.
-  bool _isLandscapePhone() {
-    final size = MediaQuery.sizeOf(context);
-    return Theme.of(context).platform == TargetPlatform.android &&
-        size.shortestSide < 600 &&
-        size.width > size.height;
-  }
+  bool _isLandscapePhone() => context.isLandscapePhone;
 
   @override
   Widget build(BuildContext context) {
@@ -955,7 +949,7 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: EdgeInsets.zero,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
-    final narrow = MediaQuery.sizeOf(context).width < 600;
+    final narrow = MediaQuery.sizeOf(context).width < kBreakCompact;
     final landscape = _isLandscapePhone();
     return [
       // On phones (portrait or landscape) the shortcuts live here as buttons
@@ -1049,7 +1043,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // [itemCount] folder entries. Phones get a one-column list of rows, anything
   // wider the flip-card grid; [itemBuilder] is told which to build.
   Widget _tiles(int itemCount, Widget Function(int i, bool narrow) itemBuilder) {
-    final narrow = MediaQuery.sizeOf(context).width < 600;
+    final narrow = MediaQuery.sizeOf(context).width < kBreakCompact;
     final landscape = _isLandscapePhone();
     // Phones (portrait or landscape) show the shortcuts as chips under the
     // search bar instead of as leading cards.
@@ -1072,6 +1066,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     return GridView.builder(
       padding: const EdgeInsets.all(12),
+      // Default (hardEdge) clip: a popped card still overlaps its neighbours,
+      // but clips at the viewport edge instead of painting over the search
+      // bar above it.
       // Landscape phone gets a tighter grid so systems read slightly smaller.
       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: landscape ? 200 : 260,
@@ -1096,6 +1093,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!narrow) {
       return ConsoleCard(
         onTap: onTap,
+        focusScale: 1.05,
+        showRing: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisAlignment: MainAxisAlignment.center,

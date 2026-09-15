@@ -7,6 +7,7 @@ import '../../theme/ui_tokens.dart';
 import '../folder_card.dart' show ConsoleLogo;
 import '../rom_thumb.dart';
 import '../ui/console_card.dart';
+import '../ui/ui_card.dart';
 
 // The right panel lists a system's hottest few; the rest aren't worth a longer
 // scroll for a "what to play next" glance.
@@ -80,6 +81,7 @@ class _ConsoleBrowserState extends State<ConsoleBrowser> {
   Widget _grid() {
     return GridView.builder(
       padding: const EdgeInsets.all(16),
+      clipBehavior: Clip.none,
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 200,
         mainAxisExtent: 190,
@@ -112,9 +114,9 @@ class _ConsoleBrowserState extends State<ConsoleBrowser> {
   }
 }
 
-/// One console folder in the grid. Focusable (D-pad/keyboard) and clickable;
-/// Enter/A or a click selects it, drawing the accent ring the selection shows.
-class _ConsoleTile extends StatefulWidget {
+/// One console folder in the grid. Focusable (D-pad/keyboard) and clickable via
+/// [ConsoleCard]; selecting it highlights it with the theme accent.
+class _ConsoleTile extends StatelessWidget {
   final String name;
   final int? consoleId;
   // When set, shown instead of a console logo (the "All Consoles" tile).
@@ -133,57 +135,35 @@ class _ConsoleTile extends StatefulWidget {
   });
 
   @override
-  State<_ConsoleTile> createState() => _ConsoleTileState();
-}
-
-class _ConsoleTileState extends State<_ConsoleTile> {
-  bool _focused = false;
-
-  @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    final active = widget.selected || _focused;
-    return FocusableActionDetector(
-      onShowFocusHighlight: (f) => setState(() => _focused = f),
-      actions: {
-        ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: (_) {
-          widget.onSelect();
-          return null;
-        }),
-      },
-      child: Container(
-        // Transparent border always reserved so selecting never shifts layout.
-        decoration: BoxDecoration(
-          borderRadius: ui.roundLg,
-          border: Border.all(
-              color: active ? ui.accent : Colors.transparent, width: 3),
-        ),
-        child: ConsoleCard(
-          onTap: widget.onSelect,
-          padding: const EdgeInsets.all(12),
-          child: Builder(
-            builder: (context) => Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: widget.icon != null
-                      ? Icon(widget.icon, size: 56, color: ui.accent)
-                      : ConsoleLogo(consoleId: widget.consoleId),
-                ),
-                const SizedBox(height: 8),
-                Text(widget.name,
-                    maxLines: 1,
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text(
-                    '${widget.gameCount} '
-                    '${widget.gameCount == 1 ? 'game' : 'games'}',
-                    style: Theme.of(context).textTheme.bodySmall),
-              ],
+    return ConsoleCard(
+      onTap: onSelect,
+      borderColor: selected ? ui.accent : null,
+      padding: const EdgeInsets.all(12),
+      focusScale: 1.05,
+      showRing: false,
+      child: Builder(
+        builder: (context) => Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Expanded(
+              child: icon != null
+                  ? Icon(icon, size: 56, color: ui.accent)
+                  : ConsoleLogo(consoleId: consoleId),
             ),
-          ),
+            const SizedBox(height: 8),
+            Text(name,
+                maxLines: 1,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 2),
+            Text(
+                '$gameCount '
+                '${gameCount == 1 ? 'game' : 'games'}',
+                style: Theme.of(context).textTheme.bodySmall),
+          ],
         ),
       ),
     );
@@ -221,7 +201,6 @@ class _GamesPanel extends StatelessWidget {
 }
 
 /// One game in the right-hand list: cover thumbnail, RA title, player count.
-/// [InkWell] gives click, keyboard (Enter) and controller (A) activation.
 class _GameRow extends StatelessWidget {
   final RomResult rom;
   final void Function(RomResult rom) onOpen;
@@ -232,37 +211,41 @@ class _GameRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final ui = context.ui;
     final players = rom.numPlayersCasual ?? 0;
-    return InkWell(
-      onTap: () => onOpen(rom),
-      borderRadius: ui.roundMd,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 48,
-              height: 48,
-              child: RomThumb(rom: rom, size: 48, raArt: rom.thumbArt),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    rom.gameTitle ?? rom.fileName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  if (players > 0)
-                    Text('${compactCount(players)} players',
-                        style: TextStyle(fontSize: 12, color: ui.muted)),
-                ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      child: UiCard(
+        padding: EdgeInsets.zero,
+        flourish: FocusFlourish.jump,
+        onTap: () => onOpen(rom),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 48,
+                height: 48,
+                child: RomThumb(rom: rom, size: 48, raArt: rom.thumbArt),
               ),
-            ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      rom.gameTitle ?? rom.fileName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    if (players > 0)
+                      Text('${compactCount(players)} players',
+                          style: TextStyle(fontSize: 12, color: ui.muted)),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

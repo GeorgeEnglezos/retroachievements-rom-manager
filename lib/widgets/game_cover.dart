@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/folder_stats.dart' show achievementFraction;
 import '../models/rom_result.dart';
 import '../services/play_view.dart';
 import '../theme/ui_tokens.dart';
@@ -143,7 +144,7 @@ class GameCover extends StatelessWidget {
           Positioned(top: 6, right: 6, child: corner!)
         else if (mastered)
           Positioned(top: 8, right: 8, child: _trophy(ui)),
-        if (inProgress) _strip(ui, earned / total),
+        if (inProgress) _strip(ui, achievementFraction(earned, total)),
       ],
     );
     // A bare Home tile rounds its own corners; in the card the tile's UiCard

@@ -353,7 +353,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final wide = MediaQuery.sizeOf(context).width >= kBreakWide;
     return wide && _hasAchievementPanel
         ? _splitLayout(context)
         : _singleLayout(context);

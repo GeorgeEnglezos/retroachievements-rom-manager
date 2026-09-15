@@ -45,7 +45,82 @@ void main() {
     final detector = findDetector(t);
     expect(detector.enabled, isFalse);
   });
+
+  testWidgets('a lifted surface (focusScale > 1.0) renders the drop shadow '
+      'by default', (t) async {
+    await t.pumpWidget(
+      _host(
+        UiFocusable(
+          borderRadius: BorderRadius.circular(8),
+          onPressed: () {},
+          focusScale: 1.08,
+          child: const SizedBox(width: 100, height: 40),
+        ),
+      ),
+    );
+    expect(shadowBoxes(), findsOneWidget);
+  });
+
+  testWidgets('showShadow:false drops the shadow even when lifted', (
+    t,
+  ) async {
+    await t.pumpWidget(
+      _host(
+        UiFocusable(
+          borderRadius: BorderRadius.circular(8),
+          onPressed: () {},
+          focusScale: 1.08,
+          showShadow: false,
+          child: const SizedBox(width: 100, height: 40),
+        ),
+      ),
+    );
+    expect(shadowBoxes(), findsNothing);
+  });
+
+  testWidgets('hover still lights the surface (ring/zoom unaffected)', (
+    t,
+  ) async {
+    await t.pumpWidget(
+      _host(
+        UiFocusable(
+          borderRadius: BorderRadius.circular(8),
+          onPressed: () {},
+          child: const SizedBox(width: 100, height: 40),
+        ),
+      ),
+    );
+    expect(findDetector(t).onShowHoverHighlight, isNotNull);
+  });
+
+  testWidgets('passes tight parent constraints through to child', (t) async {
+    await t.pumpWidget(
+      _host(
+        SizedBox(
+          width: 200,
+          height: 150,
+          child: UiFocusable(
+            borderRadius: BorderRadius.circular(8),
+            onPressed: () {},
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: const [
+                SizedBox(width: 30, height: 30),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    final renderBox = t.renderObject<RenderBox>(find.byType(Column));
+    expect(renderBox.size.width, 200);
+    expect(renderBox.size.height, 150);
+  });
 }
 
 FocusableActionDetector findDetector(WidgetTester t) =>
     t.widget<FocusableActionDetector>(find.byType(FocusableActionDetector));
+
+Finder shadowBoxes() => find.byWidgetPredicate((w) =>
+    w is DecoratedBox &&
+    (w.decoration as BoxDecoration).boxShadow?.isNotEmpty == true);

@@ -14,6 +14,7 @@ import '../services/ra_service.dart';
 import '../services/scan_settings.dart';
 import '../services/scraper/scraped_store.dart';
 import '../services/search_service.dart';
+import '../theme/ui_tokens.dart';
 import 'game_detail_dialog.dart';
 import 'require_credentials.dart';
 import 'rom_list_view.dart';
@@ -212,7 +213,7 @@ class _HomeSearchState extends State<HomeSearch> {
     final trailing =
         _searchQuery.isNotEmpty ? const <Widget>[] : widget.idleTrailing;
     // Narrow: full-width field, actions below. Wide: centered 60% row.
-    final wide = MediaQuery.sizeOf(context).width >= 600;
+    final wide = MediaQuery.sizeOf(context).width >= kBreakCompact;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
       child: wide

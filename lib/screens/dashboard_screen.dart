@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../models/rom_result.dart';
 import '../services/home_dashboard.dart';
+import '../services/ignored_candidates.dart';
 import '../services/library.dart';
+import '../services/member_key.dart';
 import '../services/playlist_store.dart';
 import '../services/scraper/scraped_store.dart';
 import '../theme/ui_tokens.dart';
@@ -69,6 +71,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  Future<void> _ignore(RomResult rom) async {
+    final key = memberKeyFor(gameId: rom.gameId, filePath: rom.filePath);
+    await IgnoredCandidates.instance.ignore(key);
+    if (mounted) {
+      final title = gameDisplayName(rom.gameTitle, rom.fileName);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Won\'t suggest "$title" here again'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () async {
+            await IgnoredCandidates.instance.unignore(key);
+            _load();
+          },
+        ),
+      ));
+    }
+    await _load();
+  }
+
   void _open(RomResult rom) {
     showDialog<void>(
       context: context,
@@ -91,7 +112,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (dash == null || !dash.hasContent) {
       return _EmptyDashboard(onOpenLibrary: widget.onOpenLibrary);
     }
-    return CouchHome(dashboard: dash, onOpen: _open);
+    return CouchHome(dashboard: dash, onOpen: _open, onIgnore: _ignore);
   }
 }
 

@@ -47,6 +47,7 @@ class UiSegmented<T> extends StatelessWidget {
                 // ring with no lift stays within it.
                 borderRadius: BorderRadius.zero,
                 focusScale: 1.0,
+                flourish: FocusFlourish.none,
                 child: GestureDetector(
                   onTap: enabled ? () => onChanged(segments[i].value) : null,
                   child: Container(

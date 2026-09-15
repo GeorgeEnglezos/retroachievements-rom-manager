@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../models/folder_stats.dart' show compactCount;
+import '../../models/folder_stats.dart' show achievementFraction, compactCount;
 import '../../models/rom_result.dart';
 import '../../theme/ui_tokens.dart';
+import '../positioned_menu.dart';
 import '../ra_image.dart';
 import '../ui/ui_progress_bar.dart';
 
@@ -12,15 +13,24 @@ import '../ui/ui_progress_bar.dart';
 class CouchHero extends StatefulWidget {
   final RomResult rom;
   final VoidCallback onOpen;
+  // Right-click / long-press: dismiss this game so the next candidate takes
+  // its place here.
+  final VoidCallback onIgnore;
   final bool autofocus;
   final String eyebrow;
+  // Explicit height from a parent that knows the real available space (the
+  // fitted desktop layout). Null falls back to the viewport-relative default,
+  // used by the compact/scrolling layout where there's no space to spare.
+  final double? height;
 
   const CouchHero({
     super.key,
     required this.rom,
     required this.onOpen,
+    required this.onIgnore,
     this.autofocus = false,
     this.eyebrow = 'CONTINUE PLAYING',
+    this.height,
   });
 
   @override
@@ -55,6 +65,17 @@ class _CouchHeroState extends State<CouchHero> {
     super.dispose();
   }
 
+  Future<void> _showMenu(BuildContext context, Offset position) async {
+    final choice = await showPositionedMenu<String>(context, position, const [
+      PopupMenuItem(
+        value: 'ignore',
+        child: Text('Not interested, show next'),
+      ),
+    ]);
+    if (choice != 'ignore' || !context.mounted) return;
+    widget.onIgnore();
+  }
+
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
@@ -64,17 +85,17 @@ class _CouchHeroState extends State<CouchHero> {
     final title = gameDisplayName(rom.gameTitle, rom.fileName);
     final total = rom.achievementCount ?? 0;
     final earned = rom.earnedAchievements ?? 0;
-    final frac = total == 0 ? 0.0 : (earned / total).clamp(0.0, 1.0);
-    final art = rom.boxArt;
+    final frac = achievementFraction(earned, total);
+    final art = rom.heroArt;
     final meta = [
       rom.consoleName,
       if (total > 0) '$earned/$total achievements',
       if ((rom.numPlayersCasual ?? 0) > 0)
         '${compactCount(rom.numPlayersCasual!)} players',
     ].whereType<String>().join('   ·   ');
-    // Kept short so Home's two banners plus the three cover rows fit one screen
-    // without scrolling. FittedBox below scales the readout down to this height.
-    final h = (MediaQuery.sizeOf(context).height * 0.24).clamp(180.0, 240.0);
+    // FittedBox below scales the readout down to whatever height lands here.
+    final h = widget.height ??
+        (MediaQuery.sizeOf(context).height * 0.24).clamp(180.0, 240.0);
 
     return FocusableActionDetector(
       focusNode: _node,
@@ -87,6 +108,8 @@ class _CouchHeroState extends State<CouchHero> {
       },
       child: GestureDetector(
         onTap: widget.onOpen,
+        onSecondaryTapDown: (d) => _showMenu(context, d.globalPosition),
+        onLongPressStart: (d) => _showMenu(context, d.globalPosition),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           height: h,

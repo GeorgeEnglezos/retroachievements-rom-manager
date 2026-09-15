@@ -1,7 +1,9 @@
 import '../models/home_index.dart';
 import '../models/rom_result.dart';
 import 'game_lookup.dart' show romFromEntry;
+import 'ignored_candidates.dart';
 import 'library.dart';
+import 'member_key.dart';
 import 'ra_service.dart' show RaAward;
 import 'recommender.dart';
 import 'play_view.dart';
@@ -104,7 +106,22 @@ Future<(List<RomResult>, List<SystemSummary>)> loadMatchedGames(
 /// Walks the library and assembles its [HomeDashboard].
 Future<HomeDashboard> loadHomeDashboard({Library? library, int limit = 12}) async {
   final (games, summaries) = await loadMatchedGames(library: library);
-  return buildHomeDashboard(games, systems: summaries, limit: limit);
+  final ignored = await IgnoredCandidates.instance.load();
+  return buildHomeDashboard(games,
+      systems: summaries, limit: limit, ignoredKeys: ignored);
+}
+
+/// The first game in [games] not in [ignoredKeys], or null when every
+/// candidate has been dismissed. Used to pick the mastery/beat spotlight so a
+/// dismissed game falls through to the next candidate instead of hiding the
+/// hero outright.
+RomResult? _firstEligible(Iterable<RomResult> games, Set<String> ignoredKeys) {
+  for (final r in games) {
+    if (!ignoredKeys.contains(memberKeyFor(gameId: r.gameId, filePath: r.filePath))) {
+      return r;
+    }
+  }
+  return null;
 }
 
 /// Builds the dashboard from the supported games in the library. Pure, no I/O.
@@ -115,6 +132,7 @@ HomeDashboard buildHomeDashboard(
   List<RomResult> games, {
   List<SystemSummary> systems = const [],
   int limit = 12,
+  Set<String> ignoredKeys = const {},
 }) {
   // Two ROM libraries can hold the same game (same RA gameId, different file
   // paths); collapse to one entry so a game counts once across every bucket and
@@ -155,14 +173,11 @@ HomeDashboard buildHomeDashboard(
     ..sort((a, b) => (b.lastPlayed ?? _epoch).compareTo(a.lastPlayed ?? _epoch));
 
   // Prefer a mastery target; fall back to whatever the library can offer so a
-  // library with only unplayed games still gets a hero.
-  final spotlight = closest.isNotEmpty
-      ? closest.first
-      : continuePlaying.isNotEmpty
-          ? continuePlaying.first
-          : popular.isNotEmpty
-              ? popular.first
-              : null;
+  // library with only unplayed games still gets a hero. Skips games dismissed
+  // via [ignoredKeys], falling through to the next candidate in each bucket.
+  final spotlight = _firstEligible(closest, ignoredKeys) ??
+      _firstEligible(continuePlaying, ignoredKeys) ??
+      _firstEligible(popular, ignoredKeys);
 
   // Started but not yet beaten, most-complete first. ponytail: completion % is
   // a proxy for closeness-to-beaten; the true signal is remaining progression /
@@ -177,7 +192,7 @@ HomeDashboard buildHomeDashboard(
           r.filePath != spotlight?.filePath)
       .toList()
     ..sort((a, b) => _ratio(b).compareTo(_ratio(a)));
-  final beatSpotlight = beatCandidates.isEmpty ? null : beatCandidates.first;
+  final beatSpotlight = _firstEligible(beatCandidates, ignoredKeys);
 
   return HomeDashboard(
     spotlight: spotlight,

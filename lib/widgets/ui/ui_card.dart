@@ -24,6 +24,16 @@ class UiCard extends StatefulWidget {
   /// [FocusFlourish.jump]; grid tiles keep the default tilt.
   final FocusFlourish flourish;
 
+  /// Whether to render the highlight border ring on focus/hover.
+  final bool showRing;
+
+  /// Distance between content edge and accent ring.
+  final double ringGap;
+
+  /// Whether to render the blurred drop shadow on a lifted card (see
+  /// [UiFocusable.showShadow]).
+  final bool showShadow;
+
   const UiCard({
     super.key,
     required this.child,
@@ -34,6 +44,9 @@ class UiCard extends StatefulWidget {
     this.focusScale = 1.0,
     this.ringColor,
     this.flourish = FocusFlourish.tilt,
+    this.showRing = true,
+    this.ringGap = 4.0,
+    this.showShadow = true,
   });
 
   @override
@@ -87,6 +100,9 @@ class _CardState extends State<UiCard> {
       focusScale: widget.focusScale,
       ringColor: widget.ringColor,
       flourish: widget.flourish,
+      showRing: widget.showRing,
+      ringGap: widget.ringGap,
+      showShadow: widget.showShadow,
       child: GestureDetector(
         onTapDown: (_) => setState(() => _pressed = true),
         onTapUp: (_) => setState(() => _pressed = false),

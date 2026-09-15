@@ -3,6 +3,9 @@ import '../../theme/ui_tokens.dart';
 
 /// The one-shot motion a surface plays the moment it gains focus/hover.
 enum FocusFlourish {
+  /// No motion on highlight. Standard interactive controls (buttons, chips, tabs).
+  none,
+
   /// Tilt left a few degrees, then settle upright. Square game tiles.
   tilt,
 
@@ -36,7 +39,7 @@ class UiFocusable extends StatefulWidget {
   final VoidCallback? onPressed;
 
   /// Radius the accent ring follows — pass the surface's own (`ui.roundLg` for
-  /// cards, `ui.roundMd` for buttons, etc.); the ring is grown by [_ringGap] so
+  /// cards, `ui.roundMd` for buttons, etc.); the ring is grown by [ringGap] so
   /// it hugs a slightly larger rounded rect than the content.
   final BorderRadius borderRadius;
 
@@ -54,6 +57,18 @@ class UiFocusable extends StatefulWidget {
   /// Which one-shot motion to play on focus gain.
   final FocusFlourish flourish;
 
+  /// Whether to render the highlight border ring on focus/hover.
+  final bool showRing;
+
+  /// Distance between content edge and accent ring. Defaults to 4.
+  final double ringGap;
+
+  /// Whether to render the blurred drop shadow behind a lifted ([focusScale]
+  /// > 1.0) surface on focus/hover. Defaults to true; a dense grid of small
+  /// tiles (the ROM grid) sets this false — the blur reads as a muddy halo at
+  /// that size — while keeping the zoom and ring.
+  final bool showShadow;
+
   const UiFocusable({
     super.key,
     required this.child,
@@ -62,66 +77,87 @@ class UiFocusable extends StatefulWidget {
     this.focusScale = 1.0,
     this.ringColor,
     this.flourish = FocusFlourish.tilt,
+    this.showRing = true,
+    this.ringGap = _defaultRingGap,
+    this.showShadow = true,
   });
 
   @override
   State<UiFocusable> createState() => _UiFocusableState();
 }
 
-/// Gap between the content edge and the accent ring, so the ring frames the
-/// tile rather than overlapping its art/text.
-const double _ringGap = 4;
+/// Default gap between the content edge and the accent ring.
+const double _defaultRingGap = 4;
 
 class _UiFocusableState extends State<UiFocusable>
     with SingleTickerProviderStateMixin {
   bool _focused = false;
   bool _hovered = false;
 
-  // The one-shot flourish, driven 0→1 once each time the surface gains
-  // highlight. Both curves start and end at 0, so at rest (value 0 before the
-  // first play, value 1 after) the transform is identity.
-  late final AnimationController _flourishCtl = AnimationController(
-    vsync: this,
-    duration: widget.flourish == FocusFlourish.jump
-        ? const Duration(milliseconds: 260)
-        : const Duration(milliseconds: 480),
-  );
+  AnimationController? _flourishCtl;
+  Animation<double>? _angle;
+  Animation<double>? _hop;
 
-  // Tilt: ~4° left fast, then ease back upright.
-  late final Animation<double> _angle = TweenSequence<double>([
-    TweenSequenceItem(
-      tween: Tween(
-        begin: 0.0,
-        end: -0.07,
-      ).chain(CurveTween(curve: Curves.easeOut)),
-      weight: 30,
-    ),
-    TweenSequenceItem(
-      tween: Tween(
-        begin: -0.07,
-        end: 0.0,
-      ).chain(CurveTween(curve: Curves.easeOutBack)),
-      weight: 70,
-    ),
-  ]).animate(_flourishCtl);
+  @override
+  void initState() {
+    super.initState();
+    _initFlourish();
+  }
 
-  // Jump: a small, quick hop up and back down.
-  late final Animation<double> _hop = TweenSequence<double>([
-    TweenSequenceItem(
-      tween: Tween(
-        begin: 0.0,
-        end: -5.0,
-      ).chain(CurveTween(curve: Curves.easeOut)),
-      weight: 40,
-    ),
-    TweenSequenceItem(
-      tween: Tween(
-        begin: -5.0,
-        end: 0.0,
-      ).chain(CurveTween(curve: Curves.easeOutBack)),
-      weight: 60,
-    ),
-  ]).animate(_flourishCtl);
+  void _initFlourish() {
+    if (widget.flourish == FocusFlourish.none) return;
+    final ctl = AnimationController(
+      vsync: this,
+      duration: widget.flourish == FocusFlourish.jump
+          ? const Duration(milliseconds: 260)
+          : const Duration(milliseconds: 520),
+    );
+    _flourishCtl = ctl;
+    if (widget.flourish == FocusFlourish.tilt) {
+      // Spring wiggle: playful initial tilt left, lively rebound right, then
+      // soft settle upright (Switch card / cartridge feel).
+      _angle = TweenSequence<double>([
+        TweenSequenceItem(
+          tween: Tween(
+            begin: 0.0,
+            end: -0.065,
+          ).chain(CurveTween(curve: Curves.easeOutQuad)),
+          weight: 28,
+        ),
+        TweenSequenceItem(
+          tween: Tween(
+            begin: -0.065,
+            end: 0.025,
+          ).chain(CurveTween(curve: Curves.easeInOutQuad)),
+          weight: 36,
+        ),
+        TweenSequenceItem(
+          tween: Tween(
+            begin: 0.025,
+            end: 0.0,
+          ).chain(CurveTween(curve: Curves.easeOutCubic)),
+          weight: 36,
+        ),
+      ]).animate(ctl);
+    } else if (widget.flourish == FocusFlourish.jump) {
+      _hop = TweenSequence<double>([
+        TweenSequenceItem(
+          tween: Tween(
+            begin: 0.0,
+            end: -5.0,
+          ).chain(CurveTween(curve: Curves.easeOut)),
+          weight: 40,
+        ),
+        TweenSequenceItem(
+          tween: Tween(
+            begin: -5.0,
+            end: 0.0,
+          ).chain(CurveTween(curve: Curves.easeOutBack)),
+          weight: 60,
+        ),
+      ]).animate(ctl);
+    }
+  }
 
   bool get _lit => _focused || _hovered;
 
@@ -131,19 +167,19 @@ class _UiFocusableState extends State<UiFocusable>
       if (focus != null) _focused = focus;
       if (hover != null) _hovered = hover;
     });
-    if (!was && _lit) _flourishCtl.forward(from: 0); // rising edge → flourish
+    if (!was && _lit) _flourishCtl?.forward(from: 0); // rising edge → flourish
   }
 
   @override
   void dispose() {
-    _flourishCtl.dispose();
+    _flourishCtl?.dispose();
     super.dispose();
   }
 
-  // The surface's radius grown by [_ringGap] so the outset ring stays concentric.
+  // The surface's radius grown by [widget.ringGap] so the outset ring stays concentric.
   BorderRadius get _ringRadius {
     final r = widget.borderRadius;
-    const g = Radius.circular(_ringGap);
+    final g = Radius.circular(widget.ringGap);
     return BorderRadius.only(
       topLeft: r.topLeft + g,
       topRight: r.topRight + g,
@@ -158,6 +194,57 @@ class _UiFocusableState extends State<UiFocusable>
     final enabled = widget.onPressed != null;
     final ring = widget.ringColor ?? ui.accent;
     final scale = _lit ? widget.focusScale : 1.0;
+    final hasLift = widget.focusScale > 1.0;
+    final shadowColor = ui.brightness == Brightness.light
+        ? Colors.black.withValues(alpha: 0.16)
+        : Colors.black.withValues(alpha: 0.55);
+
+    final content = Stack(
+      fit: StackFit.passthrough,
+      clipBehavior: Clip.none,
+      children: [
+        if (hasLift && widget.showShadow)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedOpacity(
+                opacity: _lit ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 140),
+                curve: Curves.easeOut,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: widget.borderRadius,
+                    boxShadow: [
+                      BoxShadow(
+                        color: shadowColor,
+                        blurRadius: 22,
+                        spreadRadius: 2,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        widget.child,
+        if (_lit && widget.showRing)
+          Positioned(
+            left: -widget.ringGap,
+            top: -widget.ringGap,
+            right: -widget.ringGap,
+            bottom: -widget.ringGap,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: _ringRadius,
+                  border: Border.all(color: ring, width: 2.5),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+
     return FocusableActionDetector(
       enabled: enabled,
       mouseCursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
@@ -175,43 +262,22 @@ class _UiFocusableState extends State<UiFocusable>
         scale: scale,
         duration: const Duration(milliseconds: 140),
         curve: Curves.easeOut,
-        child: AnimatedBuilder(
-          animation: _flourishCtl,
-          builder: (_, child) {
-            final t = widget.flourish == FocusFlourish.tilt
-                ? Matrix4.rotationZ(_angle.value)
-                : Matrix4.translationValues(0, _hop.value, 0);
-            return Transform(
-              transform: t,
-              alignment: Alignment.center,
-              child: child,
-            );
-          },
-          // Ring drawn as a sibling positioned _ringGap outside the child, so it
-          // frames the content without overlapping it and without affecting
-          // layout (Clip.none lets the outset paint past the child's bounds).
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              widget.child,
-              if (_lit)
-                Positioned(
-                  left: -_ringGap,
-                  top: -_ringGap,
-                  right: -_ringGap,
-                  bottom: -_ringGap,
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: _ringRadius,
-                        border: Border.all(color: ring, width: 2.5),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
+        child: _flourishCtl == null
+            ? content
+            : AnimatedBuilder(
+                animation: _flourishCtl!,
+                builder: (_, child) {
+                  final t = widget.flourish == FocusFlourish.tilt
+                      ? Matrix4.rotationZ(_angle!.value)
+                      : Matrix4.translationValues(0, _hop!.value, 0);
+                  return Transform(
+                    transform: t,
+                    alignment: Alignment.center,
+                    child: child,
+                  );
+                },
+                child: content,
+              ),
       ),
     );
   }

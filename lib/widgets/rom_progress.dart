@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/folder_stats.dart' show achievementFraction, kNearMasteryRatio;
 import '../models/rom_result.dart';
 import '../services/ra_service.dart' show RaAward;
 import '../theme/ui_tokens.dart';
@@ -54,7 +55,7 @@ class RomProgress extends StatelessWidget {
     if (earned == 0) return null;
     final remaining = total - earned;
     final plural = remaining == 1 ? '' : 's';
-    if (earned / total >= 0.8) {
+    if (achievementFraction(earned, total) >= kNearMasteryRatio) {
       return '🏆 Close to mastery: $remaining achievement$plural to go';
     }
     return '$remaining achievement$plural to go';
@@ -65,7 +66,7 @@ class RomProgress extends StatelessWidget {
     final ui = context.ui;
     final earned = rom.earnedAchievements ?? 0;
     final total = rom.achievementCount ?? 0;
-    final fraction = total == 0 ? 0.0 : earned / total;
+    final fraction = achievementFraction(earned, total);
 
     // The RA award is authoritative when present: it distinguishes a hardcore
     // mastery from a softcore completion, and marks "beaten" (game finished but

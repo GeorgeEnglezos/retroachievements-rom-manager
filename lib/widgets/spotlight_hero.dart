@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/folder_stats.dart' show compactCount;
+import '../models/folder_stats.dart' show achievementFraction, compactCount;
 import '../models/rom_result.dart';
 import '../services/play_view.dart';
 import '../theme/ui_tokens.dart';
@@ -46,7 +46,7 @@ class SpotlightHero extends StatelessWidget {
     final title = listingTitle(rom.gameTitle, rom.fileName);
     final total = rom.achievementCount ?? 0;
     final earned = rom.earnedAchievements ?? 0;
-    final frac = total == 0 ? 0.0 : (earned / total).clamp(0.0, 1.0);
+    final frac = achievementFraction(earned, total);
     final art = rom.boxArt;
 
     // One mono readout under the title: where the game lives, how far in it is

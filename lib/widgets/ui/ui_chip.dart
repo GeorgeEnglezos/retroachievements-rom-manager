@@ -30,6 +30,7 @@ class UiChip extends StatelessWidget {
     return UiFocusable(
       onPressed: onTap,
       borderRadius: UiTokens.pill,
+      flourish: FocusFlourish.none,
       child: GestureDetector(
         onTap: onTap,
         child: Container(

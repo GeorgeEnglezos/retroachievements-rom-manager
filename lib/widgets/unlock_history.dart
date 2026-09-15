@@ -21,6 +21,11 @@ class UnlockHistory extends StatefulWidget {
   /// and scrollable, for the standard dashboard.
   final bool fillHeight;
 
+  /// Row scale factor, so the panel grows with the covers beside it on a big
+  /// window instead of staying fixed-size (1.0 = the base design). The fitted
+  /// couch Home passes the covers' own growth here; everywhere else keeps 1.0.
+  final double scale;
+
   /// Test seam: skips the network and renders these directly.
   final List<RecentUnlock>? preview;
 
@@ -28,6 +33,7 @@ class UnlockHistory extends StatefulWidget {
     super.key,
     this.width,
     this.fillHeight = false,
+    this.scale = 1.0,
     this.preview,
   });
 
@@ -36,8 +42,9 @@ class UnlockHistory extends StatefulWidget {
 }
 
 class _UnlockHistoryState extends State<UnlockHistory> {
-  late final Future<List<RecentUnlock>> _future =
-      widget.preview != null ? Future.value(widget.preview) : loadRecentUnlocks();
+  late final Future<List<RecentUnlock>> _future = widget.preview != null
+      ? Future.value(widget.preview)
+      : loadRecentUnlocks();
 
   @override
   Widget build(BuildContext context) {
@@ -66,7 +73,7 @@ class _UnlockHistoryState extends State<UnlockHistory> {
                 snap.hasError
                     ? "Couldn't load unlocks."
                     : 'No recent unlocks yet. Earn achievements and they show up '
-                        'here.',
+                          'here.',
                 style: TextStyle(color: ui.muted, fontSize: 12),
               ),
             );
@@ -77,8 +84,9 @@ class _UnlockHistoryState extends State<UnlockHistory> {
               shrinkWrap: !widget.fillHeight,
               padding: EdgeInsets.zero,
               itemCount: unlocks.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (_, i) => _UnlockRow(unlock: unlocks[i]),
+              separatorBuilder: (_, _) => SizedBox(height: 10 * widget.scale),
+              itemBuilder: (_, i) =>
+                  _UnlockRow(unlock: unlocks[i], scale: widget.scale),
             );
             body = widget.fillHeight
                 ? Expanded(child: list)
@@ -96,10 +104,7 @@ class _UnlockHistoryState extends State<UnlockHistory> {
   Widget _panel(BuildContext context, Widget body) {
     final ui = context.ui;
     final panel = Container(
-      decoration: BoxDecoration(
-        color: ui.surface,
-        borderRadius: ui.roundMd,
-      ),
+      decoration: BoxDecoration(color: ui.surface, borderRadius: ui.roundMd),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -121,7 +126,12 @@ class _UnlockHistoryState extends State<UnlockHistory> {
 
 class _UnlockRow extends StatelessWidget {
   final RecentUnlock unlock;
-  const _UnlockRow({required this.unlock});
+
+  /// Row scale (1.0 = base). Badge, gaps and text sizes multiply by this so the
+  /// panel keeps pace with the covers beside it on a large window.
+  final double scale;
+
+  const _UnlockRow({required this.unlock, this.scale = 1.0});
 
   @override
   Widget build(BuildContext context) {
@@ -131,17 +141,17 @@ class _UnlockRow extends StatelessWidget {
       children: [
         RaImage(
           url: unlock.badgeUrl,
-          width: 40,
-          height: 40,
+          width: 40 * scale,
+          height: 40 * scale,
           fit: BoxFit.cover,
           borderRadius: ui.roundSm,
           placeholder: ColoredBox(color: ui.surfaceAlt),
           error: ColoredBox(
             color: ui.surfaceAlt,
-            child: Icon(Icons.emoji_events, color: ui.muted, size: 20),
+            child: Icon(Icons.emoji_events, color: ui.muted, size: 20 * scale),
           ),
         ),
-        const SizedBox(width: 10),
+        SizedBox(width: 10 * scale),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,35 +162,38 @@ class _UnlockRow extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: ui.text),
+                  fontSize: 13 * scale,
+                  fontWeight: FontWeight.w600,
+                  color: ui.text,
+                ),
               ),
               Padding(
-                padding: const EdgeInsets.only(top: 2),
+                padding: EdgeInsets.only(top: 2 * scale),
                 child: Text(
                   unlock.gameTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: ui.muted),
+                  style: TextStyle(fontSize: 11 * scale, color: ui.muted),
                 ),
               ),
               if (unlock.description.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(top: 2),
+                  padding: EdgeInsets.only(top: 2 * scale),
                   child: Text(
                     unlock.description,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, color: ui.text),
+                    style: TextStyle(fontSize: 11 * scale, color: ui.text),
                   ),
                 ),
             ],
           ),
         ),
-        const SizedBox(width: 8),
-        Text('${unlock.points}',
-            style: ui.labelCaps.copyWith(color: ui.accent, fontSize: 12)),
+        SizedBox(width: 8 * scale),
+        Text(
+          '${unlock.points}',
+          style: ui.labelCaps.copyWith(color: ui.accent, fontSize: 12 * scale),
+        ),
       ],
     );
   }

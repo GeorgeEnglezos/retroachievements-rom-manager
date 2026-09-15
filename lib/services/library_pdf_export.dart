@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'ra_image_cache.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -69,8 +69,7 @@ Future<Map<String, pw.MemoryImage>> _fetchIcons(
     final icon = e.icon;
     if (icon == null || icon.isEmpty) continue;
     try {
-      final file =
-          await DefaultCacheManager().getSingleFile(raImageUrl(icon));
+      final file = await raCacheManager.getSingleFile(raImageUrl(icon));
       out[e.filePath] = pw.MemoryImage(await file.readAsBytes());
     } catch (err) {
       LogService.error('LibraryPdfExport', 'icon fetch failed', err: err);

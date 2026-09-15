@@ -1,5 +1,18 @@
 import 'package:flutter/material.dart';
 
+/// App-wide layout breakpoints (logical px). One source of truth so the shell
+/// chrome, content grids and dialogs all flip at the same widths, rather than
+/// each widget picking its own number (which left a zone where a mobile nav bar
+/// framed a desktop-style body).
+///
+/// - [kBreakCompact]: below this the UI goes single-column / phone form (list
+///   instead of grid, shortcuts as chips, no progress bars).
+/// - [kBreakWide]: at/above this the desktop chrome appears (left sidebar,
+///   two-pane dialogs, the fitted dashboard). Between the two is the tablet
+///   middle ground: grid content, but still the compact chrome.
+const double kBreakCompact = 600;
+const double kBreakWide = 900;
+
 /// Fixed accent hues used across widgets: purple favorite and red danger read
 /// the same in both palettes, so they live outside the palette tokens.
 const Color kFavoriteColor = Color(0xFF8B5CF6);
@@ -32,7 +45,8 @@ class UiTokens extends ThemeExtension<UiTokens> {
   final Color surface; // card / panel surface
   final Color surfaceAlt; // raised surface: hover, selected row, active tab
   final Color text; // primary text + icons
-  final Color accent; // primary accent: buttons, links, selection, active, error
+  final Color
+  accent; // primary accent: buttons, links, selection, active, error
   final Color accentAlt; // secondary accent, 3rd hue of the accent set
   final Color accentGames; // game-specific highlight (e.g. ACH badge)
   final Color border; // outline color
@@ -94,11 +108,11 @@ class UiTokens extends ThemeExtension<UiTokens> {
     required this.favoriteFill,
     required this.favoriteInk,
     required this.brightness,
-  })  : unit = 8,
-        radius = 16,
-        cardShadow = Offset.zero,
-        controlShadow = Offset.zero,
-        borderWidth = 1;
+  }) : unit = 8,
+       radius = 16,
+       cardShadow = Offset.zero,
+       controlShadow = Offset.zero,
+       borderWidth = 1;
 
   // Warm light theme: yellowish retro tint, no pure-white surfaces (easier on
   // the eyes), amber accent. Same geometry as [dark]: rounded, hairline border.
@@ -344,8 +358,13 @@ class UiTokens extends ThemeExtension<UiTokens> {
 
   /// The five-hue accent set, in order. Use it wherever a palette of distinct
   /// but equal colors is needed (folder group headers, per-item highlights).
-  List<Color> get accents =>
-      [accent, supported, accentAlt, accentGames, warning];
+  List<Color> get accents => [
+    accent,
+    supported,
+    accentAlt,
+    accentGames,
+    warning,
+  ];
 
   /// Backdrop for console tiles and home shortcut cards. Full-color console
   /// logos need a light backdrop, so both palettes render these on a light
@@ -362,8 +381,7 @@ class UiTokens extends ThemeExtension<UiTokens> {
 
   /// Label/icon color on the selected nav tab: the ground colour on light's
   /// accent fill (as the toggles do), normal ink on dark's raised surface.
-  Color get navSelectedFg =>
-      brightness == Brightness.light ? background : text;
+  Color get navSelectedFg => brightness == Brightness.light ? background : text;
 
   /// Hard offset shadow (no blur). Returns no shadow when the offset is zero.
   List<BoxShadow> shadow([Offset? offset]) {
@@ -373,34 +391,34 @@ class UiTokens extends ThemeExtension<UiTokens> {
   }
 
   TextStyle get display => TextStyle(
-        fontFamily: 'HankenGrotesk',
-        fontWeight: FontWeight.w700,
-        fontSize: 22,
-        color: text,
-        height: 1.05,
-      );
+    fontFamily: 'HankenGrotesk',
+    fontWeight: FontWeight.w700,
+    fontSize: 22,
+    color: text,
+    height: 1.05,
+  );
 
   TextStyle get labelCaps => TextStyle(
-        fontFamily: 'Inter',
-        fontWeight: FontWeight.w600,
-        fontSize: 11,
-        color: text,
-        letterSpacing: 1.2,
-      );
+    fontFamily: 'Inter',
+    fontWeight: FontWeight.w600,
+    fontSize: 11,
+    color: text,
+    letterSpacing: 1.2,
+  );
 
   TextStyle get body => TextStyle(
-        fontFamily: 'Inter',
-        fontWeight: FontWeight.w400,
-        fontSize: 13,
-        color: text,
-      );
+    fontFamily: 'Inter',
+    fontWeight: FontWeight.w400,
+    fontSize: 13,
+    color: text,
+  );
 
   TextStyle get mono => TextStyle(
-        fontFamily: 'JetBrainsMono',
-        fontWeight: FontWeight.w700,
-        fontSize: 13,
-        color: text,
-      );
+    fontFamily: 'JetBrainsMono',
+    fontWeight: FontWeight.w700,
+    fontSize: 13,
+    color: text,
+  );
 
   @override
   UiTokens copyWith({
@@ -424,29 +442,28 @@ class UiTokens extends ThemeExtension<UiTokens> {
     Offset? cardShadow,
     Offset? controlShadow,
     double? borderWidth,
-  }) =>
-      UiTokens(
-        background: background ?? this.background,
-        surface: surface ?? this.surface,
-        surfaceAlt: surfaceAlt ?? this.surfaceAlt,
-        text: text ?? this.text,
-        accent: accent ?? this.accent,
-        accentAlt: accentAlt ?? this.accentAlt,
-        accentGames: accentGames ?? this.accentGames,
-        border: border ?? this.border,
-        trough: trough ?? this.trough,
-        supported: supported ?? this.supported,
-        warning: warning ?? this.warning,
-        muted: muted ?? this.muted,
-        favoriteFill: favoriteFill ?? this.favoriteFill,
-        favoriteInk: favoriteInk ?? this.favoriteInk,
-        brightness: brightness ?? this.brightness,
-        unit: unit ?? this.unit,
-        radius: radius ?? this.radius,
-        cardShadow: cardShadow ?? this.cardShadow,
-        controlShadow: controlShadow ?? this.controlShadow,
-        borderWidth: borderWidth ?? this.borderWidth,
-      );
+  }) => UiTokens(
+    background: background ?? this.background,
+    surface: surface ?? this.surface,
+    surfaceAlt: surfaceAlt ?? this.surfaceAlt,
+    text: text ?? this.text,
+    accent: accent ?? this.accent,
+    accentAlt: accentAlt ?? this.accentAlt,
+    accentGames: accentGames ?? this.accentGames,
+    border: border ?? this.border,
+    trough: trough ?? this.trough,
+    supported: supported ?? this.supported,
+    warning: warning ?? this.warning,
+    muted: muted ?? this.muted,
+    favoriteFill: favoriteFill ?? this.favoriteFill,
+    favoriteInk: favoriteInk ?? this.favoriteInk,
+    brightness: brightness ?? this.brightness,
+    unit: unit ?? this.unit,
+    radius: radius ?? this.radius,
+    cardShadow: cardShadow ?? this.cardShadow,
+    controlShadow: controlShadow ?? this.controlShadow,
+    borderWidth: borderWidth ?? this.borderWidth,
+  );
 
   @override
   UiTokens lerp(ThemeExtension<UiTokens>? other, double t) {
@@ -479,6 +496,14 @@ class UiTokens extends ThemeExtension<UiTokens> {
 }
 
 extension UiContext on BuildContext {
-  UiTokens get ui =>
-      Theme.of(this).extension<UiTokens>() ?? UiTokens.standard;
+  UiTokens get ui => Theme.of(this).extension<UiTokens>() ?? UiTokens.standard;
+
+  // An Android phone held sideways: too narrow for a sidebar, too wide for the
+  // portrait single-column layout.
+  bool get isLandscapePhone {
+    final size = MediaQuery.sizeOf(this);
+    return Theme.of(this).platform == TargetPlatform.android &&
+        size.shortestSide < kBreakCompact &&
+        size.width > size.height;
+  }
 }

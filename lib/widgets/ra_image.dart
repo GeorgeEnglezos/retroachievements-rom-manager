@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../services/ra_image_cache.dart';
 import 'image_viewer.dart';
 
 /// Base host for RA artwork served under a leading-slash path (icons, box art,
@@ -61,6 +62,7 @@ class RaImage extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget image = CachedNetworkImage(
       imageUrl: url,
+      cacheManager: raCacheManager,
       width: width,
       height: height,
       fit: fit,
@@ -78,7 +80,8 @@ class RaImage extends StatelessWidget {
     if (!zoomable) return image;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => showImageViewer(context, CachedNetworkImageProvider(url)),
+      onTap: () => showImageViewer(
+          context, CachedNetworkImageProvider(url, cacheManager: raCacheManager)),
       child: image,
     );
   }

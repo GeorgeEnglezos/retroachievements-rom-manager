@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../models/folder_stats.dart' show compactCount;
+import '../models/folder_stats.dart' show achievementFraction, compactCount;
 import '../models/rom_result.dart';
 import '../models/scraped_game.dart';
 import '../services/cull_deck_builder.dart';
@@ -278,7 +278,9 @@ class CullCard extends StatelessWidget {
           Text('$earned/$total', style: ui.mono.copyWith(fontSize: 22)),
           const SizedBox(height: 10),
           UiProgressBar(
-              value: earned / total, height: 5, color: ui.accentGames),
+              value: achievementFraction(earned, total),
+              height: 5,
+              color: ui.accentGames),
         ],
       ),
     );

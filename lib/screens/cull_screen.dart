@@ -179,6 +179,7 @@ class _CullConsoleRow extends StatelessWidget {
       child: UiCard(
         padding: EdgeInsets.zero,
         onTap: onTap,
+        flourish: FocusFlourish.jump,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(

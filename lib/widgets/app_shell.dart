@@ -193,13 +193,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // route) rebuilt in the wrong build scope and tore a subtree down while its
     // controllers were still attached.
     final size = MediaQuery.sizeOf(context);
-    final wide = size.width >= 900;
+    final wide = size.width >= kBreakWide;
     // A phone held sideways: short-and-wide, on Android (desktop/tablet keep
     // their layouts). Landscape gets its own shell — nav stood up on a left
     // rail, and the portrait layout's top title strip dropped entirely.
-    final landscapePhone = Theme.of(context).platform == TargetPlatform.android &&
-        size.shortestSide < 600 &&
-        size.width > size.height;
+    final landscapePhone = context.isLandscapePhone;
     final stack = IndexedStack(index: active, children: _bodies);
     final update = _update;
     final banner = update == null
@@ -267,6 +265,23 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 }
 
+/// Shared surface for the shell's four nav bars (sidebar, top title, bottom
+/// nav, landscape rail): a border on one edge, no background fill, so the bar
+/// blends with the body behind it instead of sitting on a solid panel.
+class _NavSurface extends StatelessWidget {
+  final Border border;
+  final double? width;
+  final Widget child;
+  const _NavSurface({required this.border, this.width, required this.child});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: width,
+        decoration: BoxDecoration(border: border),
+        child: child,
+      );
+}
+
 /// Mobile-only bar naming the active tab (the bottom nav shows icons only).
 class _TopTitle extends StatelessWidget {
   final String label;
@@ -275,13 +290,9 @@ class _TopTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    return Container(
+    return _NavSurface(
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: ui.surface,
-        border:
-            Border(bottom: BorderSide(color: ui.border, width: ui.borderWidth)),
-      ),
+      border: Border(bottom: BorderSide(color: ui.border, width: ui.borderWidth)),
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -307,13 +318,9 @@ class _Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    return Container(
+    return _NavSurface(
       width: 180,
-      decoration: BoxDecoration(
-        color: ui.surface,
-        border:
-            Border(right: BorderSide(color: ui.border, width: ui.borderWidth)),
-      ),
+      border: Border(right: BorderSide(color: ui.border, width: ui.borderWidth)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -408,13 +415,10 @@ class _BottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    return Container(
-      decoration: BoxDecoration(
-        color: ui.surface,
-        border: Border(top: BorderSide(color: ui.border, width: ui.borderWidth)),
-      ),
-      // Keep the bar's surface/border but inset the tappable icons above the
-      // system navigation bar (gesture pill / 3-button nav) on Android/iOS.
+    return _NavSurface(
+      border: Border(top: BorderSide(color: ui.border, width: ui.borderWidth)),
+      // Keep the bar's border but inset the tappable icons above the system
+      // navigation bar (gesture pill / 3-button nav) on Android/iOS.
       child: SafeArea(
         top: false,
         child: Row(
@@ -471,13 +475,9 @@ class _Rail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    return Container(
+    return _NavSurface(
       width: 64,
-      decoration: BoxDecoration(
-        color: ui.surface,
-        border:
-            Border(right: BorderSide(color: ui.border, width: ui.borderWidth)),
-      ),
+      border: Border(right: BorderSide(color: ui.border, width: ui.borderWidth)),
       // Scrolls if a tall nav (cleaning's seven) outgrows a short landscape.
       child: SingleChildScrollView(
         child: Column(

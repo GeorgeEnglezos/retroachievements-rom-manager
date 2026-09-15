@@ -327,7 +327,7 @@ class RomRowTile extends StatelessWidget {
     // Small screens (phones in any orientation, or any narrow window) drop the
     // per-row bar: the row is too tight for a bar + label, and the earned/total
     // read in the meta line already carries how far in the game is.
-    if (MediaQuery.sizeOf(context).shortestSide < 600) return null;
+    if (MediaQuery.sizeOf(context).shortestSide < kBreakCompact) return null;
     if (!display.showProgress ||
         row.rom == null ||
         row.earnedAchievements == null) {

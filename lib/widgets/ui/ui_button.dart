@@ -49,6 +49,7 @@ class _ButtonState extends State<UiButton> {
     return UiFocusable(
       onPressed: widget.onPressed,
       borderRadius: ui.roundMd,
+      flourish: FocusFlourish.none,
       child: GestureDetector(
         onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
         onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,

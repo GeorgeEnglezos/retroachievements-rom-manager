@@ -1,4 +1,5 @@
 import '../models/folder_sort.dart';
+import '../models/folder_stats.dart' show achievementFraction, kNearMasteryRatio;
 import '../models/rom_result.dart';
 import '../models/rom_tags.dart';
 import 'cleanup_score.dart';
@@ -85,10 +86,6 @@ int _nullsLast<T extends Comparable<Object>>(T? a, T? b, int dir) {
   return dir * a.compareTo(b);
 }
 
-/// At or above this earned/total ratio (but not yet mastered) a game counts as
-/// "near complete": the quickest mastery candidates.
-const _nearCompleteRatio = 0.8;
-
 /// A game counts as "recently played" if RA last-played is within this window.
 const _recentlyPlayedWindow = Duration(days: 90);
 
@@ -174,7 +171,7 @@ class RomFilter {
           ? ProgressState.mastered
           : earned == 0
               ? ProgressState.notStarted
-              : earned / total >= _nearCompleteRatio
+              : achievementFraction(earned, total) >= kNearMasteryRatio
                   ? ProgressState.nearComplete
                   : ProgressState.started;
       if (!progressStates.contains(state)) return false;

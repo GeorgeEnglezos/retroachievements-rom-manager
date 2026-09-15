@@ -108,6 +108,7 @@ class _FolderCardState extends State<FolderCard>
       onTap: widget.onTap,
       color: color,
       padding: const EdgeInsets.all(14),
+      flourish: FocusFlourish.none,
       child: child,
     );
   }

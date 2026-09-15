@@ -740,7 +740,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     // Shell already shows the title on mobile; AppBar keeps only the tabs.
-    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final wide = MediaQuery.sizeOf(context).width >= kBreakWide;
 
     final general = [
       _accountSection(),

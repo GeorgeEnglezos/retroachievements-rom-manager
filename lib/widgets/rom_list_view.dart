@@ -15,6 +15,25 @@ import 'rom_grid_item.dart';
 import 'rom_row_tile.dart';
 import 'row_display.dart';
 
+/// The text block under each cover in the library grid: the title, the
+/// achievement numbers/chips, and the status/size line. A grid cell is the
+/// square cover plus this height, so the art box stays square at any column
+/// width — the same square silhouette Home's shelves use.
+///
+/// ponytail: an estimate tuned to RomGridItem(lean, listingExtras); it errs
+/// generous so the meta line never overflows. Bump it if a font change clips.
+const double kGridTextBlock = 78;
+
+/// How many columns fit across [width] when each tile is at most [target] px
+/// wide with [spacing] between them. Matches Flutter's
+/// [SliverGridDelegateWithMaxCrossAxisExtent] (ceil), so the folder grid's size
+/// slider keeps its old feel — this only makes the cells square. Pulled out so a
+/// caller can size cells to the real column width and so it stays unit-testable.
+int gridColumns(double width, double target, double spacing) {
+  if (width <= 0 || target <= 0) return 1;
+  return ((width + spacing) / (target + spacing)).ceil().clamp(1, 24);
+}
+
 /// Shared list/grid widget that owns selection state, the bulk-action bar,
 /// and delete-with-progress. Screens delegate rendering here and supply
 /// callbacks for actions they support.
@@ -48,7 +67,8 @@ class RomListView extends StatefulWidget {
   final ScrollPhysics? physics;
   final Widget? emptyState;
   final EdgeInsetsGeometry? padding;
-  @visibleForTesting final Set<String>? initialSelected;
+  @visibleForTesting
+  final Set<String>? initialSelected;
 
   const RomListView({
     super.key,
@@ -161,8 +181,9 @@ class _RomListViewState extends State<RomListView> {
   }
 
   void _emitSelection() {
-    widget.onSelectionChanged
-        ?.call(_flatRows.where((r) => _selected.contains(_key(r))).toList());
+    widget.onSelectionChanged?.call(
+      _flatRows.where((r) => _selected.contains(_key(r))).toList(),
+    );
   }
 
   List<RomRow> get _selectedRows =>
@@ -184,9 +205,9 @@ class _RomListViewState extends State<RomListView> {
     }
     if (!mounted) return;
     widget.onPlaylistChanged?.call();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(favoritesSnack(added, removed))),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(favoritesSnack(added, removed))));
   }
 
   Future<void> _bulkPlaylist() async {
@@ -200,8 +221,9 @@ class _RomListViewState extends State<RomListView> {
   Future<void> _bulkExclude() async {
     final targets = _selectedRows;
     if (targets.isEmpty) return;
-    await ScanSettings.addExcludedFiles(
-        [for (final r in targets) ...(r.groupPaths ?? [r.filePath!])]);
+    await ScanSettings.addExcludedFiles([
+      for (final r in targets) ...(r.groupPaths ?? [r.filePath!]),
+    ]);
     if (!mounted) return;
     widget.onRowsExcluded!(targets);
   }
@@ -210,7 +232,9 @@ class _RomListViewState extends State<RomListView> {
     if (widget.onDeleteRow == null) return;
     final targets = _selectedRows;
     final ok = await confirmRecycleDialog(
-        context, deleteConfirmMessage(files: targets.length));
+      context,
+      deleteConfirmMessage(files: targets.length),
+    );
     if (!ok || !mounted) return;
     setState(() {
       _deleting = true;
@@ -262,8 +286,7 @@ class _RomListViewState extends State<RomListView> {
 
   @override
   Widget build(BuildContext context) {
-    final showBar =
-        _selectionEnabled && (_selected.isNotEmpty || _deleting);
+    final showBar = _selectionEnabled && (_selected.isNotEmpty || _deleting);
 
     Widget list;
     if (_flatRows.isEmpty) {
@@ -289,8 +312,9 @@ class _RomListViewState extends State<RomListView> {
                   onFavorites: widget.bulkFavorites ? _bulkFavorites : null,
                   onPlaylist: widget.bulkPlaylist ? _bulkPlaylist : null,
                   onDelete: _runDelete,
-                  onExclude:
-                      widget.onRowsExcluded == null ? null : _bulkExclude,
+                  onExclude: widget.onRowsExcluded == null
+                      ? null
+                      : _bulkExclude,
                   onClose: _clearSelection,
                 )
               : const SizedBox.shrink(),
@@ -314,12 +338,12 @@ class _RomListViewState extends State<RomListView> {
   }
 
   Widget _buildFlat() => ListView.builder(
-        shrinkWrap: widget.shrinkWrap,
-        physics: widget.physics,
-        padding: widget.padding,
-        itemCount: widget.rows.length,
-        itemBuilder: (_, i) => _tile(widget.rows[i], leading: _leading(i)),
-      );
+    shrinkWrap: widget.shrinkWrap,
+    physics: widget.physics,
+    padding: widget.padding,
+    itemCount: widget.rows.length,
+    itemBuilder: (_, i) => _tile(widget.rows[i], leading: _leading(i)),
+  );
 
   Widget? _leading(int i) {
     final l = widget.leadings;
@@ -331,29 +355,36 @@ class _RomListViewState extends State<RomListView> {
     final children = <Widget>[];
     for (final grp in widget.groups!) {
       final collapsed = _collapsed.contains(grp.label);
-      children.add(_GroupHeader(
-        group: grp,
-        collapsed: collapsed,
-        onTap: () => setState(() =>
-            collapsed ? _collapsed.remove(grp.label) : _collapsed.add(grp.label)),
-      ));
+      children.add(
+        _GroupHeader(
+          group: grp,
+          collapsed: collapsed,
+          onTap: () => setState(
+            () => collapsed
+                ? _collapsed.remove(grp.label)
+                : _collapsed.add(grp.label),
+          ),
+        ),
+      );
       if (collapsed) continue;
       for (var i = 0; i < grp.rows.length; i++) {
         final r = grp.rows[i];
-        children.add(RomRowTile(
-          row: r,
-          display: widget.display,
-          store: widget.store,
-          isSelected: _isSelected(r),
-          isSelectMode: _selected.isNotEmpty,
-          onSelectToggle: _selectToggle(r),
-          onDeleted: () => widget.onRowsRemoved?.call([r]),
-          onExcluded: _excludedCb(r),
-          onFetch: _fetchCb(r),
-          onDismissDuplicate: _dismissDupCb(r),
-          onPlaylistChanged: widget.onPlaylistChanged,
-          groupColor: grp.color,
-        ));
+        children.add(
+          RomRowTile(
+            row: r,
+            display: widget.display,
+            store: widget.store,
+            isSelected: _isSelected(r),
+            isSelectMode: _selected.isNotEmpty,
+            onSelectToggle: _selectToggle(r),
+            onDeleted: () => widget.onRowsRemoved?.call([r]),
+            onExcluded: _excludedCb(r),
+            onFetch: _fetchCb(r),
+            onDismissDuplicate: _dismissDupCb(r),
+            onPlaylistChanged: widget.onPlaylistChanged,
+            groupColor: grp.color,
+          ),
+        );
       }
     }
     return ListView(
@@ -365,50 +396,54 @@ class _RomListViewState extends State<RomListView> {
   }
 
   Widget _buildGrid() => GridView.builder(
-        shrinkWrap: widget.shrinkWrap,
-        physics: widget.physics,
-        padding: widget.padding,
-        gridDelegate: widget.gridDelegate!,
-        itemCount: _flatRows.length,
-        itemBuilder: (_, i) {
-          final r = _flatRows[i];
-          return RomGridItem(
-            rom: r.rom!,
-            store: widget.store,
-            // The Library grid wears Home's framed-cover design; listingExtras
-            // layers the play-view fields (size, hot/no-ach/tag chips) back on,
-            // and raName reads titles the way Home does.
-            lean: true,
-            listingExtras: true,
-            raName: true,
-            isSelected: _isSelected(r),
-            isSelectMode: _selected.isNotEmpty,
-            onSelectToggle: _selectToggle(r),
-            onDeleted: () => widget.onRowsRemoved?.call([r]),
-            onExcluded: _excludedCb(r),
-            onFetch: _fetchCb(r),
-            onPlaylistChanged: widget.onPlaylistChanged,
-            onOpen: r.onTap,
-            discCount: r.discCount,
-            groupPaths: r.groupPaths,
-          );
-        },
-      );
-
-  Widget _tile(RomRow r, {Widget? leading}) => RomRowTile(
-        row: r,
-        leading: leading,
-        display: widget.display,
+    shrinkWrap: widget.shrinkWrap,
+    physics: widget.physics,
+    padding: widget.padding,
+    // Default (hardEdge) clip: an interior tile still pops over its neighbours
+    // (siblings aren't individually clipped), but the viewport's own edge
+    // clips a popped top-row tile instead of painting over whatever sits
+    // above the grid (e.g. the search & filters toolbar).
+    gridDelegate: widget.gridDelegate!,
+    itemCount: _flatRows.length,
+    itemBuilder: (_, i) {
+      final r = _flatRows[i];
+      return RomGridItem(
+        rom: r.rom!,
         store: widget.store,
+        // The Library grid wears Home's framed-cover design; listingExtras
+        // layers the play-view fields (size, hot/no-ach/tag chips) back on,
+        // and raName reads titles the way Home does.
+        lean: true,
+        listingExtras: true,
+        raName: true,
         isSelected: _isSelected(r),
         isSelectMode: _selected.isNotEmpty,
         onSelectToggle: _selectToggle(r),
         onDeleted: () => widget.onRowsRemoved?.call([r]),
         onExcluded: _excludedCb(r),
         onFetch: _fetchCb(r),
-        onDismissDuplicate: _dismissDupCb(r),
         onPlaylistChanged: widget.onPlaylistChanged,
+        onOpen: r.onTap,
+        discCount: r.discCount,
+        groupPaths: r.groupPaths,
       );
+    },
+  );
+
+  Widget _tile(RomRow r, {Widget? leading}) => RomRowTile(
+    row: r,
+    leading: leading,
+    display: widget.display,
+    store: widget.store,
+    isSelected: _isSelected(r),
+    isSelectMode: _selected.isNotEmpty,
+    onSelectToggle: _selectToggle(r),
+    onDeleted: () => widget.onRowsRemoved?.call([r]),
+    onExcluded: _excludedCb(r),
+    onFetch: _fetchCb(r),
+    onDismissDuplicate: _dismissDupCb(r),
+    onPlaylistChanged: widget.onPlaylistChanged,
+  );
 }
 
 /// Tappable section header for a grouped listing: accent stripe, label, row
@@ -427,23 +462,29 @@ class _GroupHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    final style =
-        ui.labelCaps.copyWith(color: ui.muted, fontWeight: FontWeight.w700);
+    final style = ui.labelCaps.copyWith(
+      color: ui.muted,
+      fontWeight: FontWeight.w700,
+    );
     return InkWell(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
         child: Row(
           children: [
-            Icon(collapsed ? Icons.chevron_right : Icons.expand_more,
-                size: 18, color: ui.muted),
+            Icon(
+              collapsed ? Icons.chevron_right : Icons.expand_more,
+              size: 18,
+              color: ui.muted,
+            ),
             const SizedBox(width: 4),
             if (group.color != null)
               Container(
-                  width: 4,
-                  height: 14,
-                  color: group.color,
-                  margin: const EdgeInsets.only(right: 6)),
+                width: 4,
+                height: 14,
+                color: group.color,
+                margin: const EdgeInsets.only(right: 6),
+              ),
             Expanded(child: Text(group.label, style: style)),
             Text('${group.rows.length}', style: style),
           ],

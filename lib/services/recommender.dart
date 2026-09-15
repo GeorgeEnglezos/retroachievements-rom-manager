@@ -1,3 +1,5 @@
+import '../models/folder_stats.dart' show achievementFraction;
+
 /// One game reduced to just the signals the recommender scores on.
 class RecGame {
   final String title;
@@ -21,8 +23,8 @@ class RecGame {
   });
 
   int get remaining => total - earned;
-  double get ratio => total == 0 ? 0 : earned / total;
-  double get hardcoreRatio => total == 0 ? 0 : hardcoreEarned / total;
+  double get ratio => achievementFraction(earned, total);
+  double get hardcoreRatio => achievementFraction(hardcoreEarned, total);
   bool get mastered => total > 0 && earned >= total;
   bool get hardcoreMastered => total > 0 && hardcoreEarned >= total;
   bool get unplayed => earned == 0;
