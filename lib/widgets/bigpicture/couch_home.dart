@@ -49,7 +49,7 @@ class CouchHome extends StatelessWidget {
         // desktop sidebar does too, never framed by the mobile bottom nav.
         final compact = c.maxWidth < kBreakWide || c.maxHeight < 560;
         return compact
-            ? _compact(spotlight, beat)
+            ? _compact(spotlight, beat, phone: c.maxWidth < kBreakCompact)
             : _fitted(spotlight, beat, c.maxHeight);
       },
     );
@@ -120,18 +120,18 @@ class CouchHome extends StatelessWidget {
     );
   }
 
-  /// The phone/short-window layout: the two banners side by side, each cover row
-  /// a fixed height that scrolls horizontally, the unlocks panel below. The whole
-  /// thing
-  /// scrolls vertically so nothing is stuck off-screen.
-  Widget _compact(RomResult? spotlight, RomResult? beat) {
+  /// The phone/short-window layout: the two banners side by side (stacked on a
+  /// phone-width screen), each cover row a fixed height that scrolls
+  /// horizontally, the unlocks panel below. The whole thing scrolls vertically
+  /// so nothing is stuck off-screen.
+  Widget _compact(RomResult? spotlight, RomResult? beat, {required bool phone}) {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (spotlight != null) ...[
-            _heroes(spotlight, beat),
+            _heroes(spotlight, beat, stacked: phone),
             const SizedBox(height: 12),
           ],
           for (final (title, games) in _rowData())
@@ -181,8 +181,10 @@ class CouchHome extends StatelessWidget {
 
   /// The two featured banners: "closest to beat" left, mastery right (the
   /// wireframe's COMPLETE / MASTERY). A library with no beat target shows the
-  /// mastery banner alone.
-  Widget _heroes(RomResult spotlight, RomResult? beat, {double? height}) {
+  /// mastery banner alone. Stacked vertically instead of side by side when
+  /// [stacked] is set, so the banners stay readable on a phone-width screen.
+  Widget _heroes(RomResult spotlight, RomResult? beat,
+      {double? height, bool stacked = false}) {
     final mastery = CouchHero(
       rom: spotlight,
       eyebrow: 'MASTERY',
@@ -192,19 +194,28 @@ class CouchHome extends StatelessWidget {
       height: height,
     );
     if (beat == null) return mastery;
+    final beatHero = CouchHero(
+      rom: beat,
+      eyebrow: 'CLOSEST TO BEAT',
+      autofocus: true,
+      onOpen: () => onOpen(beat),
+      onIgnore: () => onIgnore(beat),
+      height: height,
+    );
+    if (stacked) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          beatHero,
+          const SizedBox(height: 12),
+          mastery,
+        ],
+      );
+    }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: CouchHero(
-            rom: beat,
-            eyebrow: 'CLOSEST TO BEAT',
-            autofocus: true,
-            onOpen: () => onOpen(beat),
-            onIgnore: () => onIgnore(beat),
-            height: height,
-          ),
-        ),
+        Expanded(child: beatHero),
         const SizedBox(width: 16),
         Expanded(child: mastery),
       ],

@@ -1,7 +1,66 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rarm/models/rom_result.dart';
+import 'package:rarm/services/home_dashboard.dart';
 import 'package:rarm/widgets/bigpicture/couch_home.dart';
+import 'package:rarm/widgets/bigpicture/couch_hero.dart';
+
+RomResult _g(String path, String title) =>
+    RomResult(filePath: path, fileName: '$title.sfc')..gameTitle = title;
+
+HomeDashboard _dashboardWithBothHeroes() => HomeDashboard(
+      spotlight: _g('/a.sfc', 'Alpha'),
+      beatSpotlight: _g('/b.sfc', 'Beta'),
+      continuePlaying: const [],
+      closestToMastery: const [],
+      popularUnplayed: const [],
+      stats: DashboardStats.empty,
+    );
 
 void main() {
+  group('CouchHome hero banners', () {
+    Widget app() => MaterialApp(
+          home: Scaffold(
+            body: CouchHome(
+              dashboard: _dashboardWithBothHeroes(),
+              onOpen: (_) {},
+              onIgnore: (_) {},
+            ),
+          ),
+        );
+
+    testWidgets('stack vertically on a phone-width screen', (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(app());
+
+      final heroes = find.byType(CouchHero);
+      expect(heroes, findsNWidgets(2));
+      final beatCenter = tester.getCenter(heroes.first);
+      final masteryCenter = tester.getCenter(heroes.last);
+      expect(beatCenter.dx, masteryCenter.dx);
+      expect(beatCenter.dy, lessThan(masteryCenter.dy));
+    });
+
+    testWidgets('stay side by side on a wider compact screen',
+        (tester) async {
+      tester.view.physicalSize = const Size(700, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(app());
+
+      final heroes = find.byType(CouchHero);
+      expect(heroes, findsNWidgets(2));
+      final beatCenter = tester.getCenter(heroes.first);
+      final masteryCenter = tester.getCenter(heroes.last);
+      expect(beatCenter.dy, masteryCenter.dy);
+      expect(beatCenter.dx, lessThan(masteryCenter.dx));
+    });
+  });
+
   group('couchFillTileSize', () {
     test('a taller column grows the tiles', () {
       expect(CouchHome.couchFillTileSize(1200, 3),
