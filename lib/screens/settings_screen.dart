@@ -1,22 +1,15 @@
-import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/ui_tokens.dart';
-import '../services/android_emulators.dart';
 import '../services/app_mode.dart';
 import '../services/play_view.dart';
 import '../services/app_theme.dart';
 import '../services/backup_service.dart';
-import '../services/console_map.dart';
 import '../services/credentials.dart';
 import '../services/display_name.dart';
-import '../services/emulator_catalog.dart';
-import '../services/emulator_finder.dart';
-import '../services/emulator_store.dart';
 import '../services/library.dart';
 import '../services/pref_keys.dart';
 import '../services/library_folder.dart';
@@ -24,7 +17,8 @@ import '../services/scraper/gamelist_importer.dart';
 import '../services/scraper/scraped_store.dart';
 import '../widgets/pick_library_folder.dart';
 import '../services/scan_settings.dart';
-import '../widgets/pick_emulator.dart';
+import '../widgets/system_settings_section.dart';
+import '../widgets/ui/ui_card.dart';
 import '../widgets/ui_scale_control.dart';
 import 'setup_wizard.dart';
 
@@ -50,8 +44,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // write can prompt for a keyring unlock each time.
   final _apiKeyFocus = FocusNode();
 
-  List<String> _systemFolders = [];
-  Map<String, int?> _consoleSelections = {};
   String _version = '';
 
   @override
@@ -94,33 +86,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final excluded = await ScanSettings.excludedFilesText();
     final apiKey = await readApiKey();
 
-    final overrides = await ScanSettings.folderConsoleOverrides();
-    final ignoredLower = (await ScanSettings.ignoredFolders())
-        .map((e) => e.toLowerCase())
-        .toSet();
-    final root = prefs.getString(PrefKeys.lastFolder);
-    final folders = <String>[];
-    final selections = <String, int?>{};
-    final rootDir = root == null ? null : Directory(root);
-    if (rootDir != null && await rootDir.exists()) {
-      await for (final d in rootDir.list()) {
-        if (d is! Directory) continue;
-        final name = p.basename(d.path);
-        if (ignoredLower.contains(name.toLowerCase())) continue;
-        folders.add(name);
-        selections[name] = overrides[name];
-      }
-      folders.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    }
-
     setState(() {
       _usernameCtrl.text = prefs.getString(PrefKeys.raUsername) ?? '';
       _apiKeyCtrl.text = apiKey;
       _extensionsCtrl.text = extensions;
       _ignoredCtrl.text = ignored;
       _excludedCtrl.text = excluded;
-      _systemFolders = folders;
-      _consoleSelections = selections;
     });
   }
 
@@ -518,65 +489,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _systemMappingSection() {
-    final consoleItems = ConsoleMap.consoleNames.entries.toList()
-      ..sort((a, b) => a.value.compareTo(b.value));
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _heading('System mapping',
-            'Each subfolder is hashed as a specific console. Override a wrong '
-            'guess here; disc systems (PS1, PSP, Saturn, …) must be set.'),
-        if (_systemFolders.isEmpty)
-          Text(
-            'No library folder selected yet. Pick one on the Home screen, then '
-            'reopen Settings to map its subfolders.',
-            style: Theme.of(context).textTheme.bodySmall,
-          )
-        else
-          ..._systemFolders.map((folder) {
-            final detected = ConsoleMap.idForFolder(folder);
-            final detectedName = detected == null
-                ? 'none'
-                : ConsoleMap.nameFor(detected) ?? 'id $detected';
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                children: [
-                  Expanded(child: Text(folder, overflow: TextOverflow.ellipsis)),
-                  const SizedBox(width: 12),
-                  // isExpanded: otherwise the dropdown sizes to its widest
-                  // item and overflows on phones.
-                  Expanded(
-                    child: DropdownButton<int?>(
-                    isExpanded: true,
-                    value: _consoleSelections[folder],
-                    isDense: true,
-                    hint: Text('Auto ($detectedName)'),
-                    onChanged: (v) {
-                      setState(() => _consoleSelections[folder] = v);
-                      ScanSettings.setFolderConsoleOverride(folder, v);
-                    },
-                    items: [
-                      DropdownMenuItem<int?>(
-                        value: null,
-                        child: Text('Auto-detect ($detectedName)'),
-                      ),
-                      ...consoleItems.map((e) => DropdownMenuItem<int?>(
-                            value: e.key,
-                            child: Text(e.value),
-                          )),
-                    ],
-                  ),
-                  ),
-                ],
-              ),
-            );
-          }),
-      ],
-    );
-  }
-
   Widget _libraryFolderSection() {
     return ValueListenableBuilder<String?>(
       valueListenable: libraryFolderListenable,
@@ -686,52 +598,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // Each section is its own card, so a long tab reads as a stack of panels
+  // instead of one ruled column.
   Widget _column(List<Widget> sections) {
-    final ui = context.ui;
     return Column(
-      // Stretch, so a section's closing hairline runs the width of the column
-      // rather than stopping at whatever its widest control happens to be.
+      // Stretch, so every card in the column is the same width whatever its
+      // widest control happens to be.
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var i = 0; i < sections.length; i++)
-          Container(
-            padding: EdgeInsets.only(bottom: i == sections.length - 1 ? 0 : 28),
-            margin: EdgeInsets.only(bottom: i == sections.length - 1 ? 0 : 28),
-            decoration: i == sections.length - 1
-                ? null
-                : BoxDecoration(
-                    border: Border(
-                        bottom: BorderSide(
-                            color: ui.border, width: ui.borderWidth))),
-            child: sections[i],
+          Padding(
+            padding: EdgeInsets.only(bottom: i == sections.length - 1 ? 0 : 16),
+            child: UiCard(padding: const EdgeInsets.all(20), child: sections[i]),
           ),
       ],
     );
   }
 
-  // One tab's body; two columns when there's room, else stacked.
+  // Centred, width-capped scroll body shared by every tab.
+  Widget _scroll(double maxWidth, Widget child) => Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
+            child: child,
+          ),
+        ),
+      );
+
+  // One tab's body; two columns of section cards when there's room.
   Widget _tabBody(List<Widget> sections) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final twoColumns = constraints.maxWidth >= 760 && sections.length > 1;
         final split = (sections.length + 1) ~/ 2;
-        return Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: twoColumns ? 1400 : 720),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
-              child: twoColumns
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: _column(sections.sublist(0, split))),
-                        const SizedBox(width: 40),
-                        Expanded(child: _column(sections.sublist(split))),
-                      ],
-                    )
-                  : _column(sections),
-            ),
-          ),
+        return _scroll(
+          twoColumns ? 1400 : 720,
+          twoColumns
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: _column(sections.sublist(0, split))),
+                    const SizedBox(width: 32),
+                    Expanded(child: _column(sections.sublist(split))),
+                  ],
+                )
+              : _column(sections),
         );
       },
     );
@@ -754,13 +666,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Mobile has no sidebar, so surface the version here.
       if (!wide) _aboutSection(),
     ];
-    final systems = [_systemMappingSection()];
-    final emulation = [
-      EmulatorSettingsSection(library: widget.library),
-    ];
     final ui = context.ui;
     return DefaultTabController(
-      length: 3,
+      length: 2,
       child: Scaffold(
         backgroundColor: ui.background,
         // No AppBar: the tabs sit on the page under the title, on a hairline
@@ -787,7 +695,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       tabs: [
                         Tab(text: 'General'),
                         Tab(text: 'Systems'),
-                        Tab(text: 'Emulation (beta)'),
                       ],
                     ),
                   ),
@@ -799,435 +706,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: TabBarView(
                 children: [
                   _tabBody(general),
-                  _tabBody(systems),
-                  _tabBody(emulation),
+                  // Draws its own cards, so it gets the raw scroll body and the
+                  // full width rather than a section card.
+                  _scroll(1400, SystemSettingsSection(library: widget.library)),
                 ],
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Emulators + per-system connections (settings-first, Playnite-style).
-class EmulatorSettingsSection extends StatefulWidget {
-  final Library? library; // injectable for tests
-
-  const EmulatorSettingsSection({super.key, this.library});
-
-  @override
-  State<EmulatorSettingsSection> createState() =>
-      _EmulatorSettingsSectionState();
-}
-
-class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
-  _EmulatorData? _data;
-  bool _scanning = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _refresh();
-  }
-
-  // State field, not FutureBuilder: repaints reliably after a native picker.
-  Future<void> _refresh() async {
-    final data = await _load();
-    if (mounted) setState(() => _data = data);
-  }
-
-  Future<_EmulatorData> _load() async {
-    // Android emulators are installed apps, so the first time this tab opens we
-    // sweep them in without asking. After that it's the Detect button, so a
-    // removed emulator stays removed.
-    if (Platform.isAndroid && await EmulatorStore.takeAndroidSweep()) {
-      await _addDetectedApps();
-    }
-    final emulators = await EmulatorStore.emulators();
-    final connections = await EmulatorStore.connections();
-    final fullscreen = await EmulatorStore.launchFullscreen();
-    // The library's filtered systems are the single source, so this list
-    // matches the home grid / badge: ignored, missing, out-of-root, and
-    // never-scanned folders never leak in here.
-    final summaries =
-        await (widget.library ?? Library.instance).summaries();
-    final consoleIds = <int>{
-      for (final s in summaries)
-        if (s.consoleId != null && ConsoleMap.consoleNames[s.consoleId!] != null)
-          s.consoleId!,
-    }.toList()
-      ..sort((a, b) => ConsoleMap.consoleNames[a]!
-          .compareTo(ConsoleMap.consoleNames[b]!));
-    return _EmulatorData(emulators, connections, consoleIds, fullscreen);
-  }
-
-  Future<void> _addEmulator() async {
-    final emu = await pickNewEmulator(context);
-    if (emu == null) return;
-    await EmulatorStore.addEmulator(emu);
-    await _refresh();
-    _toast('Added ${emu.name}. Connected its default systems below.');
-  }
-
-  // Adds every installed app we recognise as an emulator, skipping kinds the
-  // user already has. Returns what it added.
-  Future<List<Emulator>> _addDetectedApps() async {
-    final found = emulatorsFromApps(await AndroidEmulators.installedApps(),
-        existing: await EmulatorStore.emulators());
-    for (final emu in found) {
-      await EmulatorStore.addEmulator(emu);
-    }
-    return found;
-  }
-
-  Future<void> _detectEmulatorApps() async {
-    setState(() => _scanning = true);
-    try {
-      final found = await _addDetectedApps();
-      await _refresh();
-      _toast(found.isEmpty
-          ? 'No new emulator apps found.'
-          : 'Added ${found.map((e) => e.name).join(', ')}. '
-              'Connected their default systems below.');
-    } finally {
-      if (mounted) setState(() => _scanning = false);
-    }
-  }
-
-  // Desktop: point at a folder, add every emulator under it. EmulatorStore
-  // connects each one's default systems as it's added.
-  Future<void> _scanForEmulators() async {
-    final folder = await pickEmulatorFolder(context);
-    if (folder == null) return;
-    setState(() => _scanning = true);
-    try {
-      final found = await findEmulators(Directory(folder),
-          existing: _data?.emulators ?? const []);
-      for (final emu in found) {
-        await EmulatorStore.addEmulator(emu);
-      }
-      await _refresh();
-      _toast(found.isEmpty
-          ? 'No new emulators found in that folder.'
-          : 'Added ${found.map((e) => e.name).join(', ')}. '
-              'Connected their default systems below.');
-    } finally {
-      if (mounted) setState(() => _scanning = false);
-    }
-  }
-
-  Future<void> _editEmulatorExe(Emulator emu) async {
-    final picked = await pickNewEmulator(context,
-        dialogTitle: 'Choose the emulator executable for ${emu.name}');
-    if (picked == null) return;
-    await EmulatorStore.updateEmulatorExe(emu.id, picked.exePath);
-    await _refresh();
-    _toast('Updated ${emu.name}.');
-  }
-
-  void _toast(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final subhead = Theme.of(context).textTheme.titleSmall;
-    final data = _data;
-    return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Emulators', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Text(
-              Platform.isAndroid
-                  ? 'Add your emulator apps, then connect each system to one. '
-                      'Tapping Play sends the ROM straight to that app.'
-                  : 'Add your emulators, then connect each system to one. Adding '
-                      'RetroArch auto-fills the right core for most systems; '
-                      'standalone emulators (Dolphin, PCSX2, DuckStation, PPSSPP) '
-                      'connect their own.',
-              style: TextStyle(fontSize: 12, color: context.ui.muted),
-            ),
-            const SizedBox(height: 16),
-            Text('Your emulators', style: subhead),
-            const SizedBox(height: 4),
-            if (data == null)
-              const Padding(
-                padding: EdgeInsets.all(8),
-                child: SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2)),
-              )
-            else ...[
-              // Fullscreen is a desktop CLI flag; hidden on Android.
-              if (!Platform.isAndroid)
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  title: const Text('Launch games in fullscreen'),
-                  value: data.launchFullscreen,
-                  onChanged: (v) async {
-                    await EmulatorStore.setLaunchFullscreen(v ?? false);
-                    await _refresh();
-                  },
-                ),
-              if (data.emulators.isEmpty)
-                const Text('None yet, add one below.',
-                    style: TextStyle(fontStyle: FontStyle.italic))
-              else
-                for (final emu in data.emulators)
-                  Column(
-                    key: ValueKey(emu.id),
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(emu.name),
-                        subtitle: Text(emu.exePath,
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              tooltip:
-                                  Platform.isAndroid ? 'Change app' : 'Change exe',
-                              icon: const Icon(Icons.edit_outlined),
-                              onPressed: () => _editEmulatorExe(emu),
-                            ),
-                            IconButton(
-                              tooltip: 'Remove',
-                              icon: const Icon(Icons.delete_outline),
-                              onPressed: () async {
-                                await EmulatorStore.removeEmulator(emu.id);
-                                await _refresh();
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Args are desktop-only; Android launches via intent.
-                      if (!Platform.isAndroid)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _AutoSaveTextField(
-                            key: ValueKey('args-${emu.id}'),
-                            value: emu.extraArgs,
-                            label: 'Extra arguments (applied to all this '
-                                "emulator's systems)",
-                            onSave: (v) =>
-                                EmulatorStore.setExtraArgs(emu.id, v),
-                          ),
-                        ),
-                    ],
-                  ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: _scanning ? null : _addEmulator,
-                    icon: const Icon(Icons.add),
-                    label: Text(Platform.isAndroid
-                        ? 'Add emulator (pick app)'
-                        : 'Add emulator (browse exe)'),
-                  ),
-                  // Desktop searches a folder of exes; Android sweeps the
-                  // installed apps, so there's nothing to browse for.
-                  OutlinedButton.icon(
-                    onPressed: _scanning
-                        ? null
-                        : Platform.isAndroid
-                            ? _detectEmulatorApps
-                            : _scanForEmulators,
-                    icon: _scanning
-                        ? const SizedBox(
-                            height: 16,
-                            width: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.travel_explore),
-                    label: Text(_scanning
-                        ? 'Scanning…'
-                        : Platform.isAndroid
-                            ? 'Detect installed emulators'
-                            : 'Scan a folder for emulators'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Text('Systems', style: subhead),
-              const SizedBox(height: 4),
-              if (data.consoleIds.isEmpty)
-                const Text('No scanned systems yet.',
-                    style: TextStyle(fontStyle: FontStyle.italic))
-              else
-                for (final consoleId in data.consoleIds)
-                  _SystemRow(
-                    key: ValueKey(consoleId),
-                    consoleId: consoleId,
-                    name: ConsoleMap.consoleNames[consoleId]!,
-                    emulators: data.emulators,
-                    connection: data.connections[consoleId],
-                    onChanged: _refresh,
-                  ),
-            ],
-          ],
-        );
-  }
-}
-
-class _EmulatorData {
-  final List<Emulator> emulators;
-  final Map<int, EmulatorConnection> connections;
-  final List<int> consoleIds;
-  final bool launchFullscreen;
-  _EmulatorData(
-      this.emulators, this.connections, this.consoleIds, this.launchFullscreen);
-}
-
-/// Text field that saves on blur/enter and reseeds when [value] changes
-/// (state is reused across reloads when the parent keys it).
-class _AutoSaveTextField extends StatefulWidget {
-  final String value;
-  final String label;
-  final ValueChanged<String> onSave;
-
-  const _AutoSaveTextField({
-    super.key,
-    required this.value,
-    required this.label,
-    required this.onSave,
-  });
-
-  @override
-  State<_AutoSaveTextField> createState() => _AutoSaveTextFieldState();
-}
-
-class _AutoSaveTextFieldState extends State<_AutoSaveTextField> {
-  late final TextEditingController _ctrl =
-      TextEditingController(text: widget.value);
-  late final FocusNode _focus = FocusNode()..addListener(_onBlur);
-
-  void _onBlur() {
-    if (!_focus.hasFocus) widget.onSave(_ctrl.text);
-  }
-
-  @override
-  void didUpdateWidget(_AutoSaveTextField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Never clobber in-progress typing; reseed only while unfocused.
-    if (widget.value != oldWidget.value && !_focus.hasFocus) {
-      _ctrl.text = widget.value;
-    }
-  }
-
-  @override
-  void dispose() {
-    _focus.removeListener(_onBlur);
-    _focus.dispose();
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: _ctrl,
-      focusNode: _focus,
-      decoration: InputDecoration(
-        labelText: widget.label,
-        isDense: true,
-      ),
-      onEditingComplete: () => widget.onSave(_ctrl.text),
-    );
-  }
-}
-
-/// One library console: pick its emulator + edit the launch args.
-class _SystemRow extends StatelessWidget {
-  final int consoleId;
-  final String name;
-  final List<Emulator> emulators;
-  final EmulatorConnection? connection;
-  final VoidCallback onChanged;
-
-  const _SystemRow({
-    super.key,
-    required this.consoleId,
-    required this.name,
-    required this.emulators,
-    required this.connection,
-    required this.onChanged,
-  });
-
-  Future<void> _saveArgs(String text) async {
-    final emulatorId = connection?.emulatorId;
-    if (emulatorId == null) return;
-    await EmulatorStore.setConnection(consoleId, emulatorId, text);
-  }
-
-  Future<void> _selectEmulator(String? emulatorId) async {
-    if (emulatorId == null) {
-      await EmulatorStore.clearConnection(consoleId);
-      onChanged();
-      return;
-    }
-    final emu = emulators.where((e) => e.id == emulatorId).firstOrNull;
-    if (emu == null) return;
-    final args =
-        EmulatorCatalog.defaultArgsFor(consoleId, emu.kindId, emu.exePath) ??
-            '"{file.path}"';
-    await EmulatorStore.setConnection(consoleId, emulatorId, args);
-    onChanged();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final selectedId = connection?.emulatorId;
-    final valid = emulators.any((e) => e.id == selectedId) ? selectedId : null;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              SizedBox(width: 160, child: Text(name)),
-              Expanded(
-                child: DropdownButton<String?>(
-                  isExpanded: true,
-                  value: valid,
-                  hint: const Text('Not set'),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                        value: null, child: Text('Not set')),
-                    for (final e in emulators)
-                      DropdownMenuItem<String?>(
-                          value: e.id, child: Text(e.name)),
-                  ],
-                  onChanged: _selectEmulator,
-                ),
-              ),
-            ],
-          ),
-          // Args are desktop-only; Android launches via intent.
-          if (valid != null && !Platform.isAndroid)
-            Padding(
-              padding: const EdgeInsets.only(left: 160, top: 4),
-              child: _AutoSaveTextField(
-                key: ValueKey('sysargs-$consoleId'),
-                value: connection?.args ?? '',
-                label: 'Arguments ({file.path} is the ROM)',
-                onSave: _saveArgs,
-              ),
-            ),
-        ],
       ),
     );
   }
