@@ -80,6 +80,19 @@ void main() {
           CouchHome.couchFillTileSize(3000, 3));
     });
 
+    // UiZoom hands a zoomed-in layout a viewport shrunk by the scale, then
+    // paints the result back up by it. Sizing from the logical height alone let
+    // the fixed row chrome eat the difference, so covers came out smaller the
+    // further you zoomed in; they have to grow with the zoom like everything
+    // else in the app.
+    test('zoom grows covers instead of shrinking them', () {
+      const height = 900.0;
+      final at100 = CouchHome.couchFillTileSize(height, 3);
+      final at125 =
+          CouchHome.couchFillTileSize(height / 1.25, 3, scale: 1.25) * 1.25;
+      expect(at125, closeTo(at100 * 1.25, 0.01));
+    });
+
     test('a normal window lands strictly between floor and ceiling', () {
       final mid = CouchHome.couchFillTileSize(900, 3);
       expect(mid, greaterThan(CouchHome.couchFillTileSize(300, 3)));

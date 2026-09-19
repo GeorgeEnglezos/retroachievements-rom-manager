@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rarm/models/folder_stats.dart';
+import 'package:rarm/theme/ui_theme.dart';
+import 'package:rarm/theme/ui_tokens.dart';
 import 'package:rarm/widgets/folder_card.dart';
 
 void main() {
-  Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
+  Widget host(Widget child, {UiTokens? palette}) => MaterialApp(
+        theme: palette == null ? null : uiTheme(palette),
+        home: Scaffold(body: child),
+      );
 
-  testWidgets('unknown folder shows generic logo and unsupported chip',
+  testWidgets('unknown folder shows the generic logo, with no badge on it',
       (tester) async {
     await tester.pumpWidget(host(FolderCard(
       name: 'Sega Genesis',
@@ -16,10 +22,11 @@ void main() {
       onTap: () {},
     )));
     expect(find.text('Sega Genesis'), findsOneWidget);
-    // Falls back to the generic logo (an Image), not a bare help icon, and is
-    // marked as not RA-supported.
+    // Falls back to the generic logo (an Image), not a bare help icon. The
+    // unsupported systems now sit in their own Library block, so the front of
+    // the card carries no badge.
     expect(find.byType(Image), findsOneWidget);
-    expect(find.text('No RetroAchievements'), findsOneWidget);
+    expect(find.text('No RetroAchievements'), findsNothing);
   });
 
   testWidgets('tapping calls onTap', (tester) async {
@@ -94,6 +101,58 @@ void main() {
     )));
     expect(find.text('Game Boy'), findsOneWidget);
     expect(find.text('Not scanned yet'), findsOneWidget);
+  });
+
+  // The cards sit on a fixed light plate, so their labels must stay dark ink in
+  // every palette. A Theme override alone doesn't do it: an unstyled Text reads
+  // the DefaultTextStyle of the Scaffold's Material, outside the card.
+  testWidgets('system label keeps light ink under any palette', (tester) async {
+    Future<Color?> labelColor(UiTokens palette, Widget card) async {
+      await tester.pumpWidget(host(card, palette: palette));
+      return tester
+          .renderObject<RenderParagraph>(find.text('PlayStation'))
+          .text
+          .style
+          ?.color;
+    }
+
+    Widget card() => FolderCard(
+          name: 'psx',
+          displayName: 'PlayStation',
+          stats: FolderStats(path: 'x', totalGames: 3),
+          consoleId: null,
+          onTap: () {},
+        );
+    final onDark = await labelColor(UiTokens.dark, card());
+    final onLight = await labelColor(UiTokens.light, card());
+    expect(onDark, onLight);
+    expect(onDark, uiTheme(UiTokens.light).textTheme.bodyMedium!.color);
+    expect(onDark, isNot(UiTokens.dark.text));
+  });
+
+  testWidgets('FolderRow label keeps light ink under any palette',
+      (tester) async {
+    Future<Color?> labelColor(UiTokens palette) async {
+      await tester.pumpWidget(host(
+        FolderRow(
+          name: 'psx',
+          displayName: 'PlayStation',
+          stats: FolderStats(path: 'x', totalGames: 3),
+          consoleId: null,
+          onTap: () {},
+        ),
+        palette: palette,
+      ));
+      return tester
+          .renderObject<RenderParagraph>(find.text('PlayStation'))
+          .text
+          .style
+          ?.color;
+    }
+
+    expect(await labelColor(UiTokens.dark), await labelColor(UiTokens.light));
+    expect(await labelColor(UiTokens.dark),
+        uiTheme(UiTokens.light).textTheme.bodyMedium!.color);
   });
 
   testWidgets('FolderRow tapping calls onTap', (tester) async {

@@ -1078,7 +1078,11 @@ class _HomeScreenState extends State<HomeScreen> {
   // Shared shell: three headed blocks, in order — the built-in shortcuts (All
   // games + playlists), the favorited systems, then the rest. Phones get a
   // one-column list of rows per block, anything wider the flip-card grid.
-  Widget _tiles({required List<Widget> favorites, required List<Widget> systems}) {
+  Widget _tiles({
+    required List<Widget> favorites,
+    required List<Widget> systems,
+    required List<Widget> unsupported,
+  }) {
     final narrow = _isNarrow;
     final landscape = _isLandscapePhone();
     // Phones (portrait or landscape) show the shortcuts as chips under the
@@ -1093,6 +1097,10 @@ class _HomeScreenState extends State<HomeScreen> {
       if (shortcuts.isNotEmpty) (title: 'Shortcuts', tiles: shortcuts),
       if (favorites.isNotEmpty) (title: 'Favorites', tiles: favorites),
       if (systems.isNotEmpty) (title: 'Systems', tiles: systems),
+      // Systems RA can't validate (Switch, PS3…, or an unidentified folder)
+      // sit in their own block instead of wearing a badge each.
+      if (unsupported.isNotEmpty)
+        (title: 'No RetroAchievements', tiles: unsupported),
     ];
     return CustomScrollView(
       slivers: [
@@ -1274,6 +1282,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final narrow = _isNarrow;
     final favorites = <Widget>[];
     final rest = <Widget>[];
+    final unsupported = <Widget>[];
     for (final dir in _sortedSubfolders) {
       final displayName = displayNameFor(
         mode: _nameMode,
@@ -1291,15 +1300,23 @@ class _HomeScreenState extends State<HomeScreen> {
         narrow: narrow,
         onTap: _isRunning ? null : () => _openSubfolder(dir.path),
       );
-      (favorite ? favorites : rest).add(tile);
+      _bucketFor(
+        favorite: favorite,
+        consoleId: _folderConsoleIds[dir.path],
+        favorites: favorites,
+        systems: rest,
+        unsupported: unsupported,
+      ).add(tile);
     }
-    return _tiles(favorites: favorites, systems: rest);
+    return _tiles(
+        favorites: favorites, systems: rest, unsupported: unsupported);
   }
 
   Widget _buildCombinedGrid() {
     final narrow = _isNarrow;
     final favorites = <Widget>[];
     final rest = <Widget>[];
+    final unsupported = <Widget>[];
     for (final entry in _combinedEntries) {
       final g = entry.group;
       final favorite = FavoriteSystems.isFavorite(_favorites, g.folderPaths);
@@ -1319,9 +1336,29 @@ class _HomeScreenState extends State<HomeScreen> {
         narrow: narrow,
         onTap: _isRunning ? null : () => _openCombined(g, entry.label),
       );
-      (favorite ? favorites : rest).add(tile);
+      _bucketFor(
+        favorite: favorite,
+        consoleId: g.consoleId,
+        favorites: favorites,
+        systems: rest,
+        unsupported: unsupported,
+      ).add(tile);
     }
-    return _tiles(favorites: favorites, systems: rest);
+    return _tiles(
+        favorites: favorites, systems: rest, unsupported: unsupported);
+  }
+
+  // Which block a tile belongs to. A favorite stays under Favorites even when
+  // RA doesn't cover it: the user pinned it deliberately.
+  List<Widget> _bucketFor({
+    required bool favorite,
+    required int? consoleId,
+    required List<Widget> favorites,
+    required List<Widget> systems,
+    required List<Widget> unsupported,
+  }) {
+    if (favorite) return favorites;
+    return ConsoleMap.isRaSupported(consoleId) ? systems : unsupported;
   }
 
   // One system tile (a folder, or a combined console group), with the

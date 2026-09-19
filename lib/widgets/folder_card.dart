@@ -4,16 +4,14 @@ import '../models/folder_stats.dart';
 import '../services/console_image.dart';
 import '../services/console_map.dart';
 import '../theme/ui_tokens.dart';
-import '../theme/ui_theme.dart';
 import 'ui/console_card.dart';
-import 'ui/ui_badge.dart';
 import 'ui/ui_card.dart';
 import 'ui/ui_progress_bar.dart';
 
 // The console logos are full-color on transparency and don't tint to the theme,
-// so cards render their contents through the light palette (dark ink) and use
-// the [UiTokens.cardSurface] badge color so text stays legible on it.
-final ThemeData _lightCardTheme = uiTheme(UiTokens.light);
+// so cards render their contents through the light palette (dark ink, see
+// [lightCardInk]) and use the [UiTokens.cardSurface] badge color so text stays
+// legible on it.
 
 // A grid tile for one subfolder. The front shows the console picture (or a
 // fallback folder icon) and the name; hovering flips the card on its Y-axis to
@@ -75,8 +73,7 @@ class _FolderCardState extends State<FolderCard>
     // Read the surface off the real theme before the light-theme override below
     // (white in dark, warm beige in light).
     final cardColor = context.ui.cardSurface;
-    return Theme(
-      data: _lightCardTheme,
+    return lightCardInk(
       child: MouseRegion(
       onEnter: (_) => _hover(true),
       onExit: (_) => _hover(false),
@@ -150,19 +147,9 @@ class _FolderCardState extends State<FolderCard>
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
-        if (!ConsoleMap.isRaSupported(widget.consoleId)) ...[
-          const SizedBox(height: 4),
-          Align(alignment: Alignment.center, child: _unsupportedChip(context)),
-        ],
       ],
     );
   }
-
-  // Marks systems RA can't validate (Switch, PS3…, or an unidentified folder).
-  Widget _unsupportedChip(BuildContext context) => UiBadge(
-        label: 'No RetroAchievements',
-        color: context.ui.muted,
-      );
 
   Widget _back(BuildContext context) {
     final s = widget.stats;

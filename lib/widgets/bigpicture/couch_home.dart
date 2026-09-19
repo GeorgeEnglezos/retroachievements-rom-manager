@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/rom_result.dart';
 import '../../services/home_dashboard.dart';
+import '../../services/ui_scale.dart';
 import '../../theme/ui_tokens.dart';
 import '../unlock_history.dart';
 import 'couch_hero.dart';
@@ -65,9 +66,18 @@ class CouchHome extends StatelessWidget {
   /// [height] instead of packing fixed tiles at the top and leaving a blank band
   /// on a tall screen. Clamped so a very short window still scrolls rather than
   /// shrinking art to nothing, and a very tall one doesn't blow tiles up huge.
-  static double couchFillTileSize(double height, int rowCount) {
+  ///
+  /// [scale] is the app zoom. UiZoom shrinks the logical viewport by it and
+  /// paints the result back up, so dividing [height] alone left the art paying
+  /// for row chrome that grew with the zoom: covers came out smaller at 125%
+  /// than at 100%. Multiplying back out sizes from the window's real height, so
+  /// this returns one zoom-independent number that paints bigger as you zoom in,
+  /// and rows that no longer fit scroll (the width-based grids reflow the same
+  /// way, a column at a time).
+  static double couchFillTileSize(double height, int rowCount,
+      {double scale = 1.0}) {
     if (rowCount <= 0) return _compactTileSize;
-    final perRow = height / rowCount;
+    final perRow = height * scale / rowCount;
     return (perRow - _fittedRowChrome).clamp(_compactTileSize, 240.0);
   }
 
@@ -93,7 +103,8 @@ class CouchHome extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, c) {
                 final rows = _rowData();
-                final tile = couchFillTileSize(c.maxHeight, rows.length);
+                final tile = couchFillTileSize(c.maxHeight, rows.length,
+                    scale: uiScaleListenable.value);
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -159,8 +170,8 @@ class CouchHome extends StatelessWidget {
   /// The fitted layout's rows, sized so they fill the column's height instead of
   /// packing fixed tiles at the top. Tiles grow with the window (bigger art on a
   /// TV, smaller on a laptop); each row still scrolls horizontally if a narrow
-  /// window can't fit its covers, and the column scrolls vertically only when a
-  /// short window forces the tiles to their minimum.
+  /// window can't fit its covers, and the column scrolls vertically when a short
+  /// window or a zoomed-in one can't show every row at that size.
   Widget _fillRows(List<(String, List<RomResult>)> rows, double tile) {
     return SingleChildScrollView(
       child: Column(

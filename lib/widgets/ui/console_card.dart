@@ -3,6 +3,22 @@ import '../../theme/ui_tokens.dart';
 import '../../theme/ui_theme.dart';
 import 'ui_card.dart';
 
+// UiCard is a plain Container, so a Theme override alone never reaches an
+// unstyled Text: DefaultTextStyle comes from the nearest ancestor Material,
+// which sits outside these cards. Labels kept the app palette's ink (light
+// grey on the white plate in dark themes) while anything reading Theme.of got
+// light's black. Pair the two so a card's whole subtree is light.
+final ThemeData lightCardTheme = uiTheme(UiTokens.light);
+
+/// Wraps [child] in the light card palette, ink included.
+Widget lightCardInk({required Widget child}) => Theme(
+  data: lightCardTheme,
+  child: DefaultTextStyle(
+    style: lightCardTheme.textTheme.bodyMedium!,
+    child: child,
+  ),
+);
+
 /// A [UiCard] that always renders on a light backdrop with dark ink, in both
 /// themes; used by the console tiles (full-color logos) and the home shortcut
 /// cards (All games, playlists) so they read the same everywhere. The surface
@@ -39,8 +55,7 @@ class ConsoleCard extends StatelessWidget {
     // override, so the focus ring wears the app's accent, not light's amber.
     final color = context.ui.cardSurface;
     final ring = context.ui.accent;
-    return Theme(
-      data: uiTheme(UiTokens.light),
+    return lightCardInk(
       child: UiCard(
         onTap: onTap,
         color: color,
