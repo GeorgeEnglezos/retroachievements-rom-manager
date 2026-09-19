@@ -6,6 +6,7 @@ import '../models/rom_result.dart';
 import '../models/scraped_game.dart';
 import '../services/credentials.dart';
 import '../services/disc_grouping.dart';
+import '../services/switch_grouping.dart';
 import '../services/app_mode.dart';
 import '../services/file_actions.dart';
 import '../services/library.dart';
@@ -84,6 +85,15 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   late int _selected = _discs.indexOf(widget.rom).clamp(0, _discs.length - 1);
   RomResult get rom => _discs[_selected];
   bool get _multiDisc => _discs.length > 1;
+
+  // A Switch title's files are parts of one game, not interchangeable discs.
+  // Derived from the files themselves so callers pass nothing extra.
+  bool get _switchTitle => _multiDisc && isSwitchFile(_discs.first.fileName);
+
+  // Only a Switch title's base file boots: updates and DLC are content the
+  // emulator loads through it. Play always targets the base, whichever part
+  // the switcher has selected. [DiscGroup] sorts the base first.
+  RomResult get _playTarget => _switchTitle ? _discs.first : rom;
 
   List<Achievement>? _achievements;
   bool _achievementsLoading = false;
@@ -304,8 +314,9 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   // prompt, error snack) so both surfaces behave identically.
   Widget _playButton() {
     return FilledButton.icon(
-      onPressed: () => RomActions(rom: rom, store: widget.store ?? PlaylistStore())
-          .handle(context, 'play'),
+      onPressed: () =>
+          RomActions(rom: _playTarget, store: widget.store ?? PlaylistStore())
+              .handle(context, 'play'),
       icon: const Icon(Icons.play_arrow, size: 18),
       label: const Text('Play (beta)'),
     );
@@ -460,8 +471,10 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-              gameDisplayName(rom.gameTitle,
-                  _multiDisc ? stripDiscToken(rom.fileName) : rom.fileName),
+              _switchTitle
+                  ? switchDisplayTitle(_discs.first.fileName)
+                  : gameDisplayName(rom.gameTitle,
+                      _multiDisc ? stripDiscToken(rom.fileName) : rom.fileName),
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
           if (rom.consoleName != null)
@@ -618,6 +631,14 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   }
 
   Widget _buildDiscSwitcher(BuildContext context) {
+    // Discs are numbered; a Switch title's parts are named (Base / Update /
+    // DLC), since which one you are looking at is not a number.
+    final labels = _switchTitle
+        ? switchPartLabels([for (final d in _discs) d.fileName])
+        : [
+            for (var i = 0; i < _discs.length; i++)
+              'Disc ${discNumber(_discs[i].fileName) ?? i + 1}',
+          ];
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Column(
@@ -630,16 +651,16 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
               onChanged: _selectDisc,
               segments: [
                 for (var i = 0; i < _discs.length; i++)
-                  (
-                    value: i,
-                    label: 'Disc ${discNumber(_discs[i].fileName) ?? i + 1}',
-                    icon: null,
-                  ),
+                  (value: i, label: labels[i], icon: null),
               ],
             ),
           ),
           const SizedBox(height: 4),
-          Text('File ${_selected + 1} of ${_discs.length}',
+          Text(
+              _switchTitle && switchPart(rom.fileName) != SwitchPart.base
+                  ? 'File ${_selected + 1} of ${_discs.length} · installed '
+                      'content, the base game is what boots'
+                  : 'File ${_selected + 1} of ${_discs.length}',
               style: Theme.of(context).textTheme.bodySmall),
         ],
       ),

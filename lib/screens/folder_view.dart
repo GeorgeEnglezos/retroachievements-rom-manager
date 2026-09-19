@@ -33,6 +33,7 @@ import '../services/rom_file_lister.dart';
 import '../services/rom_filter.dart';
 import '../services/cleanup_score.dart';
 import '../services/disc_grouping.dart';
+import '../services/switch_grouping.dart';
 import '../models/folder_sort.dart';
 import '../models/rom_row.dart';
 import '../models/rom_group.dart';
@@ -696,7 +697,11 @@ class _FolderViewState extends State<FolderView> {
     if (!g.isMultiDisc) return _toRow(g.discs.first);
     final rep = g.representative;
     return RomRow(
-      title: listingTitle(rep.gameTitle, stripDiscToken(rep.fileName)),
+      // A Switch title has no RA match to name it, and its filename is mostly
+      // bracketed title id / version, so the group row uses the cleaned name.
+      title: g.switchTitle
+          ? switchDisplayTitle(rep.fileName)
+          : listingTitle(rep.gameTitle, stripDiscToken(rep.fileName)),
       filePath: rep.filePath,
       status: rep.status,
       imageIcon: rep.imageIcon,

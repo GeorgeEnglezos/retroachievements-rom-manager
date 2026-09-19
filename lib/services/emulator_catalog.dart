@@ -52,10 +52,12 @@ class EmulatorCatalog {
     EmulatorKind('ryujinx', 'Ryujinx', // Switch
         RegExp(r'^ryujinx(\.ava)?\.exe$', caseSensitive: false),
         '"{file.path}"', '--fullscreen'),
+    // yuzu forks: args read off their own shortcut builder (`-g "<path>"`,
+    // `-f` for fullscreen), not the bare positional path.
     EmulatorKind('citron', 'Citron', // Switch (yuzu fork)
-        RegExp(r'^citron\.exe$', caseSensitive: false), '"{file.path}"', null),
+        RegExp(r'^citron\.exe$', caseSensitive: false), '-g "{file.path}"', '-f'),
     EmulatorKind('eden', 'Eden', // Switch (yuzu fork)
-        RegExp(r'^eden\.exe$', caseSensitive: false), '"{file.path}"', null),
+        RegExp(r'^eden\.exe$', caseSensitive: false), '-g "{file.path}"', '-f'),
     EmulatorKind('rpcs3', 'RPCS3', // PS3
         RegExp(r'^rpcs3.*\.exe$', caseSensitive: false), '"{file.path}"', null),
     EmulatorKind('shadps4', 'shadPS4', // PS4
@@ -199,6 +201,20 @@ class EmulatorCatalog {
     }
     return kindById(kindId)?.standaloneArgs;
   }
+
+  /// Kinds that can run a console besides its [defaultKind] entry. Switch is
+  /// the only system with several maintained emulators today; add a console
+  /// here when a second one is worth offering.
+  static const Map<int, List<String>> _alsoRunKinds = {
+    -1: ['citron', 'eden'],
+  };
+
+  /// Every kind that can run [consoleId], the default first. Drives the
+  /// "Play with…" picker; [defaultKind] still decides auto-connect.
+  static List<String> kindsForConsole(int consoleId) => [
+        if (defaultKind[consoleId] != null) defaultKind[consoleId]!,
+        ...?_alsoRunKinds[consoleId],
+      ];
 
   /// Console ids whose default kind is [kindId] (used for auto-connect).
   static List<int> consolesForKind(String kindId) => defaultKind.entries

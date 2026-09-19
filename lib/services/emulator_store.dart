@@ -235,14 +235,37 @@ class EmulatorStore {
     if (conn == null) return null;
     final emu = await connectedEmulator(consoleId);
     if (emu == null) return null;
+    return _command(emu, conn.args);
+  }
 
+  /// Launch command for running [consoleId] ROMs in [emu], built from the
+  /// catalog defaults instead of the stored connection, so a one-off launch
+  /// never repoints the console. Null when the catalog has no args for the
+  /// pair. Same shape as [commandFor].
+  static Future<String?> commandForEmulator(Emulator emu, int consoleId) async {
+    final args =
+        EmulatorCatalog.defaultArgsFor(consoleId, emu.kindId, emu.exePath);
+    return args == null ? null : _command(emu, args);
+  }
+
+  static Future<String> _command(Emulator emu, String args) async {
     final parts = <String>['"${emu.exePath}"'];
     if (await launchFullscreen()) {
       final flag = EmulatorCatalog.fullscreenFlag(emu.kindId);
       if (flag != null) parts.add(flag);
     }
     if (emu.extraArgs.trim().isNotEmpty) parts.add(emu.extraArgs.trim());
-    parts.add(conn.args);
+    parts.add(args);
     return parts.join(' ');
+  }
+
+  /// The added emulators that can run [consoleId], the console's default kind
+  /// first. Empty when none are added for it.
+  static Future<List<Emulator>> emulatorsForConsole(int consoleId) async {
+    final list = await emulators();
+    return [
+      for (final kind in EmulatorCatalog.kindsForConsole(consoleId))
+        ...list.where((e) => e.kindId == kind),
+    ];
   }
 }

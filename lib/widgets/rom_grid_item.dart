@@ -116,7 +116,7 @@ class RomGridItem extends StatelessWidget {
             width: width,
             fileName: fileName,
             raName: raName,
-            artOverlays: [?discBadge(discCount, ui), ?dupBadge(rom, ui)],
+            artOverlays: [?discBadge(discCount, ui, fileName: rom.fileName), ?dupBadge(rom, ui)],
             corner: isSelectMode ? _selectionDot(ui) : null,
             meta: _leanMetaBlock(ui),
           ),
@@ -151,7 +151,7 @@ class RomGridItem extends StatelessWidget {
           textPadding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
           fileName: fileName,
           raName: raName,
-          artOverlays: [?discBadge(discCount, ui), ?dupBadge(rom, ui)],
+          artOverlays: [?discBadge(discCount, ui, fileName: rom.fileName), ?dupBadge(rom, ui)],
           corner: isSelectMode ? _selectionDot(ui) : null,
           meta: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

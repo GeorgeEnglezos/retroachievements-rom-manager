@@ -442,7 +442,7 @@ class RomRowTile extends StatelessWidget {
     if (!display.showChips || row.rom == null) return [];
     final rom = row.rom!;
     return [
-      ?discBadge(row.discCount, ui),
+      ?discBadge(row.discCount, ui, fileName: rom.fileName),
       if (display.showDupBadge) ?dupBadge(rom, ui),
       ?hotBadge(rom),
       ?noAchBadge(rom),

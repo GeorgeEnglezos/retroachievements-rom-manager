@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
@@ -187,6 +188,9 @@ class FileActions {
       // to the working directory.
       final program = tokens.first;
       final workdir = p.isAbsolute(program) ? p.dirname(program) : null;
+      if (Platform.isWindows && isConsoleExe(program)) {
+        return _startWithConsole(program, tokens.sublist(1), workdir);
+      }
       await Process.start(program, tokens.sublist(1),
           mode: ProcessStartMode.detached, workingDirectory: workdir);
       return true;
@@ -194,6 +198,63 @@ class FileActions {
       LogService.error(
           'FileActions/launchWithTemplate', 'Failed for $romPath', err: e);
       return false;
+    }
+  }
+
+  /// Windows: launches a console-subsystem program detached but *with* a
+  /// console. [ProcessStartMode.detached] gives the child no console at all,
+  /// which kills such a program during runtime startup, before it can log a
+  /// word (Ryujinx is one; every GUI emulator is unaffected). `start` hands it
+  /// its own console and still detaches. The empty argument is the window
+  /// title, which `start` otherwise takes from the first quoted argument.
+  // ponytail: cmd re-parses what Dart passes it, so an argument holding `&`
+  // with no spaces (Dart only quotes when spaces are present) would split the
+  // command. Pass the tokens through environment variables, as
+  // [resolveShortcuts] does, if a ROM name ever trips it.
+  static Future<bool> _startWithConsole(
+      String program, List<String> args, String? workdir) async {
+    // `start` reports a missing program in its own dialog and still exits 0,
+    // so the caller would never see the failure. Check it here instead.
+    if (!File(program).existsSync()) {
+      LogService.error(
+          'FileActions/launchWithTemplate', 'Emulator not found: $program');
+      return false;
+    }
+    await Process.start(
+        'cmd',
+        [
+          '/c', 'start', '',
+          if (workdir != null) ...['/d', workdir],
+          program,
+          ...args,
+        ],
+        mode: ProcessStartMode.detached);
+    return true;
+  }
+
+  /// Whether [exePath] is a Windows console-subsystem program, read from the
+  /// PE header's Subsystem field (2 = GUI, 3 = console). False for anything
+  /// that isn't a readable PE file, so an odd path takes the normal path.
+  static bool isConsoleExe(String exePath) {
+    RandomAccessFile? file;
+    try {
+      file = File(exePath).openSync();
+      final dos = file.readSync(0x40);
+      // 'MZ', then the PE header offset at 0x3c.
+      if (dos.length < 0x40 || dos[0] != 0x4D || dos[1] != 0x5A) return false;
+      final peOffset = ByteData.sublistView(dos).getUint32(0x3c, Endian.little);
+      file.setPositionSync(peOffset);
+      // 'PE  ' + 20-byte COFF header, then Subsystem 0x44 into the optional
+      // header; same offset for PE32 and PE32+.
+      final header = file.readSync(0x5e);
+      if (header.length < 0x5e) return false;
+      return ByteData.sublistView(header).getUint16(0x5c, Endian.little) == 3;
+    } catch (_) {
+      return false;
+    } finally {
+      try {
+        file?.closeSync();
+      } catch (_) {}
     }
   }
 
