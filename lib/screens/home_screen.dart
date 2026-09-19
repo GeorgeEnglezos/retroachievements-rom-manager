@@ -24,6 +24,7 @@ import '../services/ra_cache.dart';
 import '../services/ra_service.dart';
 import '../services/console_map.dart';
 import '../services/display_name.dart';
+import '../services/favorite_systems.dart';
 import '../services/library_folder.dart';
 import '../widgets/pick_library_folder.dart';
 import '../services/member_key.dart';
@@ -146,6 +147,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Set<String> _enabledExtensions = {...kDefaultRomExtensions};
   Set<String> _ignoredFolders = {};
+  // Folder names pinned to the top of the grid (see FavoriteSystems).
+  Set<String> _favorites = {};
 
   int _folderIndex = 0; // 1-based folder we're currently on
   int _folderCount = 0; // total folders in this run
@@ -280,6 +283,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _init() async {
     await _loadFilters();
+    _favorites = await FavoriteSystems.all();
     await _loadHomeSortPref();
     await _loadUsername();
     await _restoreLastFolder();
@@ -562,10 +566,13 @@ class _HomeScreenState extends State<HomeScreen> {
         enabledExtensions: _enabledExtensions,
       ));
 
-  Future<void> _showFolderMenu(Offset position, String dirPath) async {
+  // [paths] is one folder, or every folder of a combined console group. The
+  // ignore action only makes sense for a single folder.
+  Future<void> _showFolderMenu(Offset position, List<String> paths) async {
     final overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox;
-    final name = p.basename(dirPath);
+    final name = p.basename(paths.first);
+    final favorite = FavoriteSystems.isFavorite(_favorites, paths);
     final choice = await showMenu<String>(
       context: context,
       position: RelativeRect.fromRect(
@@ -574,18 +581,45 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       items: [
         PopupMenuItem(
-          value: 'ignore',
+          value: 'favorite',
           child: Row(
             children: [
-              const Icon(Icons.visibility_off, size: 18),
+              Icon(favorite ? Icons.favorite : Icons.favorite_border,
+                  size: 18, color: kFavoriteColor),
               const SizedBox(width: 8),
-              Flexible(child: Text('Ignore "$name"')),
+              Flexible(
+                  child:
+                      Text(favorite ? 'Remove from favorites' : 'Favorite')),
             ],
           ),
         ),
+        if (paths.length == 1)
+          PopupMenuItem(
+            value: 'ignore',
+            child: Row(
+              children: [
+                const Icon(Icons.visibility_off, size: 18),
+                const SizedBox(width: 8),
+                Flexible(child: Text('Ignore "$name"')),
+              ],
+            ),
+          ),
       ],
     );
     if (choice == 'ignore') await _ignoreFolder(name);
+    if (choice == 'favorite') await _toggleFavorite(paths, favorite);
+  }
+
+  // A combined group follows its first folder, so the whole group flips
+  // together rather than splitting across the two sections.
+  Future<void> _toggleFavorite(List<String> paths, bool favorite) async {
+    var updated = _favorites;
+    for (final path in paths) {
+      final isFavorite = FavoriteSystems.isFavorite(updated, [path]);
+      if (isFavorite != favorite) continue; // already on the target side
+      updated = await FavoriteSystems.toggle(path);
+    }
+    if (mounted) setState(() => _favorites = updated);
   }
 
   // The cards refresh through the scanFiltersListenable listener.
@@ -1039,47 +1073,100 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Shared shell: leading shortcuts (All games + playlists) first, then
-  // [itemCount] folder entries. Phones get a one-column list of rows, anything
-  // wider the flip-card grid; [itemBuilder] is told which to build.
-  Widget _tiles(int itemCount, Widget Function(int i, bool narrow) itemBuilder) {
-    final narrow = MediaQuery.sizeOf(context).width < kBreakCompact;
+  bool get _isNarrow => MediaQuery.sizeOf(context).width < kBreakCompact;
+
+  // Shared shell: three headed blocks, in order — the built-in shortcuts (All
+  // games + playlists), the favorited systems, then the rest. Phones get a
+  // one-column list of rows per block, anything wider the flip-card grid.
+  Widget _tiles({required List<Widget> favorites, required List<Widget> systems}) {
+    final narrow = _isNarrow;
     final landscape = _isLandscapePhone();
     // Phones (portrait or landscape) show the shortcuts as chips under the
     // search bar instead of as leading cards.
-    final leading = <Widget>[
+    final shortcuts = <Widget>[
       if (!narrow && !landscape) ...[
         if (_subfolders.isNotEmpty) _buildAllGamesCard(narrow),
         for (final pl in _playlists) _buildPlaylistCard(pl, narrow),
       ],
     ];
-    Widget at(int i) =>
-        i < leading.length ? leading[i] : itemBuilder(i - leading.length, narrow);
-    final count = itemCount + leading.length;
-    if (narrow) {
-      return ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        itemCount: count,
-        itemBuilder: (_, i) =>
-            Padding(padding: const EdgeInsets.only(bottom: 8), child: at(i)),
-      );
-    }
-    return GridView.builder(
-      padding: const EdgeInsets.all(12),
-      // Default (hardEdge) clip: a popped card still overlaps its neighbours,
-      // but clips at the viewport edge instead of painting over the search
-      // bar above it.
-      // Landscape phone gets a tighter grid so systems read slightly smaller.
-      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: landscape ? 200 : 260,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1.3,
-      ),
-      itemCount: count,
-      itemBuilder: (_, i) => at(i),
+    final blocks = <({String title, List<Widget> tiles})>[
+      if (shortcuts.isNotEmpty) (title: 'Shortcuts', tiles: shortcuts),
+      if (favorites.isNotEmpty) (title: 'Favorites', tiles: favorites),
+      if (systems.isNotEmpty) (title: 'Systems', tiles: systems),
+    ];
+    return CustomScrollView(
+      slivers: [
+        for (final block in blocks) ...[
+          _sectionHeader(block.title),
+          if (narrow)
+            _rowBlock(block.tiles)
+          // The shortcuts aren't systems, so they get short wide tiles rather
+          // than the console cards' picture-sized squares.
+          else if (block.title == 'Shortcuts')
+            _gridBlock(block.tiles, extent: 200, aspectRatio: 3.2, spacing: 8)
+          else
+            _gridBlock(block.tiles,
+                extent: landscape ? 200 : 260, aspectRatio: 1.3),
+        ],
+        const SliverToBoxAdapter(child: SizedBox(height: 12)),
+      ],
     );
   }
+
+  Widget _sectionHeader(String title) => SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 14, 12, 8),
+          child: Row(children: [
+            Text(
+              title.toUpperCase(),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.8,
+                color: context.ui.muted,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Divider(
+                  height: 1, color: context.ui.muted.withValues(alpha: 0.3)),
+            ),
+          ]),
+        ),
+      );
+
+  // Default (hardEdge) clip: a popped card still overlaps its neighbours, but
+  // clips at the viewport edge instead of painting over the search bar above
+  // it. Landscape phone gets a tighter grid so systems read slightly smaller.
+  Widget _gridBlock(
+    List<Widget> tiles, {
+    required double extent,
+    required double aspectRatio,
+    double spacing = 12,
+  }) =>
+      SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        sliver: SliverGrid(
+          gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: extent,
+            mainAxisSpacing: spacing,
+            crossAxisSpacing: spacing,
+            childAspectRatio: aspectRatio,
+          ),
+          delegate: SliverChildListDelegate(tiles),
+        ),
+      );
+
+  Widget _rowBlock(List<Widget> tiles) => SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        sliver: SliverList(
+          delegate: SliverChildListDelegate([
+            for (final tile in tiles)
+              Padding(
+                  padding: const EdgeInsets.only(bottom: 8), child: tile),
+          ]),
+        ),
+      );
 
   // One home shortcut (All games, a playlist), in whichever shape the shell is
   // laying out.
@@ -1093,26 +1180,35 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!narrow) {
       return ConsoleCard(
         onTap: onTap,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         focusScale: 1.05,
         showRing: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 30),
-            const SizedBox(height: 8),
-            Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            if (sub != null) ...[
-              const SizedBox(height: 4),
-              Text(sub,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall),
+        // Built under ConsoleCard's light theme so the labels come out dark.
+        child: Builder(
+          builder: (context) => Row(
+            children: [
+              Icon(icon, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    if (sub != null)
+                      Text(sub,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ),
+              ),
             ],
-          ],
+          ),
         ),
       );
     }
@@ -1175,75 +1271,102 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    final dirs = _sortedSubfolders;
-    return _tiles(dirs.length, (i, narrow) {
-      final dir = dirs[i];
+    final narrow = _isNarrow;
+    final favorites = <Widget>[];
+    final rest = <Widget>[];
+    for (final dir in _sortedSubfolders) {
       final displayName = displayNameFor(
         mode: _nameMode,
         consoleId: _folderConsoleIds[dir.path],
         folderPaths: [dir.path],
       );
-      final onTap = _isRunning ? null : () => _openSubfolder(dir.path);
-      return GestureDetector(
-        // Opaque: FolderCard's flip Transform can make deferToChild
-        // hit-tests miss, swallowing right-click/long-press.
-        behavior: HitTestBehavior.opaque,
-        onSecondaryTapDown: _isRunning
-            ? null
-            : (d) => _showFolderMenu(d.globalPosition, dir.path),
-        onLongPressStart: _isRunning
-            ? null
-            : (d) => _showFolderMenu(d.globalPosition, dir.path),
-        child: narrow
-            ? FolderRow(
-                name: p.basename(dir.path),
-                displayName: displayName,
-                stats: _stats[dir.path],
-                consoleId: _folderConsoleIds[dir.path],
-                onTap: onTap,
-              )
-            : FolderCard(
-                name: p.basename(dir.path),
-                displayName: displayName,
-                stats: _stats[dir.path],
-                consoleId: _folderConsoleIds[dir.path],
-                onTap: onTap,
-              ),
+      final favorite = FavoriteSystems.isFavorite(_favorites, [dir.path]);
+      final tile = _systemTile(
+        paths: [dir.path],
+        name: p.basename(dir.path),
+        displayName: displayName,
+        stats: _stats[dir.path],
+        consoleId: _folderConsoleIds[dir.path],
+        favorite: favorite,
+        narrow: narrow,
+        onTap: _isRunning ? null : () => _openSubfolder(dir.path),
       );
-    });
+      (favorite ? favorites : rest).add(tile);
+    }
+    return _tiles(favorites: favorites, systems: rest);
   }
 
   Widget _buildCombinedGrid() {
-    final entries = _combinedEntries;
-    return _tiles(entries.length, (i, narrow) {
-      final entry = entries[i];
+    final narrow = _isNarrow;
+    final favorites = <Widget>[];
+    final rest = <Widget>[];
+    for (final entry in _combinedEntries) {
       final g = entry.group;
-      final name = displayNameFor(
-        mode: NameMode.folderName,
+      final favorite = FavoriteSystems.isFavorite(_favorites, g.folderPaths);
+      final tile = _systemTile(
+        paths: g.folderPaths,
+        name: displayNameFor(
+          mode: NameMode.folderName,
+          consoleId: g.consoleId,
+          folderPaths: g.folderPaths,
+        ),
+        displayName: entry.label,
+        stats: entry.agg,
         consoleId: g.consoleId,
-        folderPaths: g.folderPaths,
+        subtitle:
+            g.folderPaths.length > 1 ? '${g.folderPaths.length} folders' : null,
+        favorite: favorite,
+        narrow: narrow,
+        onTap: _isRunning ? null : () => _openCombined(g, entry.label),
       );
-      final subtitle =
-          g.folderPaths.length > 1 ? '${g.folderPaths.length} folders' : null;
-      final onTap = _isRunning ? null : () => _openCombined(g, entry.label);
-      return narrow
+      (favorite ? favorites : rest).add(tile);
+    }
+    return _tiles(favorites: favorites, systems: rest);
+  }
+
+  // One system tile (a folder, or a combined console group), with the
+  // right-click/long-press menu both shapes share.
+  Widget _systemTile({
+    required List<String> paths,
+    required String name,
+    required String displayName,
+    required FolderStats? stats,
+    required int? consoleId,
+    String? subtitle,
+    required bool favorite,
+    required bool narrow,
+    required VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      // Opaque: FolderCard's flip Transform can make deferToChild
+      // hit-tests miss, swallowing right-click/long-press.
+      behavior: HitTestBehavior.opaque,
+      onSecondaryTapDown: _isRunning
+          ? null
+          : (d) => _showFolderMenu(d.globalPosition, paths),
+      onLongPressStart: _isRunning
+          ? null
+          : (d) => _showFolderMenu(d.globalPosition, paths),
+      child: narrow
           ? FolderRow(
               name: name,
-              displayName: entry.label,
-              stats: entry.agg,
-              consoleId: g.consoleId,
+              displayName: displayName,
+              stats: stats,
+              consoleId: consoleId,
               subtitle: subtitle,
+              favorite: favorite,
               onTap: onTap,
             )
           : FolderCard(
               name: name,
-              displayName: entry.label,
-              stats: entry.agg,
-              consoleId: g.consoleId,
+              displayName: displayName,
+              stats: stats,
+              consoleId: consoleId,
               subtitle: subtitle,
+              favorite: favorite,
               onTap: onTap,
-            );
-    });
+            ),
+    );
   }
 
   Widget _buildPlaylistCard(Playlist pl, bool narrow) {

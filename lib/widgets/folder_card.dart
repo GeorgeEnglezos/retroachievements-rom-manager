@@ -28,6 +28,9 @@ class FolderCard extends StatefulWidget {
   final FolderStats? stats;
   final int? consoleId;
   final String? subtitle;
+
+  /// Pinned to the Library's favorites section; marked with a heart.
+  final bool favorite;
   // Null disables the tap (e.g. while a scan is running).
   final VoidCallback? onTap;
 
@@ -38,6 +41,7 @@ class FolderCard extends StatefulWidget {
     required this.stats,
     required this.consoleId,
     this.subtitle,
+    this.favorite = false,
     required this.onTap,
   });
 
@@ -117,7 +121,19 @@ class _FolderCardState extends State<FolderCard>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(child: ConsoleLogo(consoleId: widget.consoleId)),
+        Expanded(
+          child: Stack(
+            children: [
+              Positioned.fill(child: ConsoleLogo(consoleId: widget.consoleId)),
+              if (widget.favorite)
+                const Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Icon(Icons.favorite, size: 16, color: kFavoriteColor),
+                ),
+            ],
+          ),
+        ),
         const SizedBox(height: 8),
         Text(
           widget.displayName,
@@ -186,6 +202,9 @@ class FolderRow extends StatelessWidget {
   final FolderStats? stats;
   final int? consoleId;
   final String? subtitle;
+
+  /// Pinned to the Library's favorites section; marked with a heart.
+  final bool favorite;
   // Null disables the tap (e.g. while a scan is running).
   final VoidCallback? onTap;
 
@@ -196,6 +215,7 @@ class FolderRow extends StatelessWidget {
     required this.stats,
     required this.consoleId,
     this.subtitle,
+    this.favorite = false,
     required this.onTap,
   });
 
@@ -216,10 +236,20 @@ class FolderRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Row(children: [
+                    if (favorite) ...[
+                      const Icon(Icons.favorite,
+                          size: 14, color: kFavoriteColor),
+                      const SizedBox(width: 6),
+                    ],
+                    Expanded(
+                      child: Text(displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              const TextStyle(fontWeight: FontWeight.w600)),
+                    ),
+                  ]),
                   if (name != displayName)
                     Text(name,
                         maxLines: 1,
