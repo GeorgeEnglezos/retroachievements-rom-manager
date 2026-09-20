@@ -1,11 +1,14 @@
 import '../models/folder_stats.dart' show achievementFraction;
 import '../models/home_index.dart';
 import '../models/rom_result.dart';
-import 'game_lookup.dart' show romFromEntry;
+import 'credentials.dart';
+import 'game_lookup.dart'
+    show applyGameInfo, applyProgress, romFromEntry, saveGameDetail;
 import 'ignored_candidates.dart';
 import 'library.dart';
+import 'log_service.dart';
 import 'member_key.dart';
-import 'ra_service.dart' show RaAward;
+import 'ra_service.dart' show RaAward, RaService;
 import 'recommender.dart';
 import 'play_view.dart';
 
@@ -110,6 +113,58 @@ Future<HomeDashboard> loadHomeDashboard({Library? library, int limit = 12}) asyn
   final ignored = await IgnoredCandidates.instance.load();
   return buildHomeDashboard(games,
       systems: summaries, limit: limit, ignoredKeys: ignored);
+}
+
+/// Games whose banner art was already fetched this session, so a game RA has
+/// no screenshot or box art for isn't re-fetched on every Home reload. Without
+/// it the save below (which notifies the library, which reloads Home) would
+/// loop on such a game.
+/// ponytail: in-memory only, so it re-tries once per app run; persist a
+/// "detail fetched" flag on the entry if that ever costs a visible request.
+final _spotlightArtFetched = <int>{};
+
+/// Fills in the two featured banners' artwork. A scan deliberately skips the
+/// per-game detail call, so a spotlight game the user has never opened carries
+/// only its icon and the banners fall back to a flat gradient. This fetches the
+/// detail for those two games alone (at most two requests) and persists it, so
+/// the next Home load is free. Silent on failure: banners keep the gradient.
+Future<void> fetchSpotlightArt(
+  HomeDashboard dash, {
+  required Library library,
+  RaService? service,
+}) async {
+  final targets = [dash.spotlight, dash.beatSpotlight]
+      .whereType<RomResult>()
+      .where((r) =>
+          r.heroArt == null &&
+          r.gameId != null &&
+          !_spotlightArtFetched.contains(r.gameId))
+      .toList();
+  if (targets.isEmpty) return;
+
+  var ra = service;
+  if (ra == null) {
+    final creds = await savedCredentials();
+    if (creds == null) return;
+    ra = RaService(username: creds.$1, apiKey: creds.$2);
+  }
+
+  for (final rom in targets) {
+    _spotlightArtFetched.add(rom.gameId!);
+    try {
+      final (info, progress) = await ra.getGameInfoAndUserProgress(rom.gameId!);
+      // The library's own display name for the system beats RA's, which is what
+      // every other row on Home shows.
+      final systemName = rom.consoleName;
+      applyGameInfo(rom, info);
+      applyProgress(rom, progress);
+      if (systemName != null) rom.consoleName = systemName;
+      await saveGameDetail(rom.filePath,
+          info: info, progress: progress, library: library);
+    } catch (e) {
+      LogService.error('Home/spotlightArt', 'game ${rom.gameId}: $e');
+    }
+  }
 }
 
 /// The first game in [games] not in [ignoredKeys], or null when every

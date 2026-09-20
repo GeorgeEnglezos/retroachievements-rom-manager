@@ -72,6 +72,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _dash = dash;
       _loading = false;
     });
+    // Home paints first; the two featured banners have no art until their
+    // detail is fetched, and persisting it notifies the library, which reloads
+    // us with the art in place.
+    unawaited(fetchSpotlightArt(dash, library: _lib));
   }
 
   Future<void> _ignore(RomResult rom) async {
