@@ -105,8 +105,14 @@ void main() {
       // Verified on-device against Lime3DS: its VIEW filter accepts scheme
       // content with type application/octet-stream, which is what {file.uri} is.
       final spec = AndroidEmulators.buildLaunchSpec(
-          'io.github.lime3ds.android', 'citra', 62, '/roms/game.3ds');
+          'io.github.lime3ds.android', 'azahar', 62, '/roms/game.3ds');
       expect(spec['componentPkg'], 'io.github.lime3ds.android');
+      // 'citra' is the id detection used to emit; entries connected under it
+      // must keep launching.
+      expect(
+          AndroidEmulators.buildLaunchSpec(
+              'io.github.lime3ds.android', 'citra', 62, '/roms/game.3ds'),
+          spec);
       expect(spec['componentClass'],
           'org.citra.citra_emu.activities.EmulationActivity');
       expect(spec['data'], '{file.uri}');

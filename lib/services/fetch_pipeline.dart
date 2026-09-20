@@ -106,11 +106,7 @@ Future<void> applyFetchResultToRom({
       if (detail != null) {
         final (info, progress) = detail;
         applyGameInfo(rom, info);
-        rom.earnedAchievements = progress.earnedAchievements;
-        rom.earnedHardcore = progress.earnedHardcore;
-        rom.highestAward = progress.highestAward;
-        rom.highestAwardDate = progress.highestAwardDate;
-        rom.lastPlayed = progress.lastPlayed;
+        applyProgress(rom, progress);
       } else {
         rom.status = RomStatus.supported;
         rom.gameTitle ??= 'Game #${res.gameId}';

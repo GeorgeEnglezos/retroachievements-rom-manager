@@ -1,4 +1,4 @@
-import '../services/ra_service.dart' show Achievement, RaAward, raAwardByName;
+import '../services/ra_service.dart' show Achievement, RaAward, raAwardByName, raDate;
 
 /// A user's achievement progress for one game. Persisted inside a system file
 /// (see [GameEntry]); also returned live from the RA API.
@@ -26,13 +26,9 @@ class UserProgress {
         gameId: (j['gameId'] as num?)?.toInt() ?? 0,
         earnedAchievements: (j['earnedAchievements'] as num?)?.toInt() ?? 0,
         earnedHardcore: (j['earnedHardcore'] as num?)?.toInt() ?? 0,
-        lastPlayed: j['lastPlayed'] == null
-            ? null
-            : DateTime.tryParse(j['lastPlayed'] as String),
+        lastPlayed: raDate(j['lastPlayed']),
         highestAward: raAwardByName(j['highestAward'] as String?),
-        highestAwardDate: j['highestAwardDate'] == null
-            ? null
-            : DateTime.tryParse(j['highestAwardDate'] as String),
+        highestAwardDate: raDate(j['highestAwardDate']),
         achievements: (j['achievements'] as List<dynamic>?)
                 ?.map((e) => Achievement.fromJson(e as Map<String, dynamic>))
                 .toList() ??

@@ -574,11 +574,7 @@ class _FolderViewState extends State<FolderView> {
         if (mounted) {
           setState(() {
             applyGameInfo(rom, info);
-            rom.earnedAchievements = progress.earnedAchievements;
-            rom.earnedHardcore = progress.earnedHardcore;
-            rom.highestAward = progress.highestAward;
-            rom.highestAwardDate = progress.highestAwardDate;
-            rom.lastPlayed = progress.lastPlayed;
+            applyProgress(rom, progress);
           });
         }
       } catch (e) {

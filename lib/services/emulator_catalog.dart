@@ -138,7 +138,7 @@ class EmulatorCatalog {
     'me.magnum.melondualds': 'melonds',
     // 3DS: Lime3DS, and by pattern the rest of the Citra family (Citra MMJ,
     // Azahar). They all ship org.citra.citra_emu.* classes.
-    'io.github.lime3ds.android': 'citra',
+    'io.github.lime3ds.android': 'azahar',
   };
 
   /// Substring fallbacks, checked after [androidPackageKind]. Emulators fork
@@ -157,10 +157,10 @@ class EmulatorCatalog {
     'pcsx2': 'pcsx2',
     'melonds': 'melonds',
     'melondual': 'melonds',
-    'org.citra': 'citra',
-    'citra_emu': 'citra',
-    'lime3ds': 'citra',
-    'azahar': 'citra',
+    'org.citra': 'azahar',
+    'citra_emu': 'azahar',
+    'lime3ds': 'azahar',
+    'azahar': 'azahar',
     'flycast': 'flycast',
   };
 

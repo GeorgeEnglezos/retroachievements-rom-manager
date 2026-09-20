@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:xml/xml.dart';
 import '../../models/scraped_game.dart';
+import 'gamelist_parser.dart';
 
 /// Skraper's "DAT + media folder" recipe: a Logiqx/clrmamepro `.dat` of text
 /// metadata plus a sibling `media/<type>/<rom basename>.png` tree, matched to
@@ -77,20 +78,15 @@ List<ScrapedGame> parseDat(File datFile) {
     games.add(ScrapedGame(
       romPath: romPath,
       title: g.getAttribute('name') ?? stem,
-      desc: _text(g, 'description'),
-      developer: _text(g, 'developer'),
-      publisher: _text(g, 'manufacturer') ?? _text(g, 'publisher'),
-      genre: _text(g, 'genre'),
-      releaseDate: _text(g, 'year'),
-      players: _text(g, 'players'),
-      rating: _text(g, 'rating'),
+      desc: xmlText(g, 'description'),
+      developer: xmlText(g, 'developer'),
+      publisher: xmlText(g, 'manufacturer') ?? xmlText(g, 'publisher'),
+      genre: xmlText(g, 'genre'),
+      releaseDate: xmlText(g, 'year'),
+      players: xmlText(g, 'players'),
+      rating: xmlText(g, 'rating'),
       images: images,
     ));
   }
   return games;
-}
-
-String? _text(XmlElement g, String tag) {
-  final t = g.getElement(tag)?.innerText.trim();
-  return (t == null || t.isEmpty) ? null : t;
 }

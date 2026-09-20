@@ -4,15 +4,16 @@ import 'package:rarm/services/rom_filter.dart';
 import 'package:rarm/widgets/filter_helpers.dart';
 
 void main() {
-  test('statusLabel maps known statuses', () {
+  test('statusLabel names every status', () {
     expect(statusLabel(RomStatus.supported), 'Supported');
-    expect(statusLabel(RomStatus.unsupported), 'No match');
+    expect(statusLabel(RomStatus.unsupported), 'No achievements');
     expect(statusLabel(RomStatus.notFetched), 'Not fetched');
     expect(statusLabel(RomStatus.error), 'Error');
-  });
-
-  test('statusLabel falls back to enum name for other values', () {
-    expect(statusLabel(RomStatus.checking), 'checking');
+    expect(statusLabel(RomStatus.checking), 'Checking...');
+    // No default arm, so a new status can't slip through unnamed.
+    for (final s in RomStatus.values) {
+      expect(statusLabel(s), isNotEmpty, reason: s.name);
+    }
   });
 
   test('progressLabel maps states', () {

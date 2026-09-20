@@ -71,3 +71,9 @@ class ScrapedGame {
         if (images.isNotEmpty) 'images': images,
       };
 }
+
+/// RA value wins, but only when non-empty; an empty RA field falls through to
+/// the imported (Skraper) value. Every surface that blends the two uses this,
+/// so they agree on what counts as missing.
+String? raOrScraped(String? ra, String? scraped) =>
+    (ra != null && ra.isNotEmpty) ? ra : scraped;

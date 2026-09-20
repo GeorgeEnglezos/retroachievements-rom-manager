@@ -214,15 +214,19 @@ class _HomeScreenState extends State<HomeScreen> {
   // back to its tab never rebuilds it and the shortcut cards would keep showing
   // the counts from the last time it was visited.
   void _onPlaylistsChanged() {
-    // A scan is excluded for the same reason as the library listener: it
-    // re-derives Played from the index it is still filling, and refreshes the
-    // cards itself once it finishes.
-    if (!mounted || _isRunning) return;
-    _playlistDebounce?.cancel();
     // A single action writes several times (one per key of a disc set);
     // coalesce, same as the library listener.
-    _playlistDebounce = Timer(const Duration(milliseconds: 300), () {
-      if (mounted && !_isRunning) _refreshPlaylists();
+    _playlistDebounce = _coalesce(_playlistDebounce, _refreshPlaylists);
+  }
+
+  // One refresh per burst of notifications. A scan is excluded at both ends:
+  // it feeds `_stats` live, ahead of what it has saved, and refreshes the
+  // cards itself once it finishes.
+  Timer? _coalesce(Timer? pending, VoidCallback refresh) {
+    if (!mounted || _isRunning) return pending;
+    pending?.cancel();
+    return Timer(const Duration(milliseconds: 300), () {
+      if (mounted && !_isRunning) refresh();
     });
   }
 
@@ -232,11 +236,8 @@ class _HomeScreenState extends State<HomeScreen> {
   // folder cards and playlist counts would keep showing games that are gone.
   // A scan is excluded: it feeds `_stats` live, ahead of what it has saved.
   void _onLibraryChanged() {
-    if (!mounted || _isRunning) return;
-    _libraryDebounce?.cancel();
-    // One save per system arrives in a burst; coalesce (same as StorageScreen).
-    _libraryDebounce = Timer(const Duration(milliseconds: 300), () {
-      if (!mounted || _isRunning) return;
+    // One save per system arrives in a burst; coalesce.
+    _libraryDebounce = _coalesce(_libraryDebounce, () {
       _loadFolderStats();
       _refreshPlaylists();
     });

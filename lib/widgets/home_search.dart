@@ -438,11 +438,7 @@ class _HomeSearchState extends State<HomeSearch> {
       if (!mounted) return;
       setState(() {
         applyGameInfo(hit.rom, info);
-        hit.rom.earnedAchievements = progress.earnedAchievements;
-        hit.rom.earnedHardcore = progress.earnedHardcore;
-        hit.rom.highestAward = progress.highestAward;
-        hit.rom.highestAwardDate = progress.highestAwardDate;
-        hit.rom.lastPlayed = progress.lastPlayed;
+        applyProgress(hit.rom, progress);
       });
       messenger.showSnackBar(const SnackBar(content: Text('Progress synced')));
     } catch (e) {

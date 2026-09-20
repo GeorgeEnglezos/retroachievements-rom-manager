@@ -7,7 +7,6 @@ import 'package:path/path.dart' as p;
 import '../models/folder_stats.dart' show formatBytes;
 import '../models/rom_result.dart';
 import '../models/rom_row.dart';
-import '../services/console_image.dart';
 import '../services/file_actions.dart';
 import '../services/game_lookup.dart';
 import '../services/library.dart';
@@ -18,6 +17,7 @@ import '../services/scraper/scraped_store.dart';
 import '../services/storage_scanner.dart';
 import '../services/storage_treemap.dart' show TreemapItem;
 import '../theme/ui_tokens.dart';
+import '../widgets/folder_card.dart' show ConsoleLogo;
 import '../widgets/game_detail_dialog.dart';
 import '../widgets/ui/ui_button.dart';
 import '../widgets/ui/ui_panel.dart';
@@ -257,7 +257,12 @@ class _StorageScreenState extends State<StorageScreen> {
   // row keeps the same slot filled and the titles stay on one line.
   Widget _leadingFor(TreemapItem it,
       {required bool isRoot, required bool isFile}) {
-    if (isRoot && it.path != null) return _ConsoleLogo(_consoleIds[it.path]);
+    if (isRoot && it.path != null) {
+      return Padding(
+        padding: const EdgeInsets.all(4),
+        child: ConsoleLogo(consoleId: _consoleIds[it.path]),
+      );
+    }
     if (isFile) {
       final rom = _fileRoms[it.path];
       if (rom != null &&
@@ -350,29 +355,6 @@ class _StorageScreenState extends State<StorageScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Bundled console logo for the storage root's per-system rows, mirroring the
-/// folder card's picture (same tint list, folder fallback).
-class _ConsoleLogo extends StatelessWidget {
-  final int? consoleId;
-  const _ConsoleLogo(this.consoleId);
-
-  @override
-  Widget build(BuildContext context) {
-    final path = ConsoleImage.assetOrGeneric(consoleId);
-    final tint = ConsoleImage.tintedLogos.contains(consoleId);
-    return Padding(
-      padding: const EdgeInsets.all(4),
-      child: Image.asset(
-        path,
-        fit: BoxFit.contain,
-        color: tint ? context.ui.text : null,
-        colorBlendMode: tint ? BlendMode.srcIn : null,
-        errorBuilder: (_, _, _) => const Icon(Icons.folder, size: 40),
       ),
     );
   }

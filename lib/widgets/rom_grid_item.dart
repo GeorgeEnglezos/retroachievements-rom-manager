@@ -261,16 +261,14 @@ class RomGridItem extends StatelessWidget {
   /// tile gates them. Null when neither applies.
   String? _subline(UiTokens ui) {
     final size = playView.fileSize ? rom.fileSizeLabel : null;
-    final status = rom.isLocalOnly || rom.status == RomStatus.supported
-        ? null
-        : switch (rom.status) {
-            RomStatus.notFetched => 'Not fetched',
-            RomStatus.checking => 'Checking...',
-            RomStatus.unsupported => 'No achievements',
-            RomStatus.unsupportedFormat => 'Bad format',
-            RomStatus.error => rom.errorMessage ?? 'Error',
-            _ => null,
-          };
+    final status = switch (rom.status) {
+      RomStatus.supported ||
+      RomStatus.localOnly ||
+      RomStatus.metadataOnly =>
+        null,
+      RomStatus.error => rom.errorMessage ?? statusLabel(rom.status),
+      final s => statusLabel(s),
+    };
     final parts = [?status, ?size];
     return parts.isEmpty ? null : parts.join('  ·  ');
   }

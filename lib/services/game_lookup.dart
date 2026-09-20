@@ -37,6 +37,18 @@ void applyGameInfo(RomResult rom, GameInfo? info) {
   rom.numPlayersHardcore = info.numPlayersHardcore;
 }
 
+/// Maps a user's [progress] for a game onto a [RomResult]. Null clears the
+/// fields, which is what a never-played or unmatched entry should show.
+/// Shared by every surface that refreshes one game, so adding a progress
+/// field is a one-line change here.
+void applyProgress(RomResult rom, UserProgress? progress) {
+  rom.earnedAchievements = progress?.earnedAchievements;
+  rom.earnedHardcore = progress?.earnedHardcore;
+  rom.highestAward = progress?.highestAward;
+  rom.highestAwardDate = progress?.highestAwardDate;
+  rom.lastPlayed = progress?.lastPlayed;
+}
+
 /// Maps third-party [meta] onto a [RomResult] for a display-only console. A
 /// null [meta] means the name lookup found nothing; the row stays local-only.
 /// Shared by the live fetch loop and [romFromEntry] so the mapping lives once.
@@ -126,11 +138,7 @@ RomResult romFromEntry(GameEntry entry, {int? consoleId, String? consoleName}) {
   if (entry.matched && entry.gameInfo != null) {
     applyGameInfo(rom, entry.gameInfo);
     if (consoleName != null) rom.consoleName = consoleName;
-    rom.earnedAchievements = entry.progress?.earnedAchievements;
-    rom.earnedHardcore = entry.progress?.earnedHardcore;
-    rom.highestAward = entry.progress?.highestAward;
-    rom.highestAwardDate = entry.progress?.highestAwardDate;
-    rom.lastPlayed = entry.progress?.lastPlayed;
+    applyProgress(rom, entry.progress);
   } else if (entry.matched && entry.gameId != null) {
     // Hash matched but the detail fetch failed, so nothing rich was stored.
     // Still a supported game; showing it as unscanned would invite a pointless

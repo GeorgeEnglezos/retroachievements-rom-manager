@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../models/folder_stats.dart' show compactCount;
 import '../models/rom_result.dart';
 import '../models/scraped_game.dart';
@@ -8,7 +7,6 @@ import '../services/credentials.dart';
 import '../services/disc_grouping.dart';
 import '../services/switch_grouping.dart';
 import '../services/app_mode.dart';
-import '../services/file_actions.dart';
 import '../services/game_lookup.dart';
 import '../services/library.dart';
 import '../services/console_image.dart';
@@ -24,7 +22,6 @@ import 'image_viewer.dart';
 import 'ui/ui_badge.dart';
 import 'ui/ui_card.dart';
 import 'ui/ui_segmented.dart';
-import 'playlist_picker.dart';
 import 'ra_image.dart';
 import 'rom_actions.dart';
 import 'rom_progress.dart';
@@ -206,11 +203,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
           // publisher. Applied here and persisted below so it is fetched once,
           // not on every open.
           applyGameInfo(rom, info);
-          rom.earnedAchievements = progress.earnedAchievements;
-          rom.earnedHardcore = progress.earnedHardcore;
-          rom.highestAward = progress.highestAward;
-          rom.highestAwardDate = progress.highestAwardDate;
-          rom.lastPlayed = progress.lastPlayed;
+          applyProgress(rom, progress);
           _achievements = progress.achievements;
           _achievementsLoading = false;
         });
@@ -232,18 +225,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   }
 
   Future<void> _handle(String choice) async {
-    final messenger = ScaffoldMessenger.of(context);
-    void snack(String text) =>
-        messenger.showSnackBar(SnackBar(content: Text(text)));
-
     switch (choice) {
-      case 'reveal':
-        if (!await FileActions.revealInExplorer(rom.filePath)) {
-          snack("Couldn't reveal file");
-        }
-      case 'copy':
-        await Clipboard.setData(ClipboardData(text: rom.filePath));
-        snack('Path copied');
       case 'fetch':
         // Per-disc fetch closes the modal (like single-ROM fetch);
         // reopen to fetch the next disc.
@@ -253,22 +235,17 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
           widget.onFetch?.call();
         }
         if (mounted) Navigator.pop(context);
-      case 'google':
-        if (!await FileActions.openUrl(
-            FileActions.googleSearchUrl(rom.filePath))) {
-          snack("Couldn't open browser");
-        }
-      case 'ra':
-        if (rom.gameId != null &&
-            !await FileActions.openUrl(FileActions.raGameUrl(rom.gameId!))) {
-          snack("Couldn't open browser");
-        }
-      case 'playlist':
-        if (!mounted) return;
-        await PlaylistPicker.show(context, widget.store!, _memberKey);
-        widget.onPlaylistChanged?.call();
       case 'delete':
-        await _confirmDelete(messenger);
+        // Multi-disc aware, so it can't go through RomActions.
+        await _confirmDelete(ScaffoldMessenger.of(context));
+      default:
+        // Reveal, copy, google, ra and playlist behave exactly as they do on a
+        // tile, down to the snackbar wording, so the tile owns them.
+        await RomActions(
+          rom: rom,
+          store: widget.store ?? PlaylistStore(),
+          onPlaylistChanged: widget.onPlaylistChanged,
+        ).handle(context, choice);
     }
   }
 
@@ -745,18 +722,13 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     );
   }
 
-  // RA value wins, but only when non-empty; an empty RA field falls through to
-  // the scraped value.
-  String? _gap(String? ra, String? scraped) =>
-      (ra != null && ra.isNotEmpty) ? ra : scraped;
-
   Widget _buildMetaRows(BuildContext context) {
     final s = widget.scraped;
     final rows = <(String, String?)>[
-      ('Developer', _gap(rom.developer, s?.developer)),
-      ('Publisher', _gap(rom.publisher, s?.publisher)),
-      ('Genre', _gap(rom.genre, s?.genre)),
-      ('Released', _gap(rom.released, s?.releaseDate)),
+      ('Developer', raOrScraped(rom.developer, s?.developer)),
+      ('Publisher', raOrScraped(rom.publisher, s?.publisher)),
+      ('Genre', raOrScraped(rom.genre, s?.genre)),
+      ('Released', raOrScraped(rom.released, s?.releaseDate)),
       ('Players', s?.players),
       ('Rating', s?.rating),
       ('Set released', rom.setCreated != null ? _fmtDate(rom.setCreated!) : null),

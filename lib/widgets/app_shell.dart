@@ -4,7 +4,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../services/android_emulators.dart';
 import '../services/app_mode.dart';
 import '../services/library.dart';
-import '../services/log_service.dart';
 import '../services/play_view.dart';
 import '../screens/cull_screen.dart';
 import '../screens/dashboard_screen.dart';
@@ -117,25 +116,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   Future<void> _drainPendingShortcut() async {
     final pending = await AndroidEmulators.takePendingShortcut();
     if (pending == null) return;
-    LogService.info('AppShell/shortcut',
-        'Shortcut launch ${pending.romPath} '
-        '(pkg=${pending.package}, kind=${pending.kindId}, console=${pending.consoleId})');
-    final err = await AndroidEmulators.launchRom(
+    final err = await AndroidEmulators.launchRomLogged(
       package: pending.package,
       kindId: pending.kindId,
       consoleId: pending.consoleId,
       romPath: pending.romPath,
+      subject: 'shortcut ${pending.romPath}',
+      logContext: 'AppShell/shortcut',
     );
-    if (err != null) {
-      LogService.error('AppShell/shortcut',
-          'Shortcut launch failed for ${pending.romPath} '
-          '(pkg=${pending.package}): $err');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Couldn't launch shortcut: $err")));
-      }
-    } else {
-      LogService.info('AppShell/shortcut', 'Shortcut launch OK: ${pending.romPath}');
+    if (err != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Couldn't launch shortcut: $err")));
     }
   }
 

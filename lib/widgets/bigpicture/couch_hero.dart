@@ -5,6 +5,7 @@ import '../../models/rom_result.dart';
 import '../../theme/ui_tokens.dart';
 import '../positioned_menu.dart';
 import '../ra_image.dart';
+import '../ui/ui_eyebrow.dart';
 import '../ui/ui_progress_bar.dart';
 
 /// The big-picture home's featured banner: full-bleed box art under a scrim,
@@ -166,7 +167,7 @@ class _CouchHeroState extends State<CouchHero> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _Eyebrow(widget.eyebrow),
+                            UiEyebrow(widget.eyebrow),
                             const SizedBox(height: 14),
                             Text(title,
                                 maxLines: 2,
@@ -212,20 +213,3 @@ class _CouchHeroState extends State<CouchHero> {
   }
 }
 
-class _Eyebrow extends StatelessWidget {
-  final String label;
-  const _Eyebrow(this.label);
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-          color: kOnScrim.withValues(alpha: 0.14),
-          borderRadius: UiTokens.pill,
-          border: Border.all(color: kOnScrim.withValues(alpha: 0.4)),
-        ),
-        child: Text(label,
-            style: context.ui.labelCaps
-                .copyWith(color: kOnScrimAccent, fontSize: 10, letterSpacing: 2)),
-      );
-}

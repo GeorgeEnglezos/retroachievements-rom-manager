@@ -223,24 +223,13 @@ class RomActions {
     }
     final command = await _commandOrPrompt(context, consoleId);
     if (command == null) return;
-    LogService.info('RomActions/launch',
-        'Launch ${rom.fileName} (console $consoleId) via: $command');
-    if (!await FileActions.launchWithTemplate(command, rom.filePath)) {
-      LogService.error('RomActions/launch',
-          'Launch failed for ${rom.fileName} via: $command');
-      snack("Couldn't launch ROM");
-    }
+    await _launchDesktop(command, consoleId, snack);
   }
 
   // Android: hand the ROM to the connected app via an intent.
   Future<void> _playAndroid(
       BuildContext context, int consoleId, void Function(String) snack) async {
-    var emu = await EmulatorStore.connectedEmulator(consoleId);
-    if (emu == null) {
-      if (!context.mounted) return;
-      if (!await showSetEmulatorDialog(context, consoleId)) return;
-      emu = await EmulatorStore.connectedEmulator(consoleId);
-    }
+    final emu = await _emulatorOrPrompt(context, consoleId);
     if (emu == null) return;
     await _launchAndroid(emu, consoleId, snack);
   }
@@ -248,24 +237,25 @@ class RomActions {
   // Android: fire the intent for [emu] and report the outcome.
   Future<void> _launchAndroid(
       Emulator emu, int consoleId, void Function(String) snack) async {
-    LogService.info('RomActions/launch',
-        'Launch ${rom.fileName} in ${emu.name} '
-        '(pkg=${emu.exePath}, kind=${emu.kindId}, console=$consoleId)');
-    final err = await AndroidEmulators.launchRom(
+    final err = await AndroidEmulators.launchRomLogged(
       package: emu.exePath,
       kindId: emu.kindId,
       consoleId: consoleId,
       romPath: rom.filePath,
+      subject: '${rom.fileName} in ${emu.name}',
+      logContext: 'RomActions/launch',
     );
-    if (err != null) {
-      LogService.error('RomActions/launch',
-          'Launch failed for ${rom.fileName} in ${emu.name} '
-          '(pkg=${emu.exePath}): $err');
-      snack("Couldn't open in ${emu.name}: $err");
-    } else {
-      LogService.info('RomActions/launch',
-          'Launch OK: ${rom.fileName} in ${emu.name}');
-    }
+    if (err != null) snack("Couldn't open in ${emu.name}: $err");
+  }
+
+  // The console's connected emulator, offering to set one when it has none.
+  Future<Emulator?> _emulatorOrPrompt(
+      BuildContext context, int consoleId) async {
+    final existing = await EmulatorStore.connectedEmulator(consoleId);
+    if (existing != null) return existing;
+    if (!context.mounted) return null;
+    if (!await showSetEmulatorDialog(context, consoleId)) return null;
+    return EmulatorStore.connectedEmulator(consoleId);
   }
 
   // Launch this one game in an emulator the user picks, using the catalog's
@@ -291,11 +281,20 @@ class RomActions {
       snack("${emu.name} has no launch command for this system.");
       return;
     }
+    await _launchDesktop(command, consoleId, snack, emulatorName: emu.name);
+  }
+
+  // Desktop: run [command] for this ROM and report the outcome.
+  // [emulatorName] is set only when the user picked the emulator themselves.
+  Future<void> _launchDesktop(
+      String command, int consoleId, void Function(String) snack,
+      {String? emulatorName}) async {
+    final inEmu = emulatorName == null ? '' : ' in $emulatorName';
     LogService.info('RomActions/launch',
-        'Launch ${rom.fileName} (console $consoleId) in ${emu.name} via: $command');
+        'Launch ${rom.fileName} (console $consoleId)$inEmu via: $command');
     if (!await FileActions.launchWithTemplate(command, rom.filePath)) {
       LogService.error('RomActions/launch',
-          'Launch failed for ${rom.fileName} in ${emu.name} via: $command');
+          'Launch failed for ${rom.fileName}$inEmu via: $command');
       snack("Couldn't launch ROM");
     }
   }
@@ -324,12 +323,8 @@ class RomActions {
       snack('Unknown console for this ROM. Set its folder system in Settings.');
       return;
     }
-    var emu = await EmulatorStore.connectedEmulator(consoleId);
-    if (emu == null) {
-      if (!context.mounted) return;
-      if (!await showSetEmulatorDialog(context, consoleId)) return;
-      emu = await EmulatorStore.connectedEmulator(consoleId);
-    }
+    if (!context.mounted) return;
+    final emu = await _emulatorOrPrompt(context, consoleId);
     if (emu == null) return;
     final err = await AndroidEmulators.createShortcut(
       package: emu.exePath,

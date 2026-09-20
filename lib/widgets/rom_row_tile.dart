@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,14 +8,13 @@ import '../services/member_key.dart';
 import '../services/play_view.dart';
 import '../services/playlist_store.dart';
 import '../services/rom_tap.dart';
-import '../services/scraper/scraped_store.dart';
 import '../theme/ui_tokens.dart';
 import 'game_detail_dialog.dart';
 import 'ui/ui_card.dart';
-import 'ra_image.dart';
 import 'rom_actions.dart';
 import 'rom_badges.dart';
 import 'rom_progress.dart';
+import 'rom_thumb.dart';
 import 'row_display.dart';
 
 /// A single list-row tile that renders any [RomRow], gating each visual element
@@ -240,58 +238,17 @@ class RomRowTile extends StatelessWidget {
     );
   }
 
-  // In-memory map lookup (no I/O): the store is loaded once at startup.
-  String? _scrapedThumbPath() {
-    final path = row.rom?.filePath ?? row.filePath;
-    if (path == null) return null;
-    return ScrapedStore.instance.get(path)?.thumbPath;
-  }
-
   Widget _buildLeading(UiTokens ui) {
     Widget base;
-    final scrapedArt = display.showBoxArt ? _scrapedThumbPath() : null;
+    final rom = row.rom;
     if (leading != null) {
       base = SizedBox(width: _art, height: _art, child: leading);
-    } else if (display.showBoxArt &&
-        (row.status == RomStatus.supported ||
-            row.status == RomStatus.metadataOnly) &&
-        row.imageIcon != null) {
-      base = RaImage(
-        url: raImageUrl(row.imageIcon!),
-        width: _art,
-        height: _art,
-        fit: BoxFit.cover,
-        borderRadius: ui.roundMd,
-        error: row.rom != null
-            ? romStatusIcon(row.rom!)
-            : const SizedBox.shrink(),
-        placeholder: const SizedBox(
-          width: _art,
-          height: _art,
-          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-        ),
-      );
-    } else if (scrapedArt != null) {
-      // No RA art. Fall back to imported (Skraper) box art on disk.
-      base = ClipRRect(
-        borderRadius: ui.roundMd,
-        child: Image.file(
-          File(scrapedArt),
-          width: _art,
-          height: _art,
-          // Decode at thumbnail size, scraper PNGs are full covers and would
-          // otherwise fill the image cache at native resolution per row.
-          cacheWidth: (_art * 2).round(),
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => row.rom != null
-              ? romStatusIcon(row.rom!)
-              : const SizedBox.shrink(),
-        ),
-      );
-    } else if (row.rom != null) {
-      base = romStatusIcon(row.rom!);
-    } else {
+    } else if (rom == null) {
       base = const SizedBox.shrink();
+    } else if (!display.showBoxArt) {
+      base = romStatusIcon(rom);
+    } else {
+      base = RomThumb(rom: rom, size: _art, raArt: row.imageIcon);
     }
 
     if (!display.showSelection || !isSelectMode) return base;
@@ -419,15 +376,16 @@ class RomRowTile extends StatelessWidget {
     }
 
     final statusText = switch (rom.status) {
-      RomStatus.notFetched => 'Not fetched',
-      RomStatus.checking => 'Checking...',
-      RomStatus.unsupported => 'No achievements found',
-      RomStatus.unsupportedFormat =>
-        DiscFormats.isNkit(rom.filePath)
-            ? 'NKit format not supported'
-            : 'Compressed disc. Add Dolphin in Settings → Emulators to hash it',
-      RomStatus.error => rom.errorMessage ?? 'Unknown error',
-      _ => null,
+      RomStatus.supported ||
+      RomStatus.localOnly ||
+      RomStatus.metadataOnly =>
+        null,
+      // The row has the width for the fix, not just the diagnosis.
+      RomStatus.unsupportedFormat => DiscFormats.isNkit(rom.filePath)
+          ? 'NKit format not supported'
+          : 'Compressed disc. Add Dolphin in Settings → Emulators to hash it',
+      RomStatus.error => rom.errorMessage ?? statusLabel(rom.status),
+      final s => statusLabel(s),
     };
     if (statusText == null) return null;
     return _metaLine(

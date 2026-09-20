@@ -4,6 +4,7 @@ import '../models/rom_result.dart';
 import '../services/play_view.dart';
 import '../theme/ui_tokens.dart';
 import 'ra_image.dart';
+import 'ui/ui_eyebrow.dart';
 import 'ui/ui_progress_bar.dart';
 
 /// The Home dashboard's featured game: a cinematic banner built from the game's
@@ -126,7 +127,7 @@ class SpotlightHero extends StatelessWidget {
                       vscrim ? MainAxisAlignment.end : MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _Eyebrow(eyebrow),
+                    UiEyebrow(eyebrow),
                     SizedBox(height: mini ? 7 : 12),
                     Text(title,
                         maxLines: mini ? 1 : 2,
@@ -177,25 +178,5 @@ class SpotlightHero extends StatelessWidget {
           color: kOnScrimAccent,
           trough: kOnScrim.withValues(alpha: 0.25),
         ),
-      );
-}
-
-/// The banner's kicker: an outlined pill rather than bare caps, so the label
-/// keeps its own shape against whatever artwork sits behind it.
-class _Eyebrow extends StatelessWidget {
-  final String label;
-  const _Eyebrow(this.label);
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-          color: kOnScrim.withValues(alpha: 0.14),
-          borderRadius: UiTokens.pill,
-          border: Border.all(color: kOnScrim.withValues(alpha: 0.4)),
-        ),
-        child: Text(label,
-            style: context.ui.labelCaps
-                .copyWith(color: kOnScrimAccent, fontSize: 10, letterSpacing: 2)),
       );
 }
