@@ -25,7 +25,7 @@ class RomRow {
   // Every file this row represents (all discs of the set). Null for single
   // files. Group-wide delete/exclude act on these instead of just [filePath].
   final List<String>? groupPaths;
-  // Small trailing metric (e.g. the cleanup score), shown right of the title.
+  // Small trailing metric (e.g. the least-played score), shown right of the title.
   final String? scoreLabel;
 
   const RomRow({

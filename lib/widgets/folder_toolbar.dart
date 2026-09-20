@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/folder_sort.dart';
-import '../services/cleanup_score.dart';
 import '../services/rom_filter.dart';
 import '../theme/ui_tokens.dart';
 import 'ui/ui_chip.dart';
@@ -28,7 +27,6 @@ class FolderToolbar extends StatefulWidget {
   final bool anyDuplicates;
   final bool hot;
   final bool showHot;
-  final CleanupScoreMode cleanupMode;
   final List<({String id, String name})> playlists;
   // Grid tile size (max cross-axis extent, px) and its live/commit callbacks.
   // The slider only shows in grid view when [onGridSizeChanged] is wired.
@@ -37,7 +35,6 @@ class FolderToolbar extends StatefulWidget {
   final ValueChanged<double>? onGridSizeChangeEnd;
   final ValueChanged<RomFilter> onFilterChanged;
   final ValueChanged<FolderSort> onSortChanged;
-  final ValueChanged<CleanupScoreMode> onCleanupModeChanged;
   final VoidCallback onDirectionToggle;
   final VoidCallback onViewToggle;
   final ValueChanged<bool> onDuplicatesToggle;
@@ -61,21 +58,17 @@ class FolderToolbar extends StatefulWidget {
     required this.anyDuplicates,
     this.hot = false,
     this.showHot = false,
-    this.cleanupMode = CleanupScoreMode.logDampened,
     this.gridSize = gridSizeDefault,
     this.onGridSizeChanged,
     this.onGridSizeChangeEnd,
     required this.playlists,
     required this.onFilterChanged,
     required this.onSortChanged,
-    this.onCleanupModeChanged = _ignoreMode,
     required this.onDirectionToggle,
     required this.onViewToggle,
     required this.onDuplicatesToggle,
     required this.onHotToggle,
   });
-
-  static void _ignoreMode(CleanupScoreMode _) {}
 
   @override
   State<FolderToolbar> createState() => _FolderToolbarState();
@@ -111,14 +104,10 @@ class _FolderToolbarState extends State<FolderToolbar> {
   List<FolderSort> get _sortOptions => [
         FolderSort.alphabetical,
         FolderSort.achievementCount,
-        FolderSort.points,
         FolderSort.progress,
         FolderSort.lastPlayed,
-        FolderSort.cleanup,
+        FolderSort.leastPlayed,
       ];
-
-  bool get _cleanupActive =>
-      widget.sort == FolderSort.cleanup && !_dupActive && !widget.hot;
 
   @override
   Widget build(BuildContext context) {
@@ -248,7 +237,6 @@ class _FolderToolbarState extends State<FolderToolbar> {
               if (v != widget.gridView) widget.onViewToggle();
             },
           ),
-        if (_cleanupActive) ..._buildCleanupControls(ui),
         if (widget.anyDuplicates)
           UiChip(
             label: 'Duplicates',
@@ -277,16 +265,4 @@ class _FolderToolbarState extends State<FolderToolbar> {
       ],
     );
   }
-
-  // Scoring mode picker. Only rendered while the Cleanup sort is active.
-  List<Widget> _buildCleanupControls(UiTokens ui) => [
-        UiDropdown<CleanupScoreMode>(
-          value: widget.cleanupMode,
-          items: [
-            for (final m in CleanupScoreMode.values)
-              (value: m, label: cleanupModeLabel(m)),
-          ],
-          onChanged: widget.onCleanupModeChanged,
-        ),
-      ];
 }

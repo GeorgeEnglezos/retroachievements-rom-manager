@@ -40,11 +40,17 @@ class FolderRunResult {
   /// True when the run stopped early because the user cancelled.
   final bool cancelled;
 
+  /// Why this folder produced no fetch work, or null when it ran. A sweep over
+  /// many folders reports these at the end, so a system it passed over is
+  /// visible instead of silently untouched.
+  final String? skipReason;
+
   const FolderRunResult({
     required this.saved,
     this.setUpdates = const [],
     this.unhashable = const [],
     this.cancelled = false,
+    this.skipReason,
   });
 }
 
@@ -90,7 +96,10 @@ Future<FolderRunResult> runFolderFetch({
   final setUpdates = <String>[];
 
   // Rebuilds from the current file list so removed files drop out, then saves.
-  Future<FolderRunResult> finish({List<String> unhashable = const []}) async {
+  Future<FolderRunResult> finish({
+    List<String> unhashable = const [],
+    String? skipReason,
+  }) async {
     // Size comes from the walk we just did, not from whatever a previous scan
     // stored: a ROM swapped for a bigger redump would otherwise keep reporting
     // the old size on the folder card until something re-hashed it.
@@ -106,6 +115,7 @@ Future<FolderRunResult> runFolderFetch({
       setUpdates: setUpdates,
       unhashable: unhashable,
       cancelled: run.cancelled,
+      skipReason: skipReason,
     );
   }
 
@@ -172,13 +182,18 @@ Future<FolderRunResult> runFolderFetch({
       return finish();
     }
 
+    final consoleName = ConsoleMap.nameFor(folderConsoleId);
     LogService.warning(
         logContext,
         'Non-RA console for folder ${p.basename(folderPath)} '
-        '(${ConsoleMap.nameFor(folderConsoleId) ?? 'unknown'}); '
+        '(${consoleName ?? 'unknown'}); '
         'recording size only (not hashed).');
     onTargets?.call(0);
-    return finish();
+    return finish(
+      skipReason: folderConsoleId == null
+          ? 'no console mapping'
+          : "$consoleName isn't on RetroAchievements",
+    );
   }
 
   // An RA console with no credentials cannot be looked up. Bail rather than run

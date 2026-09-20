@@ -4,18 +4,16 @@
 enum FolderSort {
   alphabetical,
   achievementCount,
-  points,
   progress,
   lastPlayed,
-  cleanup,
+  leastPlayed,
 }
 
 /// Human-readable dropdown label for each sort.
 String folderSortLabel(FolderSort s) => switch (s) {
       FolderSort.alphabetical => 'Name',
       FolderSort.achievementCount => 'Achievements',
-      FolderSort.points => 'Points',
       FolderSort.progress => 'Progress',
       FolderSort.lastPlayed => 'Last played',
-      FolderSort.cleanup => 'Cleanup',
+      FolderSort.leastPlayed => 'Least played',
     };

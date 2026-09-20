@@ -53,7 +53,6 @@ class FilterPanel extends StatelessWidget {
               RomStatus.supported,
               RomStatus.unsupported,
               RomStatus.notFetched,
-              RomStatus.localOnly,
               RomStatus.error,
             ])
               UiChip(
@@ -79,12 +78,6 @@ class FilterPanel extends StatelessWidget {
                   onTap: () => onChanged(f.copyWith(
                       progressStates: toggleSet(f.progressStates, ps))),
                 ),
-              UiChip(
-                label: 'Recently played',
-                selected: f.onlyRecentlyPlayed,
-                onTap: () => onChanged(
-                    f.copyWith(onlyRecentlyPlayed: !f.onlyRecentlyPlayed)),
-              ),
             ]),
           ],
           if (availableGenres.isNotEmpty) ...[

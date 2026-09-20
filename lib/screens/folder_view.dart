@@ -31,7 +31,7 @@ import '../services/disc_decompressor.dart';
 import '../services/disc_formats.dart';
 import '../services/rom_file_lister.dart';
 import '../services/rom_filter.dart';
-import '../services/cleanup_score.dart';
+import '../services/least_played_score.dart';
 import '../services/disc_grouping.dart';
 import '../services/switch_grouping.dart';
 import '../models/folder_sort.dart';
@@ -108,7 +108,6 @@ class _FolderViewState extends State<FolderView> {
     PlayLayout.list => false,
     PlayLayout.grid => true,
   };
-  CleanupScoreMode _cleanupMode = CleanupScoreMode.logDampened;
   // Sort override; a flag (not a FolderSort) so toggling off restores the
   // previous sort.
   bool _hot = false;
@@ -122,7 +121,6 @@ class _FolderViewState extends State<FolderView> {
     sort: _folderSort,
     ascending: _sortAscending,
     hot: _hot,
-    cleanupMode: _cleanupMode,
   );
 
   bool get _anyDuplicates => _roms.any((r) => r.duplicateGroupId != null);
@@ -209,8 +207,6 @@ class _FolderViewState extends State<FolderView> {
     final size =
         prefs.getDouble(PrefKeys.folderGridSize) ??
         FolderToolbar.gridSizeDefault;
-    final mode = CleanupScoreMode.values
-        .asNameMap()[prefs.getString(PrefKeys.cleanupMode)];
     if (mounted) {
       setState(() {
         if (v != null) _folderSort = v;
@@ -220,7 +216,6 @@ class _FolderViewState extends State<FolderView> {
           FolderToolbar.gridSizeMin,
           FolderToolbar.gridSizeMax,
         );
-        if (mode != null) _cleanupMode = mode;
       });
     }
   }
@@ -695,7 +690,7 @@ class _FolderViewState extends State<FolderView> {
   }
 
   RomRow _toRow(RomResult rom) =>
-      RomRow.fromRom(rom, scoreLabel: _cleanupScoreLabel(rom));
+      RomRow.fromRom(rom, scoreLabel: _leastPlayedScoreLabel(rom));
 
   // Collapses multi-disc sets into a single listing row; other files map 1:1.
   List<RomRow> _listingRows() =>
@@ -720,7 +715,7 @@ class _FolderViewState extends State<FolderView> {
       discCount: g.discs.length,
       groupPaths: [for (final d in g.discs) d.filePath],
       onTap: () => _openDiscGroup(g),
-      scoreLabel: _cleanupScoreLabel(rep),
+      scoreLabel: _leastPlayedScoreLabel(rep),
     );
   }
 
@@ -787,16 +782,15 @@ class _FolderViewState extends State<FolderView> {
     return rows;
   }
 
-  // The cleanup score shown on each row while the Cleanup sort is active (both
-  // score modes). Null → no label: sort isn't cleanup, or the set can't be
+  // The score shown on each row while the Least played sort is active.
+  // Null → no label: sort isn't least-played, or the set can't be
   // judged (no set date / inside the grace period). Lower score = more
   // deletable, matching the ascending sort.
-  String? _cleanupScoreLabel(RomResult rom) {
-    if (_folderSort != FolderSort.cleanup) return null;
-    final score = cleanupScore(
+  String? _leastPlayedScoreLabel(RomResult rom) {
+    if (_folderSort != FolderSort.leastPlayed) return null;
+    final score = leastPlayedScore(
       players: rom.numPlayersCasual ?? 0,
       setCreated: rom.setCreated,
-      mode: _cleanupMode,
     );
     return score == null ? '-' : score.round().toString();
   }
@@ -836,7 +830,6 @@ class _FolderViewState extends State<FolderView> {
                   anyDuplicates: _anyDuplicates,
                   hot: _hot,
                   showHot: _roms.any((r) => (r.numPlayersCasual ?? 0) > 0),
-                  cleanupMode: _cleanupMode,
                   playlists: [
                     for (final pl in _playlists) (id: pl.id, name: pl.name),
                   ],
@@ -845,11 +838,6 @@ class _FolderViewState extends State<FolderView> {
                     setState(() => _folderSort = s);
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.setString(PrefKeys.folderSort, s.name);
-                  },
-                  onCleanupModeChanged: (m) async {
-                    setState(() => _cleanupMode = m);
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setString(PrefKeys.cleanupMode, m.name);
                   },
                   onDirectionToggle: () async {
                     setState(() => _sortAscending = !_sortAscending);

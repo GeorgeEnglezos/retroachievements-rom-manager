@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rarm/models/folder_sort.dart';
 import 'package:rarm/models/rom_result.dart';
-import 'package:rarm/services/cleanup_score.dart';
 import 'package:rarm/services/rom_filter.dart';
 import 'package:rarm/widgets/folder_toolbar.dart';
 
@@ -13,10 +12,8 @@ void main() {
     bool anyDuplicates = true,
     bool showViewToggle = true,
     bool gridView = false,
-    CleanupScoreMode cleanupMode = CleanupScoreMode.logDampened,
     void Function(RomFilter)? onFilterChanged,
     void Function(FolderSort)? onSortChanged,
-    void Function(CleanupScoreMode)? onCleanupModeChanged,
     void Function(bool)? onDuplicatesToggle,
     void Function(bool)? onHotToggle,
     void Function(double)? onGridSizeChanged,
@@ -32,13 +29,11 @@ void main() {
             availableGenres: const ['Action'],
             showProgress: true,
             anyDuplicates: anyDuplicates,
-            cleanupMode: cleanupMode,
             gridSize: FolderToolbar.gridSizeDefault,
             onGridSizeChanged: onGridSizeChanged,
             playlists: const [(id: 'fav', name: 'Favorites')],
             onFilterChanged: onFilterChanged ?? (_) {},
             onSortChanged: onSortChanged ?? (_) {},
-            onCleanupModeChanged: onCleanupModeChanged ?? (_) {},
             onDirectionToggle: () {},
             onViewToggle: () {},
             onDuplicatesToggle: onDuplicatesToggle ?? (_) {},
@@ -73,7 +68,7 @@ void main() {
     ));
     await tester.tap(find.text('Name'));
     await tester.pumpAndSettle();
-    expect(find.text('Points'), findsNothing); // menu did not open
+    expect(find.text('Least played'), findsNothing); // menu did not open
   });
 
   testWidgets('opening Filters reveals the Status section', (tester) async {
@@ -83,31 +78,18 @@ void main() {
     expect(find.text('Supported'), findsOneWidget);
   });
 
-  testWidgets('Cleanup is offered as a sort option', (tester) async {
+  testWidgets('Least played is offered as a sort option', (tester) async {
     await tester.pumpWidget(host());
     await tester.tap(find.text('Name'));
     await tester.pumpAndSettle();
-    expect(find.text('Cleanup'), findsOneWidget);
+    expect(find.text('Least played'), findsOneWidget);
   });
 
-  testWidgets('cleanup mode picker shown only when Cleanup sort active',
+  testWidgets('least-played sort adds no extra controls (pure score sort)',
       (tester) async {
-    await tester.pumpWidget(host(sort: FolderSort.alphabetical));
-    expect(find.text('Log-dampened'), findsNothing);
-
-    await tester.pumpWidget(host(sort: FolderSort.cleanup));
-    expect(find.text('Log-dampened'), findsOneWidget);
-  });
-
-  testWidgets('cleanup sort shows no target input (pure score sort)',
-      (tester) async {
-    await tester.pumpWidget(host(
-      sort: FolderSort.cleanup,
-      cleanupMode: CleanupScoreMode.ratio,
-    ));
-    // Ratio mode used to add a target field; now only the search field remains.
+    await tester.pumpWidget(host(sort: FolderSort.leastPlayed));
+    // Only the search field; the scoring mode is fixed, not user-pickable.
     expect(find.byType(TextField), findsOneWidget);
-    expect(find.textContaining('players / yr'), findsNothing);
   });
 
   testWidgets('active status chip removal clears that status', (tester) async {

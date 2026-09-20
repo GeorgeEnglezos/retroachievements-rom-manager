@@ -643,6 +643,43 @@ void main() {
       expect(game.matched, isFalse);
       expect(game.metadata, isNull);
       expect(game.fileSize, greaterThan(0));
+      // The sweep names this folder instead of passing over it in silence.
+      expect(result.skipReason, isNotNull);
+    });
+
+    test('an unmapped folder reports why it was skipped', () async {
+      rom('one.iso');
+
+      final result = await runFolderFetch(
+        folderPath: romDir.path,
+        plan: const FetchPlan(scope: FetchScope.all, match: true),
+        extensions: const {'iso'},
+        library: library,
+        run: ScanRun()..start(),
+        raCache: RaCache(baseDir: cacheDir),
+        detailCache: {},
+      );
+
+      expect(result.skipReason, 'no console mapping');
+    });
+
+    test('a fetchable folder reports no skip reason', () async {
+      rom('one.iso');
+
+      final result = await runFolderFetch(
+        folderPath: romDir.path,
+        plan: const FetchPlan(scope: FetchScope.all, match: true),
+        extensions: const {'iso'},
+        library: library,
+        run: ScanRun()..start(),
+        raCache: RaCache(baseDir: cacheDir),
+        detailCache: {},
+        consoleId: 1,
+        hash: (_) async => 'aa',
+        lookupGameId: (_) async => null,
+      );
+
+      expect(result.skipReason, isNull);
     });
 
     test('skips entries that already have metadata unless re-fetching all',

@@ -708,29 +708,33 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
-    final summaries = await _lib.summaries();
-    // Any folder still holding an unresolved game, not just an untouched one:
-    // a cancelled sweep leaves a folder part-scanned, and "only unfetched" has
-    // to be able to pick it back up.
-    final unfetched = {
-      for (final s in summaries)
-        if (s.gamesScanned < s.totalGames) s.systemPath
+    final summaryByPath = {
+      for (final s in await _lib.summaries()) s.systemPath: s
     };
+    // Walked over `dirs`, not over the summaries: a folder that was never
+    // scanned has no summary at all, and it is exactly the one the narrow
+    // scopes must catch. Beyond that, any folder still holding an unresolved
+    // game counts, not just an untouched one: a cancelled sweep leaves a
+    // folder part-scanned and "only unfetched" has to pick it back up.
+    final unfetched = <String>{};
+    for (final d in dirs) {
+      final s = summaryByPath[d.path];
+      if (s == null || s.gamesScanned < s.totalGames) unfetched.add(d.path);
+    }
     // Stored games are only needed for the `changed` scope.
     // Loads every system file + re-walks every folder serially to
     // build the diff; fine at current library sizes, parallelize if it drags.
     final changedScanCache = <String, List<GameEntry>>{};
     final currentSizesCache = <String, Map<String, int>>{};
     if (plan.scope == FetchScope.changedFolders) {
-      for (final s in summaries) {
-        changedScanCache[s.systemPath] =
-            (await _lib.load(s.systemPath)).games;
-        currentSizesCache[s.systemPath] = await _currentSizesFor(s.systemPath);
+      for (final d in dirs) {
+        changedScanCache[d.path] = (await _lib.load(d.path)).games;
+        currentSizesCache[d.path] = await _currentSizesFor(d.path);
       }
     }
     final freshness = plan.scope == FetchScope.changedFolders
         ? classifyFolders(
-            systemPaths: summaries.map((s) => s.systemPath).toList(),
+            systemPaths: dirs.map((d) => d.path).toList(),
             storedGames: (path) => changedScanCache[path] ?? const <GameEntry>[],
             folderExists: (path) => Directory(path).existsSync(),
             currentSizes: (path) => currentSizesCache[path] ?? const {},
@@ -759,6 +763,11 @@ class _HomeScreenState extends State<HomeScreen> {
         : RaService(username: credentials.$1, apiKey: credentials.$2);
 
     final onlyUnfetched = !plan.matchReFetchAll;
+    // Folders the runner could do nothing with (unmapped folder name, or a
+    // console RetroAchievements doesn't cover). The per-folder view already
+    // says so on its own; without this the global sweep passed over them in
+    // silence and the system just looked unscanned.
+    final skipped = <String>[];
 
     final run = ScanRun();
     setState(() {
@@ -783,6 +792,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _scanAllTotal = total);
       run.addTotal(total);
       _setUpdates.clear();
+      skipped.clear();
 
       // Sweep-wide caches: one game list per console, one detail per game.
       final raCache = RaCache();
@@ -829,6 +839,9 @@ class _HomeScreenState extends State<HomeScreen> {
           },
         );
         _setUpdates.addAll(result.setUpdates);
+        if (result.skipReason != null) {
+          skipped.add('${p.basename(dir.path)} (${result.skipReason})');
+        }
         if (mounted) {
           setState(() => _stats[dir.path] = _statsFrom(result));
         }
@@ -847,6 +860,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (mounted) {
+      if (skipped.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Skipped ${skipped.length} '
+              'system${skipped.length == 1 ? '' : 's'}: '
+              '${skipped.take(3).join(', ')}'
+              '${skipped.length > 3 ? '…' : ''}'),
+          duration: const Duration(seconds: 8),
+        ));
+      }
       if (_setUpdates.isNotEmpty) {
         final n = _setUpdates.length;
         final sample = _setUpdates.take(3).join(', ');

@@ -245,25 +245,6 @@ class UiTokens extends ThemeExtension<UiTokens> {
     brightness: Brightness.dark,
   );
 
-  /// Greyscale dark: black grounds, ink-only accents (hue-blind safe).
-  static const UiTokens monochrome = UiTokens.palette(
-    background: Color(0xFF000000),
-    surface: Color(0xFF0D0D0D),
-    surfaceAlt: Color(0xFF1E1E1E),
-    text: Color(0xFFFFFFFF),
-    accent: Color(0xFFF0F0F0),
-    accentAlt: Color(0xFFC8C8C8),
-    accentGames: Color(0xFFD8D8D8),
-    border: Color(0xFF6E6E6E),
-    trough: Color(0xFF000000),
-    supported: Color(0xFFB8B8B8),
-    warning: Color(0xFFA6A6A6),
-    muted: Color(0xFFAEAEAE),
-    favoriteFill: Color(0xFFF0F0F0), // placeholder = accent
-    favoriteInk: Color(0xFF000000), // placeholder = background
-    brightness: Brightness.dark,
-  );
-
   /// Game Boy DMG: the pea-green LCD, dark-green ink and accents.
   static const UiTokens gameboy = UiTokens.palette(
     background: Color(0xFF9BBC0F),

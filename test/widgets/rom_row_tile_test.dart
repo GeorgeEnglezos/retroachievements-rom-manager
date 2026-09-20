@@ -56,7 +56,7 @@ void main() {
       expect(find.byIcon(Icons.chevron_right), findsOneWidget);
     });
 
-    testWidgets('shows the cleanup score label when present', (tester) async {
+    testWidgets('shows the score label when present', (tester) async {
       await tester
           .pumpWidget(hostRow(const RomRow(title: 'Block Stacker', scoreLabel: '128')));
       expect(find.text('128'), findsOneWidget);

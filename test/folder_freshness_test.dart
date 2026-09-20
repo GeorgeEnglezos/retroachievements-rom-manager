@@ -40,4 +40,15 @@ void main() {
     expect(r.changed, ['changed']);
     expect(r.hasStale, isTrue);
   });
+
+  test('a never-scanned folder holding files counts as changed', () {
+    final r = classifyFolders(
+      systemPaths: ['brandNew', 'emptyDir'],
+      storedGames: (_) => const <GameEntry>[],
+      folderExists: (_) => true,
+      currentSizes: (p) => p == 'brandNew' ? {'brandNew/a.gba': 10} : {},
+    );
+
+    expect(r.changed, ['brandNew']);
+  });
 }

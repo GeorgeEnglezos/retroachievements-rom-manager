@@ -11,11 +11,10 @@ enum AppTheme {
   nord('Nord', UiTokens.nord),
   github('GitHub', UiTokens.github),
   lavenderDark('Lavender Dark', UiTokens.lavenderDark),
-  monochrome('Monochrome', UiTokens.monochrome),
   gameboy('Game Boy', UiTokens.gameboy),
   lavenderLight('Lavender Light', UiTokens.lavenderLight),
   slate('Slate', UiTokens.slate),
-  monochromeLight('Monochrome Light', UiTokens.monochromeLight);
+  monochromeLight('Monochrome', UiTokens.monochromeLight);
 
   const AppTheme(this.label, this.tokens);
   final String label;
