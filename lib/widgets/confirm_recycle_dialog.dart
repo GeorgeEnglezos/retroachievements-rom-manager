@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'ui/ui_focusable.dart';
 
 /// True where a delete is permanent (Android has no user-facing trash).
 bool get _hardDelete => Platform.isAndroid;
@@ -32,14 +33,18 @@ Future<bool> confirmRecycleDialog(BuildContext context, String message) async {
       title: Text(_hardDelete ? 'Delete permanently?' : 'Move to Recycle Bin?'),
       content: Text(message),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('Cancel'),
+        UiFocusZoom(
+          child: TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
         ),
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, true),
-          style: TextButton.styleFrom(foregroundColor: Colors.red),
-          child: const Text('Delete'),
+        UiFocusZoom(
+          child: TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
         ),
       ],
     ),

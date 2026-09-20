@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/android_emulators.dart';
+import 'ui/ui_focusable.dart';
 
 /// Android app picker: lists installed launchable apps (known emulators first)
 /// and returns the chosen one, or null on cancel. Android-only.
@@ -49,23 +50,27 @@ class _AppPickerDialogState extends State<_AppPickerDialog> {
                     itemCount: apps.length,
                     itemBuilder: (_, i) {
                       final app = apps[i];
-                      return ListTile(
-                        dense: true,
-                        leading: Icon(app.known
-                            ? Icons.videogame_asset
-                            : Icons.android),
-                        title: Text(app.label),
-                        subtitle: Text(app.package,
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
-                        onTap: () => Navigator.pop(context, app),
+                      return UiFocusZoom(
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(app.known
+                              ? Icons.videogame_asset
+                              : Icons.android),
+                          title: Text(app.label),
+                          subtitle: Text(app.package,
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                          onTap: () => Navigator.pop(context, app),
+                        ),
                       );
                     },
                   ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+        UiFocusZoom(
+          child: TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
         ),
       ],
     );

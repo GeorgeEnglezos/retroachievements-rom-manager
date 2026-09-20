@@ -82,7 +82,6 @@ class RvzReader implements DiscBytesReader {
               data: [
                 for (final pd in part.data)
                   _PdRegion(
-                    discFirstSector: pd.firstSector,
                     decStart: (pd.firstSector - firstSector) * _blockData,
                     numSectors: pd.numSectors,
                     groupIndex: pd.groupIndex,
@@ -381,12 +380,10 @@ class _WiiPartition {
 }
 
 class _PdRegion {
-  final int discFirstSector;
   final int decStart; // decrypted-space start offset within the partition
   final int numSectors;
   final int groupIndex;
   const _PdRegion({
-    required this.discFirstSector,
     required this.decStart,
     required this.numSectors,
     required this.groupIndex,

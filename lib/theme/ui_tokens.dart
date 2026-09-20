@@ -34,8 +34,8 @@ const Color kOnScrimAccent = Color(0xFFFCDC7E);
 
 /// Design tokens, attached to [ThemeData] as a [ThemeExtension] and read via
 /// `Theme.of(context).extension<UiTokens>()!` or `context.ui`. Ships two
-/// palettes: [light] (warm retro) and [dark] (candy cartridge: deep indigo
-/// surfaces, warm cream ink, five pastel accents).
+/// palettes: [light] (warm retro) and [dark] (the RetroAchievements site's
+/// own dark scheme: near-black surfaces, grey ink, gold links, blue headings).
 ///
 /// Never hardcode a color or a corner radius in a widget: take it from here.
 @immutable
@@ -139,32 +139,29 @@ class UiTokens extends ThemeExtension<UiTokens> {
     borderWidth: 1,
   );
 
-  // "Candy cartridge": deep indigo surfaces, warm cream ink, five pastel
-  // accents (candy / mint / sky / butter / coral). The border is a 38% cream
-  // hairline rather than a drawn outline: with both shadow offsets at zero it
-  // is the only thing separating a card from its ground, so it has to clear
-  // the 3:1 WCAG asks of a component boundary.
-  static const UiTokens dark = UiTokens(
-    background: Color(0xFF191627),
-    surface: Color(0xFF241F37),
-    surfaceAlt: Color(0xFF312B4A),
-    text: Color(0xFFF8F1E3),
-    accent: Color(0xFFEF80A9), // candy
-    accentAlt: Color(0xFF86D2F3), // sky
-    accentGames: Color(0xFFFCDC7E), // butter
-    border: Color(0x60F8F1E3), // cream at 38%
-    trough: Color(0xFF191627),
-    supported: Color(0xFF7DE8D3), // mint
-    warning: Color(0xFFF59F85), // coral
-    muted: Color(0xA7DDCEB1), // warm cream at 65%
-    favoriteFill: Color(0xFFEF80A9), // placeholder = accent
-    favoriteInk: Color(0xFF191627), // placeholder = background
+  // RetroAchievements: the site's own default dark scheme, taken from RAWeb's
+  // resources/css/theme.css (--bg-color, --box-bg-color, --embed-color, gold
+  // --link-color, blue --heading-color). Three of its values are pulled
+  // brighter than the site's because the contrast invariants in
+  // ui_tokens_test.dart reject them: the divider (#5A5A5A), the muted ink
+  // (#4B4B4B) and the danger red (pure #FF0000) all land under AA on our
+  // surfaces, so they use the nearest tone from RA's own Tailwind palette.
+  static const UiTokens dark = UiTokens.palette(
+    background: Color(0xFF1A1A1A), // --bg-color
+    surface: Color(0xFF232323), // --box-bg-color
+    surfaceAlt: Color(0xFF2A2A2A), // --embed-highlight-color
+    text: Color(0xFFC8C8C8), // --text-color
+    accent: Color(0xFFCC9900), // --link-color, the RA gold
+    accentAlt: Color(0xFF2C97FA), // --heading-color, the RA blue
+    accentGames: Color(0xFFA78BFA), // violet-400: 5th hue, RA has no own one
+    border: Color(0xFF737373), // neutral-500; RA's #5A5A5A divider is 2.3:1
+    trough: Color(0xFF161616), // --embed-color
+    supported: Color(0xFF22C55E), // green-500
+    warning: Color(0xFFF87171), // red-400; RA's #FF0000 is 3.6:1
+    muted: Color(0xFFA3A3A3), // neutral-400; RA's #4B4B4B is 1.4:1
+    favoriteFill: Color(0xFFCC9900), // placeholder = accent
+    favoriteInk: Color(0xFF1A1A1A), // placeholder = background
     brightness: Brightness.dark,
-    unit: 8,
-    radius: 16,
-    cardShadow: Offset.zero,
-    controlShadow: Offset.zero,
-    borderWidth: 1,
   );
 
   // ── Extra palettes ────────────────────────────────────────────────────────
@@ -245,25 +242,6 @@ class UiTokens extends ThemeExtension<UiTokens> {
     muted: Color(0xFFA99EC9),
     favoriteFill: Color(0xFFC4B5FD), // placeholder = accent
     favoriteInk: Color(0xFF110F1E), // placeholder = background
-    brightness: Brightness.dark,
-  );
-
-  /// Greyscale dark: black grounds, ink-only accents (hue-blind safe).
-  static const UiTokens monochrome = UiTokens.palette(
-    background: Color(0xFF000000),
-    surface: Color(0xFF0D0D0D),
-    surfaceAlt: Color(0xFF1E1E1E),
-    text: Color(0xFFFFFFFF),
-    accent: Color(0xFFF0F0F0),
-    accentAlt: Color(0xFFC8C8C8),
-    accentGames: Color(0xFFD8D8D8),
-    border: Color(0xFF6E6E6E),
-    trough: Color(0xFF000000),
-    supported: Color(0xFFB8B8B8),
-    warning: Color(0xFFA6A6A6),
-    muted: Color(0xFFAEAEAE),
-    favoriteFill: Color(0xFFF0F0F0), // placeholder = accent
-    favoriteInk: Color(0xFF000000), // placeholder = background
     brightness: Brightness.dark,
   );
 

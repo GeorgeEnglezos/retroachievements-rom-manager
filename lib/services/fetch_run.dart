@@ -10,6 +10,7 @@ import 'disc_decompressor.dart';
 import 'disc_formats.dart';
 import 'fetch_engine.dart';
 import 'fetch_pipeline.dart';
+import 'game_lookup.dart';
 import 'incremental_scan.dart';
 import 'library.dart';
 import 'log_service.dart';
@@ -39,16 +40,17 @@ class FolderRunResult {
   /// True when the run stopped early because the user cancelled.
   final bool cancelled;
 
-  /// Set when the run bailed with something worth telling the user, e.g. a
-  /// failed completion sweep. Null on success.
-  final String? message;
+  /// Why this folder produced no fetch work, or null when it ran. A sweep over
+  /// many folders reports these at the end, so a system it passed over is
+  /// visible instead of silently untouched.
+  final String? skipReason;
 
   const FolderRunResult({
     required this.saved,
     this.setUpdates = const [],
     this.unhashable = const [],
     this.cancelled = false,
-    this.message,
+    this.skipReason,
   });
 }
 
@@ -61,6 +63,11 @@ class FolderRunResult {
 ///
 /// [hash] and [lookupGameId] default to the real hasher and RA cache lookup;
 /// tests inject fakes so no file is read and no request is made.
+///
+/// [progressByGameId] is the account-wide completion sweep, fetched once by the
+/// caller and shared across every folder in the run (see [fetchCompletionSweep]
+/// and [progressFromSweep]). Passing it is what lets the match pass skip the
+/// per-ROM detail call; leaving it null keeps whatever progress was stored.
 Future<FolderRunResult> runFolderFetch({
   required String folderPath,
   required FetchPlan plan,
@@ -73,6 +80,7 @@ Future<FolderRunResult> runFolderFetch({
   int? consoleId,
   MetadataProvider? metadataProvider,
   MetadataCache? metadataCache,
+  Map<int, CompletedGame>? progressByGameId,
   String logContext = 'fetchRun',
   void Function(GameEntry entry)? onEntry,
   void Function(int count)? onTargets,
@@ -88,7 +96,10 @@ Future<FolderRunResult> runFolderFetch({
   final setUpdates = <String>[];
 
   // Rebuilds from the current file list so removed files drop out, then saves.
-  Future<FolderRunResult> finish({List<String> unhashable = const []}) async {
+  Future<FolderRunResult> finish({
+    List<String> unhashable = const [],
+    String? skipReason,
+  }) async {
     // Size comes from the walk we just did, not from whatever a previous scan
     // stored: a ROM swapped for a bigger redump would otherwise keep reporting
     // the old size on the folder card until something re-hashed it.
@@ -104,43 +115,25 @@ Future<FolderRunResult> runFolderFetch({
       setUpdates: setUpdates,
       unhashable: unhashable,
       cancelled: run.cancelled,
+      skipReason: skipReason,
     );
   }
 
-  // Progress-only pass: no hashing, one sweep for the whole account.
+  // Progress-only pass: no hashing. The sweep is one account-wide call the
+  // caller makes once for the whole run, so a null map means it failed or was
+  // never asked for. Writing zeros in that case would wipe everyone's
+  // progress, so the folder is left exactly as it was.
   if (plan.progress && !plan.match) {
-    if (service == null) return finish();
+    if (progressByGameId == null) return finish();
     final withIds = existing.games.where((g) => g.gameId != null).toList();
-
-    final sweep = await fetchCompletionSweep(service, logContext);
-    final byGameId = sweep.byGameId;
-    // A failed or empty sweep must not be written; that would zero everyone's
-    // progress. Return the untouched index and let the caller say why.
-    if (byGameId == null) {
-      return FolderRunResult(
-        saved: existing,
-        cancelled: run.cancelled,
-        message: sweep.userMessage,
-      );
-    }
-    // Counted after the guard: a failed sweep ticks nothing, and announcing the
-    // total first would pin the bar at 0% of a number it never reaches.
     onTargets?.call(withIds.length);
 
     for (final g in withIds) {
       if (run.cancelled) break;
-      final prog = byGameId[g.gameId!];
       final updated = g.copyWith(
         lastScanned: DateTime.now(),
-        progress: UserProgress(
-          gameId: g.gameId!,
-          earnedAchievements: prog?.numAwarded ?? 0,
-          earnedHardcore: prog?.numAwardedHardcore ?? 0,
-          lastPlayed: prog?.lastPlayed,
-          highestAward: prog?.highestAward ?? RaAward.none,
-          highestAwardDate: prog?.highestAwardDate,
-          achievements: g.progress?.achievements ?? const [],
-        ),
+        progress: progressFromSweep(g.gameId!, progressByGameId,
+            achievements: g.progress?.achievements ?? const []),
       );
       entryByPath[g.filePath] = updated;
       onEntry?.call(updated);
@@ -189,13 +182,18 @@ Future<FolderRunResult> runFolderFetch({
       return finish();
     }
 
+    final consoleName = ConsoleMap.nameFor(folderConsoleId);
     LogService.warning(
         logContext,
         'Non-RA console for folder ${p.basename(folderPath)} '
-        '(${ConsoleMap.nameFor(folderConsoleId) ?? 'unknown'}); '
+        '(${consoleName ?? 'unknown'}); '
         'recording size only (not hashed).');
     onTargets?.call(0);
-    return finish();
+    return finish(
+      skipReason: folderConsoleId == null
+          ? 'no console mapping'
+          : "$consoleName isn't on RetroAchievements",
+    );
   }
 
   // An RA console with no credentials cannot be looked up. Bail rather than run
@@ -233,19 +231,38 @@ Future<FolderRunResult> runFolderFetch({
     isCancelled: () => run.cancelled,
     onResult: (res) async {
       final prev = entryByPath[res.filePath];
-      final detail = res.matched && res.gameId != null && service != null
-          ? await tryResolveGameDetail(
-              gameId: res.gameId!,
-              service: service,
-              cache: detailCache,
-              // A re-fetch-all is the user asking for fresh data, so the saved
-              // entry is not reused: reusing it would report the old
-              // achievement count and no set update could ever be detected.
-              saved: plan.matchReFetchAll ? null : prev,
-              logContext: logContext,
-            )
+      // The rich per-game call is deliberately not made here: it costs one
+      // request per matched ROM, and the cached console list already carries
+      // everything a library row draws (title, icon, achievement count,
+      // points). Box art, screenshots, genre and the achievement list are
+      // fetched and persisted by the detail dialog, for the one game the user
+      // actually opens.
+      final cached = res.matched && res.gameId != null
+          ? await raCache.entryForGame(res.gameId!, folderConsoleId)
           : null;
-      final info = detail?.$1;
+      var info = cached == null
+          ? null
+          : gameInfoFromCache(cached,
+              consoleId: folderConsoleId, saved: prev?.gameInfo);
+
+      // Matched through the dorequest fallback on a hash the console list
+      // doesn't carry, so the cache cannot name it. Few enough per run that
+      // the per-game call is still the right way to get a title.
+      (GameInfo, UserProgress)? detail;
+      if (info == null && res.matched && res.gameId != null && service != null) {
+        detail = await tryResolveGameDetail(
+          gameId: res.gameId!,
+          service: service,
+          cache: detailCache,
+          // A re-fetch-all is the user asking for fresh data, so the saved
+          // entry is not reused: reusing it would report the old achievement
+          // count and no set update could ever be detected.
+          saved: plan.matchReFetchAll ? null : prev,
+          logContext: logContext,
+        );
+        info = detail?.$1;
+      }
+
       if (isSetUpdate(
           prev?.gameInfo?.achievementCount, info?.achievementCount)) {
         setUpdates.add(gameDisplayName(info?.title, p.basename(res.filePath)));
@@ -260,7 +277,14 @@ Future<FolderRunResult> runFolderFetch({
         noMatch: res.noMatch,
         lastScanned: DateTime.now(),
         gameInfo: info,
-        progress: detail?.$2,
+        // Sweep first, then whatever the rare fallback call returned, then
+        // what was already stored: never null out progress we already have.
+        progress: res.gameId == null
+            ? null
+            : progressByGameId != null
+                ? progressFromSweep(res.gameId!, progressByGameId,
+                    achievements: prev?.progress?.achievements ?? const [])
+                : detail?.$2 ?? prev?.progress,
         hashConsoleId: folderConsoleId,
       );
       entryByPath[res.filePath] = updated;

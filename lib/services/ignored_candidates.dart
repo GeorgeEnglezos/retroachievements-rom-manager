@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'pref_keys.dart';
 
@@ -12,8 +11,9 @@ class IgnoredCandidates {
 
   Set<String>? _mem;
 
-  @visibleForTesting
-  void resetForTest() => _mem = null;
+  /// Empties the shared singleton. Used by a data wipe (see
+  /// BackupService.clearAll), and by tests between cases.
+  void clear() => _mem = null;
 
   Future<Set<String>> load() async {
     final mem = _mem;

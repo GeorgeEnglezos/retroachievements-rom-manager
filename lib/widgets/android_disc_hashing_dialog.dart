@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'ui/ui_focusable.dart';
 
 // Shown at most once per app session; bulk fetch can hit many GC/Wii discs and
 // we don't want to spam a dialog per file.
@@ -23,9 +24,11 @@ Future<void> showAndroidDiscHashingUnsupported(BuildContext context) async {
         'Android), or hash them on the desktop version.',
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('OK'),
+        UiFocusZoom(
+          child: TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
         ),
       ],
     ),

@@ -9,9 +9,11 @@ import '../services/library.dart';
 import '../services/member_key.dart';
 import '../services/playlist_store.dart';
 import '../services/scraper/scraped_store.dart';
+import '../services/settings_bus.dart';
 import '../theme/ui_tokens.dart';
 import '../widgets/bigpicture/couch_home.dart';
 import '../widgets/game_detail_dialog.dart';
+import '../widgets/ui/ui_focusable.dart';
 
 /// The Home tab for Cleaning and Play modes. It loads the dashboard and opens a
 /// game's detail dialog on tap, then hands the layout to [CouchHome], the single
@@ -42,6 +44,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _lib.addListener(_scheduleLoad);
+    settingsChanged.addListener(_scheduleLoad);
     // Warm the scraped store so a game's detail dialog can fall back to imported
     // artwork, matching the folder/storage screens.
     ScrapedStore.instance.load();
@@ -51,6 +54,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     _lib.removeListener(_scheduleLoad);
+    settingsChanged.removeListener(_scheduleLoad);
     _debounce?.cancel();
     super.dispose();
   }
@@ -69,6 +73,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _dash = dash;
       _loading = false;
     });
+    // Home paints first; the two featured banners have no art until their
+    // detail is fetched, and persisting it notifies the library, which reloads
+    // us with the art in place.
+    unawaited(fetchSpotlightArt(dash, library: _lib));
   }
 
   Future<void> _ignore(RomResult rom) async {
@@ -91,16 +99,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _open(RomResult rom) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => GameDetailDialog(
-        rom: rom,
-        store: _store,
-        onDeleted: _load,
-        onPlaylistChanged: _load,
-        scraped: ScrapedStore.instance.get(rom.filePath),
-      ),
-    );
+    openRomOnTap(context, rom,
+        store: _store, onDeleted: _load, onPlaylistChanged: _load);
   }
 
   @override
@@ -145,10 +145,12 @@ class _EmptyDashboard extends StatelessWidget {
             ),
             if (onOpenLibrary != null) ...[
               const SizedBox(height: 20),
-              FilledButton.icon(
-                onPressed: onOpenLibrary,
-                icon: const Icon(Icons.grid_view, size: 18),
-                label: const Text('Go to Library'),
+              UiFocusZoom(
+                child: FilledButton.icon(
+                  onPressed: onOpenLibrary,
+                  icon: const Icon(Icons.grid_view, size: 18),
+                  label: const Text('Go to Library'),
+                ),
               ),
             ],
           ],

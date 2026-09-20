@@ -61,29 +61,40 @@ void main() {
     });
   });
 
-  group('couchFillTileSize', () {
-    test('a taller column grows the tiles', () {
-      expect(CouchHome.couchFillTileSize(1200, 3),
-          greaterThan(CouchHome.couchFillTileSize(900, 3)));
+  group('couchFillTileWidth', () {
+    test('a wider row grows the tiles', () {
+      expect(CouchHome.couchFillTileWidth(1600),
+          greaterThan(CouchHome.couchFillTileWidth(1100)));
     });
 
-    test('a short window bottoms out at the floor, like an unknown row count',
-        () {
-      // Too short to give three rows room: clamps to the minimum, the same
-      // size the compact layout uses (rowCount 0 short-circuits to it).
-      expect(CouchHome.couchFillTileSize(300, 3),
-          CouchHome.couchFillTileSize(999, 0));
+    test('a narrow window bottoms out at the floor', () {
+      // Too narrow to give six covers room: clamps to the minimum, the same
+      // size the compact layout uses.
+      expect(CouchHome.couchFillTileWidth(400),
+          CouchHome.couchFillTileWidth(100));
     });
 
-    test('a very tall window stops growing at the ceiling', () {
-      expect(CouchHome.couchFillTileSize(5000, 3),
-          CouchHome.couchFillTileSize(3000, 3));
+    test('a very wide window stops growing at the ceiling', () {
+      expect(CouchHome.couchFillTileWidth(5000),
+          CouchHome.couchFillTileWidth(3000));
+    });
+
+    // UiZoom hands a zoomed-in layout a viewport shrunk by the scale, then
+    // paints the result back up by it. Sizing from the logical width alone let
+    // the fixed tile chrome eat the difference, so covers came out smaller the
+    // further you zoomed in; they have to grow with the zoom like everything
+    // else in the app.
+    test('zoom grows covers instead of shrinking them', () {
+      const width = 1400.0;
+      final at100 = CouchHome.couchFillTileWidth(width);
+      final at125 = CouchHome.couchFillTileWidth(width / 1.25, scale: 1.25) * 1.25;
+      expect(at125, closeTo(at100 * 1.25, 0.01));
     });
 
     test('a normal window lands strictly between floor and ceiling', () {
-      final mid = CouchHome.couchFillTileSize(900, 3);
-      expect(mid, greaterThan(CouchHome.couchFillTileSize(300, 3)));
-      expect(mid, lessThan(CouchHome.couchFillTileSize(5000, 3)));
+      final mid = CouchHome.couchFillTileWidth(1400);
+      expect(mid, greaterThan(CouchHome.couchFillTileWidth(400)));
+      expect(mid, lessThan(CouchHome.couchFillTileWidth(5000)));
     });
   });
 }

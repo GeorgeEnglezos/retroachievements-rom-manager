@@ -18,7 +18,8 @@ class FolderFreshness {
 }
 
 /// Classifies each system folder as gone, changed, or fresh. [currentSizes]
-/// is injected so this stays filesystem-free; never-scanned folders skipped.
+/// is injected so this stays filesystem-free. A never-scanned folder counts as
+/// changed when it holds files, and as fresh when it is empty.
 FolderFreshness classifyFolders({
   required List<String> systemPaths,
   required List<GameEntry> Function(String systemPath) storedGames,
@@ -33,7 +34,13 @@ FolderFreshness classifyFolders({
       continue;
     }
     final stored = storedGames(path);
-    if (stored.isEmpty) continue; // nothing scanned to compare against
+    if (stored.isEmpty) {
+      // Never scanned. A folder with ROMs on disk is the most changed a
+      // folder can be; skipping it here is what let a newly added system
+      // fall out of every narrow-scope sweep.
+      if (currentSizes(path).isNotEmpty) changed.add(path);
+      continue;
+    }
     if (!folderUnchanged(stored, currentSizes(path))) changed.add(path);
   }
   return FolderFreshness(gone: gone, changed: changed);

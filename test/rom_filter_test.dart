@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rarm/models/folder_sort.dart';
 import 'package:rarm/models/rom_result.dart';
-import 'package:rarm/services/cleanup_score.dart';
 import 'package:rarm/services/rom_filter.dart';
 
 void main() {
@@ -201,28 +200,10 @@ void main() {
     expect(f.matches(withAch, playlistIdsForRom: const {}), isFalse);
   });
 
-  group('onlyRecentlyPlayed filter', () {
-    RomResult played(String name, DateTime? when) {
-      final r = RomResult(filePath: '/x/$name', fileName: name);
-      r.status = RomStatus.supported;
-      r.lastPlayed = when;
-      return r;
-    }
-
-    test('keeps games played within 90 days, drops older/never', () {
-      const f = RomFilter(onlyRecentlyPlayed: true);
-      final recent = DateTime.now().subtract(const Duration(days: 3));
-      final old = DateTime.now().subtract(const Duration(days: 200));
-      expect(f.matches(played('a', recent), playlistIdsForRom: {}), isTrue);
-      expect(f.matches(played('b', old), playlistIdsForRom: {}), isFalse);
-      expect(f.matches(played('c', null), playlistIdsForRom: {}), isFalse);
-    });
-  });
-
   group('sortRoms', () {
-    RomResult withPoints(String name, int? points, {int players = 0}) {
+    RomResult withCount(String name, int? count, {int players = 0}) {
       final r = rom(name);
-      r.points = points;
+      r.achievementCount = count;
       r.numPlayersCasual = players;
       return r;
     }
@@ -235,41 +216,37 @@ void main() {
           names(sortRoms(roms,
               sort: FolderSort.alphabetical,
               ascending: true,
-              hot: false,
-              cleanupMode: CleanupScoreMode.logDampened)),
+              hot: false)),
           ['a', 'b', 'c']);
       expect(
           names(sortRoms(roms,
               sort: FolderSort.alphabetical,
               ascending: false,
-              hot: false,
-              cleanupMode: CleanupScoreMode.logDampened)),
+              hot: false)),
           ['c', 'b', 'a']);
     });
 
     test('null keys sink to the bottom regardless of direction', () {
-      final roms = [withPoints('none', null), withPoints('low', 10), withPoints('high', 90)];
+      final roms = [withCount('none', null), withCount('low', 10), withCount('high', 90)];
       for (final asc in [true, false]) {
         final sorted = names(sortRoms(roms,
-            sort: FolderSort.points,
+            sort: FolderSort.achievementCount,
             ascending: asc,
-            hot: false,
-            cleanupMode: CleanupScoreMode.logDampened));
+            hot: false));
         expect(sorted.last, 'none');
       }
     });
 
     test('hot overrides sort and ranks by casual players', () {
       final roms = [
-        withPoints('a', 90, players: 5),
-        withPoints('b', 10, players: 50),
+        withCount('a', 90, players: 5),
+        withCount('b', 10, players: 50),
       ];
       expect(
           names(sortRoms(roms,
               sort: FolderSort.alphabetical,
               ascending: true,
-              hot: true,
-              cleanupMode: CleanupScoreMode.logDampened)),
+              hot: true)),
           ['b', 'a']);
     });
 
@@ -278,8 +255,7 @@ void main() {
       sortRoms(roms,
           sort: FolderSort.alphabetical,
           ascending: true,
-          hot: false,
-          cleanupMode: CleanupScoreMode.logDampened);
+          hot: false);
       expect(names(roms), ['c', 'a']);
     });
   });

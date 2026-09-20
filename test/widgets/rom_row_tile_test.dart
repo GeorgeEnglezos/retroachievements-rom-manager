@@ -11,9 +11,11 @@ import 'package:rarm/services/app_mode.dart';
 import 'package:rarm/services/play_view.dart';
 import 'package:rarm/services/member_key.dart';
 import 'package:rarm/services/playlist_store.dart';
+import 'package:rarm/services/rom_tap.dart';
 import 'package:rarm/services/scraper/scraped_store.dart';
 import 'package:rarm/services/storage_treemap.dart' show TreemapItem;
 import 'package:rarm/theme/ui_tokens.dart';
+import 'package:rarm/widgets/game_detail_dialog.dart';
 import 'package:rarm/widgets/rom_row_tile.dart';
 import 'package:rarm/widgets/row_display.dart';
 import 'package:rarm/widgets/ui/ui_progress_bar.dart';
@@ -54,7 +56,7 @@ void main() {
       expect(find.byIcon(Icons.chevron_right), findsOneWidget);
     });
 
-    testWidgets('shows the cleanup score label when present', (tester) async {
+    testWidgets('shows the score label when present', (tester) async {
       await tester
           .pumpWidget(hostRow(const RomRow(title: 'Block Stacker', scoreLabel: '128')));
       expect(find.text('128'), findsOneWidget);
@@ -111,6 +113,38 @@ void main() {
       await tester.tap(find.byType(RomRowTile));
       await tester.pump();
       expect(find.byType(Dialog), findsNothing);
+    });
+
+    testWidgets('play tap action launches instead of opening the details',
+        (tester) async {
+      romTapListenable.value = RomTapAction.play;
+      addTearDown(() => romTapListenable.value = RomTapAction.detail);
+      final r = rom('Block Stacker.sfc')..consoleId = 3;
+      await tester.pumpWidget(hostRom(r));
+      await tester.pump();
+
+      await tester.tap(find.byType(RomRowTile));
+      await tester.pumpAndSettle();
+      // No emulator is set in this profile, so the launch stops at the
+      // set-emulator prompt: proof the tap went to Play, not to the details.
+      expect(find.textContaining('Set emulator for'), findsOneWidget);
+      expect(find.byType(GameDetailDialog), findsNothing);
+    });
+
+    testWidgets('play tap action beats a screen-supplied onTap',
+        (tester) async {
+      romTapListenable.value = RomTapAction.play;
+      addTearDown(() => romTapListenable.value = RomTapAction.detail);
+      var opened = false;
+      final r = rom('Block Stacker.sfc')..consoleId = 3;
+      await tester.pumpWidget(hostRow(
+          RomRow.fromRom(r, onTap: () => opened = true)));
+      await tester.pump();
+
+      await tester.tap(find.byType(RomRowTile));
+      await tester.pumpAndSettle();
+      expect(opened, isFalse);
+      expect(find.textContaining('Set emulator for'), findsOneWidget);
     });
 
     testWidgets('chip strip wraps instead of overflowing on a narrow row',
@@ -304,7 +338,7 @@ void main() {
         tester.widget<UiProgressBar>(find.byType(UiProgressBar));
 
     testWidgets('a normal row keeps its award colour', (tester) async {
-      PlaylistStore().resetForTest();
+      PlaylistStore().clear();
       await tester.pumpWidget(hostRom(inProgress('C:\\roms\\snes\\plain.sfc')));
       await tester.pump();
       // In-progress, no award -> the supported hue, not the favorite ink.
@@ -312,7 +346,7 @@ void main() {
     });
 
     testWidgets('a favorite row flips the bar to favoriteInk', (tester) async {
-      final store = PlaylistStore()..resetForTest();
+      final store = PlaylistStore()..clear();
       final r = inProgress('C:\\roms\\snes\\fav.sfc');
       await store.toggleMember(
           favoritesId, memberKeyFor(gameId: r.gameId, filePath: r.filePath));

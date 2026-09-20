@@ -1,206 +1,151 @@
 import 'package:flutter/material.dart';
 
 import '../models/fetch_plan.dart';
+import '../services/ra_cache.dart';
+import 'ui/ui_focusable.dart';
 
-/// The unified fetch/scan modal; [global] adds RA-list refresh + scope.
+/// The fetch modal: one primary action, with the rare choices folded away.
+///
+/// Nothing routine is asked. Re-reading the folders off disk is local and
+/// free; each console's RA game list re-pulls itself once it passes
+/// [RaCache.listTtl]; and the progress sync is one account-wide sweep whatever
+/// the library's size. None of those is a decision worth putting to the user,
+/// so the button just does them. What survives under Advanced is the one
+/// genuinely expensive choice (re-hashing ROMs already identified), the manual
+/// override for the list cache, and, on the global run, which folders to touch.
+///
+/// [global] adds the folder scope; the per-folder view has only its own.
 /// Returns null on cancel.
 Future<FetchPlan?> showFetchTasksDialog(
   BuildContext context, {
   required bool global,
 }) {
   var scope = FetchScope.all;
-  var match = true;
-  var matchReFetchAll = false;
-  var progress = false;
-
-  final scanStep = global ? 3 : 2; // the "Fetch & match" step number
+  var reHashAll = false;
+  var refreshLists = false;
 
   String scopeLabel(FetchScope s) => switch (s) {
-    FetchScope.changedFolders => 'Only changed folders',
-    FetchScope.unfetchedFolders => 'Only unfetched folders',
-    FetchScope.all => 'All folders',
-  };
+        FetchScope.changedFolders => 'Only changed folders',
+        FetchScope.unfetchedFolders => 'Only unfetched folders',
+        FetchScope.all => 'All folders',
+      };
 
   return showDialog<FetchPlan>(
     context: context,
     builder: (ctx) {
       final theme = Theme.of(ctx);
-
-      // A numbered step badge with a bold title and a one-line explanation.
-      Widget stepHeader(String number, String title, String subtitle) =>
-          Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 6),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 13,
-                  backgroundColor: theme.colorScheme.primary,
-                  child: Text(
-                    number,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onPrimary,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
-                      ),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
+      final muted = TextStyle(color: theme.colorScheme.onSurfaceVariant);
 
       return StatefulBuilder(
         builder: (ctx, setDlgState) => AlertDialog(
-          title: const Text('Fetch'),
+          title: const Text('Update library'),
           content: SizedBox(
             width: 400,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Step 1: standalone disk re-walk. No RA calls; closes now.
-                  stepHeader(
-                    '1',
-                    global ? 'Refresh folders & files' : 'Refresh files',
-                    'Re-read disk for added/removed files. No RA calls.',
+                  Text(
+                    global
+                        ? 'Re-reads your folders for added and removed files, '
+                            'hashes anything new, matches it on '
+                            'RetroAchievements and syncs your progress.'
+                        : 'Re-reads this folder for added and removed files, '
+                            'hashes anything new, matches it on '
+                            'RetroAchievements and syncs your progress.',
+                    style: muted,
                   ),
-                  OutlinedButton.icon(
-                    onPressed: () => Navigator.pop(
-                      ctx,
-                      FetchPlan(scope: scope, refresh: true),
-                    ),
-                    icon: const Icon(Icons.folder_open),
-                    label: Text(
-                      global ? 'Refresh folders & files' : 'Refresh files',
-                    ),
-                  ),
-                  if (global) ...[
-                    const SizedBox(height: 14),
-                    // Step 2: standalone RA list re-pull. Unrelated to the scan.
-                    stepHeader(
-                      '2',
-                      'Refresh RA game lists',
-                      'Re-pull each console\'s game/hash list from RA. '
-                          'Unrelated to the scan below.',
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () => Navigator.pop(
-                        ctx,
-                        FetchPlan(scope: scope, refreshLists: true),
-                      ),
-                      icon: const Icon(Icons.cloud_sync),
-                      label: const Text('Refresh RA game lists'),
-                    ),
-                  ],
-                  const Divider(height: 28),
-                  // Final step: the scan; runs via the Run action button.
-                  stepHeader(
-                    '$scanStep',
-                    'Fetch & match',
-                    'Hash your ROMs and sync with RetroAchievements.',
-                  ),
-                  if (global) ...[
-                    RadioGroup<FetchScope>(
-                      groupValue: scope,
-                      onChanged: (v) => setDlgState(() => scope = v!),
-                      child: Column(
-                        children: [
-                          for (final s in FetchScope.values)
-                            RadioListTile<FetchScope>(
-                              title: Text(scopeLabel(s)),
-                              value: s,
-                              dense: true,
+                  // Collapsed by default: the whole point is that the button
+                  // above needs no configuring.
+                  Theme(
+                    // The stock expansion dividers read as a section break the
+                    // rest of this dialog doesn't have.
+                    data: theme.copyWith(dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      title: const Text('Advanced'),
+                      tilePadding: EdgeInsets.zero,
+                      childrenPadding: EdgeInsets.zero,
+                      expandedCrossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (global) ...[
+                          Text('Folders', style: muted),
+                          RadioGroup<FetchScope>(
+                            groupValue: scope,
+                            onChanged: (v) => setDlgState(() => scope = v!),
+                            child: Column(
+                              children: [
+                                for (final s in FetchScope.values)
+                                  UiFocusZoom(
+                                    child: RadioListTile<FetchScope>(
+                                      title: Text(scopeLabel(s)),
+                                      value: s,
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                    ),
+                                  ),
+                              ],
                             ),
+                          ),
+                          const SizedBox(height: 8),
                         ],
-                      ),
-                    ),
-                  ],
-                  CheckboxListTile(
-                    title: const Text('Match with RA'),
-                    subtitle: const Text(
-                      'Hash ROMs and look up RetroAchievements',
-                    ),
-                    value: match,
-                    onChanged: (v) => setDlgState(() => match = v ?? false),
-                    dense: true,
-                  ),
-                  if (match)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 32),
-                      child: RadioGroup<bool>(
-                        groupValue: matchReFetchAll,
-                        onChanged: (v) =>
-                            setDlgState(() => matchReFetchAll = v!),
-                        child: const Column(
-                          children: [
-                            RadioListTile<bool>(
-                              title: Text('Only unfetched'),
-                              value: false,
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
+                        UiFocusZoom(
+                          child: CheckboxListTile(
+                            title: const Text('Re-hash every ROM'),
+                            subtitle: const Text(
+                              'Slow: reads every file again, including ones '
+                              'already identified.',
                             ),
-                            RadioListTile<bool>(
-                              title: Text('Re-fetch all'),
-                              value: true,
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ],
+                            value: reHashAll,
+                            onChanged: (v) =>
+                                setDlgState(() => reHashAll = v ?? false),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
                         ),
-                      ),
+                        UiFocusZoom(
+                          child: CheckboxListTile(
+                            title: const Text('Force refresh RA game lists'),
+                            subtitle: Text(
+                              'Normally re-pulled on their own every '
+                              '${RaCache.listTtl.inDays} days.',
+                            ),
+                            value: refreshLists,
+                            onChanged: (v) =>
+                                setDlgState(() => refreshLists = v ?? false),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ],
                     ),
-                  CheckboxListTile(
-                    title: const Text('Fetch progress'),
-                    subtitle: const Text('Sync achievement progress from RA'),
-                    value: progress,
-                    onChanged: (v) => setDlgState(() => progress = v ?? false),
-                    dense: true,
                   ),
                 ],
               ),
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
+            UiFocusZoom(
+              child: TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
             ),
-            FilledButton(
-              onPressed: (match || progress)
-                  ? () => Navigator.pop(
-                      ctx,
-                      FetchPlan(
-                        scope: scope,
-                        match: match,
-                        matchReFetchAll: matchReFetchAll,
-                        progress: progress,
-                      ),
-                    )
-                  : null,
-              child: const Text('Run'),
+            UiFocusZoom(
+              child: FilledButton(
+                onPressed: () => Navigator.pop(
+                  ctx,
+                  FetchPlan(
+                    scope: scope,
+                    refresh: true,
+                    refreshLists: refreshLists,
+                    match: true,
+                    matchReFetchAll: reHashAll,
+                    progress: true,
+                  ),
+                ),
+                child: const Text('Update'),
+              ),
             ),
           ],
         ),

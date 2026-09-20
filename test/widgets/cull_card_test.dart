@@ -25,8 +25,8 @@ Widget _wrap(Widget child) => MaterialApp(
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    PlaylistStore().resetForTest();
-    ScrapedStore.instance.resetForTest();
+    PlaylistStore().clear();
+    ScrapedStore.instance.clear();
   });
 
   group('art fallback', () {

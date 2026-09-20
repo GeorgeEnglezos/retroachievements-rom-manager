@@ -34,7 +34,7 @@ void main() {
   testWidgets('the dialog opened from a search hit carries the row actions',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
-    PlaylistStore().resetForTest();
+    PlaylistStore().clear();
     final dataDir = Directory.systemTemp.createTempSync('hs_data');
     addTearDown(() => dataDir.deleteSync(recursive: true));
     // Seeded as a system file rather than through Library.save(): a widget test

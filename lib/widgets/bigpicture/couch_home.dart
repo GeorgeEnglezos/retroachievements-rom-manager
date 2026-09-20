@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/rom_result.dart';
 import '../../services/home_dashboard.dart';
+import '../../services/ui_scale.dart';
 import '../../theme/ui_tokens.dart';
 import '../unlock_history.dart';
 import 'couch_hero.dart';
@@ -10,7 +11,7 @@ import 'cover_row.dart';
 
 // Cover size on the compact (phone/short-window) layout, where rows scroll
 // vertically so there is no fixed height to fill. The fitted layout derives its
-// own size from the height instead (see [couchFillTileSize]).
+// own size from the width instead (see [couchFillTileWidth]).
 const double _compactTileSize = 118;
 
 /// The big-picture home: the two featured banners (closest to beat + mastery)
@@ -55,26 +56,40 @@ class CouchHome extends StatelessWidget {
     );
   }
 
-  // Per-row chrome height in the fitted layout: the row's title strip plus the
-  // tile's text block and the scale-overflow padding above and below the strip.
-  // ponytail: an estimate tuned to CoverRow(compact: true); if a font change
-  // tips a row into an overflow, bump this (bigger number = smaller tiles).
-  static const double _fittedRowChrome = 123;
+  // Horizontal chrome one tile occupies beyond its art: CoverTile's own
+  // padding (8 each side). The strip's own 8px edge padding is left out, so a
+  // full row can run a few pixels past the edge and scroll.
+  static const double _fittedTileChrome = 16;
 
-  /// The square cover size the fitted layout uses so [rowCount] rows fill
-  /// [height] instead of packing fixed tiles at the top and leaving a blank band
-  /// on a tall screen. Clamped so a very short window still scrolls rather than
-  /// shrinking art to nothing, and a very tall one doesn't blow tiles up huge.
-  static double couchFillTileSize(double height, int rowCount) {
-    if (rowCount <= 0) return _compactTileSize;
-    final perRow = height / rowCount;
-    return (perRow - _fittedRowChrome).clamp(_compactTileSize, 240.0);
+  // Covers per row in the fitted layout. The row's width is split this many
+  // ways, so a wider window paints bigger art rather than more tiles.
+  static const int _fittedTilesPerRow = 10;
+
+  /// The square cover size the fitted layout uses, sized so
+  /// [_fittedTilesPerRow] tiles fill [width] instead of packing fixed tiles at
+  /// the left and leaving a blank band on a wide screen. Clamped so a narrow
+  /// window still scrolls rather than shrinking art to nothing, and a very wide
+  /// one doesn't blow tiles up huge. Rows that no longer fit the height scroll
+  /// vertically.
+  ///
+  /// [scale] is the app zoom. UiZoom shrinks the logical viewport by it and
+  /// paints the result back up, so dividing [width] alone left the art paying
+  /// for tile chrome that grew with the zoom: covers came out smaller at 125%
+  /// than at 100%. Multiplying back out sizes from the window's real width, so
+  /// this returns one zoom-independent number that paints bigger as you zoom in.
+  static double couchFillTileWidth(double width, {double scale = 1.0}) {
+    final perTile = width * scale / _fittedTilesPerRow;
+    return (perTile - _fittedTileChrome).clamp(_compactTileSize, 240.0);
   }
 
   /// The desktop/TV layout: banners across the top, cover rows filling the left,
   /// the recent-unlocks panel beside them. Everything sits on one screen; nothing
   /// scrolls, each area renders only what fits.
-  Widget _fitted(RomResult? spotlight, RomResult? beat, double availableHeight) {
+  Widget _fitted(
+    RomResult? spotlight,
+    RomResult? beat,
+    double availableHeight,
+  ) {
     // Grows with the window instead of a flat viewport fraction, so a tall
     // screen gives the banners real extra height rather than leaving it all to
     // the cover rows below. Floor matches the old minimum; ceiling keeps a very
@@ -93,7 +108,12 @@ class CouchHome extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, c) {
                 final rows = _rowData();
-                final tile = couchFillTileSize(c.maxHeight, rows.length);
+                // The rows take three of the four width shares below, minus
+                // the gap before the unlocks panel.
+                final tile = couchFillTileWidth(
+                  (c.maxWidth - 16) * 3 / 4,
+                  scale: uiScaleListenable.value,
+                );
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -124,7 +144,11 @@ class CouchHome extends StatelessWidget {
   /// phone-width screen), each cover row a fixed height that scrolls
   /// horizontally, the unlocks panel below. The whole thing scrolls vertically
   /// so nothing is stuck off-screen.
-  Widget _compact(RomResult? spotlight, RomResult? beat, {required bool phone}) {
+  Widget _compact(
+    RomResult? spotlight,
+    RomResult? beat, {
+    required bool phone,
+  }) {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Column(
@@ -159,8 +183,8 @@ class CouchHome extends StatelessWidget {
   /// The fitted layout's rows, sized so they fill the column's height instead of
   /// packing fixed tiles at the top. Tiles grow with the window (bigger art on a
   /// TV, smaller on a laptop); each row still scrolls horizontally if a narrow
-  /// window can't fit its covers, and the column scrolls vertically only when a
-  /// short window forces the tiles to their minimum.
+  /// window can't fit its covers, and the column scrolls vertically when a short
+  /// window or a zoomed-in one can't show every row at that size.
   Widget _fillRows(List<(String, List<RomResult>)> rows, double tile) {
     return SingleChildScrollView(
       child: Column(
@@ -183,8 +207,12 @@ class CouchHome extends StatelessWidget {
   /// wireframe's COMPLETE / MASTERY). A library with no beat target shows the
   /// mastery banner alone. Stacked vertically instead of side by side when
   /// [stacked] is set, so the banners stay readable on a phone-width screen.
-  Widget _heroes(RomResult spotlight, RomResult? beat,
-      {double? height, bool stacked = false}) {
+  Widget _heroes(
+    RomResult spotlight,
+    RomResult? beat, {
+    double? height,
+    bool stacked = false,
+  }) {
     final mastery = CouchHero(
       rom: spotlight,
       eyebrow: 'MASTERY',
@@ -205,11 +233,7 @@ class CouchHome extends StatelessWidget {
     if (stacked) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          beatHero,
-          const SizedBox(height: 12),
-          mastery,
-        ],
+        children: [beatHero, const SizedBox(height: 12), mastery],
       );
     }
     return Row(

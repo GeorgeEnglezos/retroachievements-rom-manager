@@ -50,6 +50,9 @@ spike/
 reference/
 backups/
 
+# Verbatim copy of RetroAchievements/api-docs, kept locally for reference.
+docs/retroachievements-api/
+
 # Collected release outputs from build_all.sh
 artifacts/
 

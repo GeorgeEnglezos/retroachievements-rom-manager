@@ -57,8 +57,8 @@ void main() {
         'com.armsx3': 'pcsx2',
         'xyz.aethersx2.someotherfork': 'pcsx2',
         'me.magnum.melonds.nightly': 'melonds',
-        'org.citra.emu': 'citra',
-        'io.github.azahar_emu.azahar': 'citra',
+        'org.citra.emu': 'azahar',
+        'io.github.azahar_emu.azahar': 'azahar',
         'org.dolphinemu.mmjr': 'dolphin',
         'org.ppsspp.ppssppgold.beta': 'ppsspp',
       };

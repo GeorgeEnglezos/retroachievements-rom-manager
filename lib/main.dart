@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/setup_wizard.dart';
 import 'services/app_mode.dart';
 import 'services/play_view.dart';
+import 'services/rom_tap.dart';
 import 'services/app_theme.dart';
 import 'services/display_name.dart';
 import 'services/library.dart';
@@ -29,12 +30,13 @@ void main() {
       exit(0);
     }
     await LogService.init();
-    await initNameMode();
+    await nameModeListenable.init();
     await initCombineSystems();
-    await initAppTheme();
+    await appThemeListenable.init();
     await initUiScale();
-    await initAppMode();
+    await appModeListenable.init();
     await initPlayView();
+    await romTapListenable.init();
     await initLibraryFolder();
     await Library.instance.init();
     final prefs = await SharedPreferences.getInstance();

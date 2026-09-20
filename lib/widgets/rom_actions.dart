@@ -13,7 +13,9 @@ import '../services/file_actions.dart';
 import '../services/icon_service.dart';
 import '../services/library.dart';
 import '../services/log_service.dart';
+import '../services/console_map.dart';
 import 'confirm_recycle_dialog.dart';
+import 'game_detail_dialog.dart';
 import 'positioned_menu.dart';
 import 'ra_image.dart';
 import '../services/emulator_store.dart';
@@ -21,8 +23,10 @@ import '../services/scan_settings.dart';
 import '../services/scraper/scraped_store.dart';
 import '../services/member_key.dart';
 import '../services/playlist_store.dart';
+import 'play_with_dialog.dart';
 import 'playlist_picker.dart';
 import 'set_emulator_dialog.dart';
+import 'ui/ui_focusable.dart';
 
 /// Fallback status icon when a ROM has no box art.
 Widget romStatusIcon(RomResult rom) => switch (rom.status) {
@@ -79,9 +83,20 @@ class RomActions {
 
   Future<void> showContextMenu(BuildContext context, Offset position) async {
     final canOpenRa = rom.status == RomStatus.supported && rom.gameId != null;
+    // "Play with…" is offered only when this console has more than one added
+    // emulator: with one there is nothing to choose and Play already uses it.
+    final consoleId = await _consoleId();
+    final alternatives = consoleId == null
+        ? const <Emulator>[]
+        : await EmulatorStore.emulatorsForConsole(consoleId);
+    if (!context.mounted) return;
     final choice = await showPositionedMenu<String>(context, position, [
+        // The only way into the dialog once a click is set to launch.
+        if (canOpenDetail(rom)) _item('detail', Icons.info_outline, 'Game details'),
         // Beta: only a handful of emulators have been tested end to end.
         _item('play', Icons.play_arrow, 'Play (beta)'),
+        if (alternatives.length > 1)
+          _item('play_with', Icons.playlist_play, 'Play with…'),
         if (Platform.isWindows)
           _item('shortcut', Icons.add_link, 'Create desktop shortcut (beta)'),
         if (Platform.isAndroid)
@@ -123,12 +138,14 @@ class RomActions {
       {Color? color}) {
     return PopupMenuItem(
       value: value,
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 8),
-          Flexible(child: Text(label, style: TextStyle(color: color))),
-        ],
+      child: UiFocusZoom(
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 8),
+            Flexible(child: Text(label, style: TextStyle(color: color))),
+          ],
+        ),
       ),
     );
   }
@@ -147,8 +164,22 @@ class RomActions {
         messenger.showSnackBar(SnackBar(content: Text(text)));
 
     switch (choice) {
+      case 'detail':
+        await showDialog<void>(
+          context: context,
+          builder: (_) => GameDetailDialog(
+            rom: rom,
+            store: store,
+            onDeleted: onDeleted,
+            onPlaylistChanged: onPlaylistChanged,
+            onFetch: onFetch,
+            scraped: ScrapedStore.instance.get(rom.filePath),
+          ),
+        );
       case 'play':
         await _play(context, snack);
+      case 'play_with':
+        await _playWith(context, snack);
       case 'shortcut':
         if (Platform.isAndroid) {
           await _createAndroidShortcut(context, snack);
@@ -194,8 +225,7 @@ class RomActions {
   // Launch via the console's emulator; unknown console -> OS default.
   // No emulator yet -> offer to set one and retry.
   Future<void> _play(BuildContext context, void Function(String) snack) async {
-    final consoleId = rom.consoleId ??
-        await ScanSettings.consoleIdForFolder(p.dirname(rom.filePath));
+    final consoleId = await _consoleId();
     if (consoleId == null) {
       LogService.info('RomActions/launch',
           'Launch ${rom.fileName}: unknown console, using OS default app');
@@ -211,44 +241,86 @@ class RomActions {
     }
     final command = await _commandOrPrompt(context, consoleId);
     if (command == null) return;
-    LogService.info('RomActions/launch',
-        'Launch ${rom.fileName} (console $consoleId) via: $command');
-    if (!await FileActions.launchWithTemplate(command, rom.filePath)) {
-      LogService.error('RomActions/launch',
-          'Launch failed for ${rom.fileName} via: $command');
-      snack("Couldn't launch ROM");
-    }
+    await _launchDesktop(command, consoleId, snack);
   }
 
   // Android: hand the ROM to the connected app via an intent.
   Future<void> _playAndroid(
       BuildContext context, int consoleId, void Function(String) snack) async {
-    var emu = await EmulatorStore.connectedEmulator(consoleId);
-    if (emu == null) {
-      if (!context.mounted) return;
-      if (!await showSetEmulatorDialog(context, consoleId)) return;
-      emu = await EmulatorStore.connectedEmulator(consoleId);
-    }
+    final emu = await _emulatorOrPrompt(context, consoleId);
     if (emu == null) return;
-    LogService.info('RomActions/launch',
-        'Launch ${rom.fileName} in ${emu.name} '
-        '(pkg=${emu.exePath}, kind=${emu.kindId}, console=$consoleId)');
-    final err = await AndroidEmulators.launchRom(
+    await _launchAndroid(emu, consoleId, snack);
+  }
+
+  // Android: fire the intent for [emu] and report the outcome.
+  Future<void> _launchAndroid(
+      Emulator emu, int consoleId, void Function(String) snack) async {
+    final err = await AndroidEmulators.launchRomLogged(
       package: emu.exePath,
       kindId: emu.kindId,
       consoleId: consoleId,
       romPath: rom.filePath,
+      subject: '${rom.fileName} in ${emu.name}',
+      logContext: 'RomActions/launch',
     );
-    if (err != null) {
+    if (err != null) snack("Couldn't open in ${emu.name}: $err");
+  }
+
+  // The console's connected emulator, offering to set one when it has none.
+  Future<Emulator?> _emulatorOrPrompt(
+      BuildContext context, int consoleId) async {
+    final existing = await EmulatorStore.connectedEmulator(consoleId);
+    if (existing != null) return existing;
+    if (!context.mounted) return null;
+    if (!await showSetEmulatorDialog(context, consoleId)) return null;
+    return EmulatorStore.connectedEmulator(consoleId);
+  }
+
+  // Launch this one game in an emulator the user picks, using the catalog's
+  // args for the pair. The console's own connection is left alone.
+  Future<void> _playWith(
+      BuildContext context, void Function(String) snack) async {
+    final consoleId = await _consoleId();
+    if (consoleId == null) {
+      snack('Unknown console for this ROM. Set its folder system in Settings.');
+      return;
+    }
+    final choices = await EmulatorStore.emulatorsForConsole(consoleId);
+    if (!context.mounted) return;
+    final emu = await showPlayWithDialog(
+        context, choices, ConsoleMap.nameFor(consoleId) ?? 'this system');
+    if (emu == null) return;
+    if (Platform.isAndroid) {
+      await _launchAndroid(emu, consoleId, snack);
+      return;
+    }
+    final command = await EmulatorStore.commandForEmulator(emu, consoleId);
+    if (command == null) {
+      snack("${emu.name} has no launch command for this system.");
+      return;
+    }
+    await _launchDesktop(command, consoleId, snack, emulatorName: emu.name);
+  }
+
+  // Desktop: run [command] for this ROM and report the outcome.
+  // [emulatorName] is set only when the user picked the emulator themselves.
+  Future<void> _launchDesktop(
+      String command, int consoleId, void Function(String) snack,
+      {String? emulatorName}) async {
+    final inEmu = emulatorName == null ? '' : ' in $emulatorName';
+    LogService.info('RomActions/launch',
+        'Launch ${rom.fileName} (console $consoleId)$inEmu via: $command');
+    if (!await FileActions.launchWithTemplate(command, rom.filePath)) {
       LogService.error('RomActions/launch',
-          'Launch failed for ${rom.fileName} in ${emu.name} '
-          '(pkg=${emu.exePath}): $err');
-      snack("Couldn't open in ${emu.name}: $err");
-    } else {
-      LogService.info('RomActions/launch',
-          'Launch OK: ${rom.fileName} in ${emu.name}');
+          'Launch failed for ${rom.fileName}$inEmu via: $command');
+      snack("Couldn't launch ROM");
     }
   }
+
+  // This ROM's console: the scanned id, else its folder's mapping.
+  Future<int?> _consoleId() async =>
+      rom.consoleId ??
+      await ScanSettings.consoleIdForFolder(p.dirname(rom.filePath));
 
   // Launch command for [consoleId], prompting to set an emulator if missing.
   Future<String?> _commandOrPrompt(BuildContext context, int consoleId) async {
@@ -264,18 +336,13 @@ class RomActions {
   // app (re-grants the file URI, rebuilds the intent).
   Future<void> _createAndroidShortcut(
       BuildContext context, void Function(String) snack) async {
-    final consoleId = rom.consoleId ??
-        await ScanSettings.consoleIdForFolder(p.dirname(rom.filePath));
+    final consoleId = await _consoleId();
     if (consoleId == null) {
       snack('Unknown console for this ROM. Set its folder system in Settings.');
       return;
     }
-    var emu = await EmulatorStore.connectedEmulator(consoleId);
-    if (emu == null) {
-      if (!context.mounted) return;
-      if (!await showSetEmulatorDialog(context, consoleId)) return;
-      emu = await EmulatorStore.connectedEmulator(consoleId);
-    }
+    if (!context.mounted) return;
+    final emu = await _emulatorOrPrompt(context, consoleId);
     if (emu == null) return;
     final err = await AndroidEmulators.createShortcut(
       package: emu.exePath,
@@ -297,8 +364,7 @@ class RomActions {
       snack('Desktop shortcuts are only available on Windows.');
       return;
     }
-    final consoleId = rom.consoleId ??
-        await ScanSettings.consoleIdForFolder(p.dirname(rom.filePath));
+    final consoleId = await _consoleId();
     if (consoleId == null) {
       snack('Unknown console for this ROM. Set its folder system in Settings.');
       return;
@@ -388,13 +454,17 @@ class RomActions {
           "the exact titles and hashes RA accepts.",
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Close'),
+          UiFocusZoom(
+            child: TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Close'),
+            ),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Open RA supported list'),
+          UiFocusZoom(
+            child: TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Open RA supported list'),
+            ),
           ),
         ],
       ),

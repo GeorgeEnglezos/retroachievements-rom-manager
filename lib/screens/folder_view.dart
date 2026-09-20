@@ -31,8 +31,9 @@ import '../services/disc_decompressor.dart';
 import '../services/disc_formats.dart';
 import '../services/rom_file_lister.dart';
 import '../services/rom_filter.dart';
-import '../services/cleanup_score.dart';
+import '../services/least_played_score.dart';
 import '../services/disc_grouping.dart';
+import '../services/switch_grouping.dart';
 import '../models/folder_sort.dart';
 import '../models/rom_row.dart';
 import '../models/rom_group.dart';
@@ -46,6 +47,7 @@ import '../widgets/row_display.dart';
 import '../widgets/require_credentials.dart';
 import '../widgets/rom_list_view.dart';
 import '../theme/ui_tokens.dart';
+import '../widgets/ui/ui_focusable.dart';
 
 class _GroupHeader {
   final Color color;
@@ -106,7 +108,6 @@ class _FolderViewState extends State<FolderView> {
     PlayLayout.list => false,
     PlayLayout.grid => true,
   };
-  CleanupScoreMode _cleanupMode = CleanupScoreMode.logDampened;
   // Sort override; a flag (not a FolderSort) so toggling off restores the
   // previous sort.
   bool _hot = false;
@@ -120,7 +121,6 @@ class _FolderViewState extends State<FolderView> {
     sort: _folderSort,
     ascending: _sortAscending,
     hot: _hot,
-    cleanupMode: _cleanupMode,
   );
 
   bool get _anyDuplicates => _roms.any((r) => r.duplicateGroupId != null);
@@ -207,8 +207,6 @@ class _FolderViewState extends State<FolderView> {
     final size =
         prefs.getDouble(PrefKeys.folderGridSize) ??
         FolderToolbar.gridSizeDefault;
-    final mode = CleanupScoreMode.values
-        .asNameMap()[prefs.getString(PrefKeys.cleanupMode)];
     if (mounted) {
       setState(() {
         if (v != null) _folderSort = v;
@@ -218,7 +216,6 @@ class _FolderViewState extends State<FolderView> {
           FolderToolbar.gridSizeMin,
           FolderToolbar.gridSizeMax,
         );
-        if (mode != null) _cleanupMode = mode;
       });
     }
   }
@@ -374,7 +371,6 @@ class _FolderViewState extends State<FolderView> {
       released: r.released,
       points: r.points,
       numPlayersCasual: r.numPlayersCasual ?? 0,
-      numPlayersHardcore: r.numPlayersHardcore ?? 0,
     );
   }
 
@@ -385,9 +381,11 @@ class _FolderViewState extends State<FolderView> {
     if (ScanRun.busy) return;
     final plan = await showFetchTasksDialog(context, global: false);
     if (plan == null || !mounted) return;
+    // Phase one, local and free: pick up files added or removed since the last
+    // run so the scan below sees them.
     if (plan.refresh) {
       await _refreshFiles();
-      return;
+      if (!mounted) return;
     }
     await _runFetch(plan);
   }
@@ -455,6 +453,20 @@ class _FolderViewState extends State<FolderView> {
     run.start(label: widget.title);
 
     try {
+      // One account-wide sweep for the run, shared with every folder below.
+      // Null when it failed, which tells the runner to leave stored progress
+      // alone rather than write zeros over it.
+      Map<int, CompletedGame>? progressByGameId;
+      if (plan.progress && service != null) {
+        final sweep = await fetchCompletionSweep(service, 'FolderView/fetch');
+        progressByGameId = sweep.byGameId;
+        if (!mounted) return;
+        if (sweep.userMessage != null) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(sweep.userMessage!)));
+        }
+      }
+
       for (final sysPath in widget.folderPaths) {
         if (!mounted || run.cancelled) break;
         // Each folder is mapped on its own, so a combined view maps every row
@@ -473,6 +485,7 @@ class _FolderViewState extends State<FolderView> {
           consoleId: widget.consoleId,
           metadataProvider: metadataProvider,
           metadataCache: MetadataCache(),
+          progressByGameId: progressByGameId,
           logContext: 'FolderView/fetch',
           onTargets: run.addTotal,
           onEntry: (entry) {
@@ -498,11 +511,6 @@ class _FolderViewState extends State<FolderView> {
         // compressed GC/Wii dump; tell the user it cannot be matched yet.
         if (result.unhashable.isNotEmpty && Platform.isAndroid && mounted) {
           await showAndroidDiscHashingUnsupported(context);
-        }
-        if (result.message != null && mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(result.message!)));
         }
       }
     } finally {
@@ -561,11 +569,7 @@ class _FolderViewState extends State<FolderView> {
         if (mounted) {
           setState(() {
             applyGameInfo(rom, info);
-            rom.earnedAchievements = progress.earnedAchievements;
-            rom.earnedHardcore = progress.earnedHardcore;
-            rom.highestAward = progress.highestAward;
-            rom.highestAwardDate = progress.highestAwardDate;
-            rom.lastPlayed = progress.lastPlayed;
+            applyProgress(rom, progress);
           });
         }
       } catch (e) {
@@ -686,7 +690,7 @@ class _FolderViewState extends State<FolderView> {
   }
 
   RomRow _toRow(RomResult rom) =>
-      RomRow.fromRom(rom, scoreLabel: _cleanupScoreLabel(rom));
+      RomRow.fromRom(rom, scoreLabel: _leastPlayedScoreLabel(rom));
 
   // Collapses multi-disc sets into a single listing row; other files map 1:1.
   List<RomRow> _listingRows() =>
@@ -696,7 +700,11 @@ class _FolderViewState extends State<FolderView> {
     if (!g.isMultiDisc) return _toRow(g.discs.first);
     final rep = g.representative;
     return RomRow(
-      title: listingTitle(rep.gameTitle, stripDiscToken(rep.fileName)),
+      // A Switch title has no RA match to name it, and its filename is mostly
+      // bracketed title id / version, so the group row uses the cleaned name.
+      title: g.switchTitle
+          ? switchDisplayTitle(rep.fileName)
+          : listingTitle(rep.gameTitle, stripDiscToken(rep.fileName)),
       filePath: rep.filePath,
       status: rep.status,
       imageIcon: rep.imageIcon,
@@ -707,7 +715,7 @@ class _FolderViewState extends State<FolderView> {
       discCount: g.discs.length,
       groupPaths: [for (final d in g.discs) d.filePath],
       onTap: () => _openDiscGroup(g),
-      scoreLabel: _cleanupScoreLabel(rep),
+      scoreLabel: _leastPlayedScoreLabel(rep),
     );
   }
 
@@ -774,16 +782,15 @@ class _FolderViewState extends State<FolderView> {
     return rows;
   }
 
-  // The cleanup score shown on each row while the Cleanup sort is active (both
-  // score modes). Null → no label: sort isn't cleanup, or the set can't be
+  // The score shown on each row while the Least played sort is active.
+  // Null → no label: sort isn't least-played, or the set can't be
   // judged (no set date / inside the grace period). Lower score = more
   // deletable, matching the ascending sort.
-  String? _cleanupScoreLabel(RomResult rom) {
-    if (_folderSort != FolderSort.cleanup) return null;
-    final score = cleanupScore(
+  String? _leastPlayedScoreLabel(RomResult rom) {
+    if (_folderSort != FolderSort.leastPlayed) return null;
+    final score = leastPlayedScore(
       players: rom.numPlayersCasual ?? 0,
       setCreated: rom.setCreated,
-      mode: _cleanupMode,
     );
     return score == null ? '-' : score.round().toString();
   }
@@ -796,13 +803,15 @@ class _FolderViewState extends State<FolderView> {
     // matches the shell's landscape rail. The system name is dropped: you
     // picked the system to get here.
     final landscapePhone = context.isLandscapePhone;
-    final toggle = IconButton(
-      key: const Key('toolbar_toggle'),
-      icon: Icon(_toolbarVisible ? Icons.expand_less : Icons.tune),
-      tooltip: _toolbarVisible
-          ? 'Hide search & filters'
-          : 'Show search & filters',
-      onPressed: () => setState(() => _toolbarVisible = !_toolbarVisible),
+    final toggle = UiFocusZoom(
+      child: IconButton(
+        key: const Key('toolbar_toggle'),
+        icon: Icon(_toolbarVisible ? Icons.expand_less : Icons.tune),
+        tooltip: _toolbarVisible
+            ? 'Hide search & filters'
+            : 'Show search & filters',
+        onPressed: () => setState(() => _toolbarVisible = !_toolbarVisible),
+      ),
     );
     final content = _loading
         ? const Center(child: CircularProgressIndicator())
@@ -821,7 +830,6 @@ class _FolderViewState extends State<FolderView> {
                   anyDuplicates: _anyDuplicates,
                   hot: _hot,
                   showHot: _roms.any((r) => (r.numPlayersCasual ?? 0) > 0),
-                  cleanupMode: _cleanupMode,
                   playlists: [
                     for (final pl in _playlists) (id: pl.id, name: pl.name),
                   ],
@@ -830,11 +838,6 @@ class _FolderViewState extends State<FolderView> {
                     setState(() => _folderSort = s);
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.setString(PrefKeys.folderSort, s.name);
-                  },
-                  onCleanupModeChanged: (m) async {
-                    setState(() => _cleanupMode = m);
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setString(PrefKeys.cleanupMode, m.name);
                   },
                   onDirectionToggle: () async {
                     setState(() => _sortAscending = !_sortAscending);
@@ -944,10 +947,12 @@ class _FolderViewState extends State<FolderView> {
                     child: SingleChildScrollView(
                       child: Column(
                         children: [
-                          IconButton(
-                            icon: const Icon(Icons.arrow_back),
-                            tooltip: 'Back',
-                            onPressed: () => Navigator.of(context).maybePop(),
+                          UiFocusZoom(
+                            child: IconButton(
+                              icon: const Icon(Icons.arrow_back),
+                              tooltip: 'Back',
+                              onPressed: () => Navigator.of(context).maybePop(),
+                            ),
                           ),
                           toggle,
                           Divider(

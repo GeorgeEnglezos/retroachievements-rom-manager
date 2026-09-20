@@ -10,7 +10,7 @@ import 'rom_path_key.dart';
 /// Path-keyed store of imported [ScrapedGame]s (one JSON file). Separate from RA
 /// persistence. Keys are normalized+lowercased ROM paths so lookups survive case
 /// differences. Pass [baseDir] in tests.
-class ScrapedStore {
+class ScrapedStore extends ChangeNotifier {
   ScrapedStore({Directory? baseDir}) : _baseDir = baseDir;
 
   /// App-wide shared store; tests build their own with a [baseDir].
@@ -43,6 +43,7 @@ class ScrapedStore {
     } catch (e) {
       LogService.error('ScrapedStore', 'load failed', err: e);
     }
+    notifyListeners();
   }
 
   /// Imported data for a ROM path, or null. Call [load] first.
@@ -53,11 +54,12 @@ class ScrapedStore {
   @visibleForTesting
   void seed(ScrapedGame g) => _mem[romPathKey(g.romPath)] = g;
 
-  /// Empties the shared [instance] so seeds don't leak between test cases.
-  @visibleForTesting
-  void resetForTest() {
+  /// Empties the store. Used by a data wipe, and by tests so seeds don't leak
+  /// between cases. The next [load] re-reads from disk.
+  void clear() {
     _mem.clear();
     _loaded = false;
+    notifyListeners();
   }
 
   /// Merges [games] in and persists. Loads first so existing entries survive.
@@ -73,5 +75,6 @@ class ScrapedStore {
     } catch (e) {
       LogService.error('ScrapedStore', 'write failed', err: e);
     }
+    notifyListeners();
   }
 }

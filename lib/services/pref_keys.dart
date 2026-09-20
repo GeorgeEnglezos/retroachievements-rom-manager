@@ -22,6 +22,9 @@ abstract final class PrefKeys {
   // Cleaning vs play surface (owned by app_mode.dart).
   static const appMode = 'app_mode';
 
+  // What clicking a ROM does: details dialog or launch (owned by rom_tap.dart).
+  static const romTapAction = 'rom_tap_action';
+
   // Set once the first-run wizard completes or is skipped. Unset = show it.
   static const setupDone = 'setup_done';
 
@@ -37,11 +40,20 @@ abstract final class PrefKeys {
   static const folderGridView = 'folder_grid_view';
   // Grid tile size (max cross-axis extent, px) for the folder game grid.
   static const folderGridSize = 'folder_grid_size';
-  static const cleanupMode = 'cleanup_mode';
   // Play-mode listing settings, one JSON blob (see play_view.dart).
   static const playView = 'play_view';
 
   // Games dismissed from Home's mastery/beat spotlight banners (owned by
   // ignored_candidates.dart), a list of member keys.
   static const homeIgnoredSpotlights = 'home_ignored_spotlights';
+
+  // Games the elimination game has judged (owned by cull_store.dart).
+  static const cullDecided = 'cull_decided';
+
+  // Named collections of games (owned by playlist_store.dart).
+  static const playlists = 'playlists';
+
+  // Systems pinned to the top of the Library grid (owned by
+  // favorite_systems.dart).
+  static const favoriteSystems = 'favorite_systems';
 }

@@ -1,5 +1,20 @@
 import '../models/folder_stats.dart' show achievementFraction;
 
+/// Collapses copies of the same game (same RA gameId in two ROM folders) down
+/// to the most-progressed one, so a game is counted and recommended once.
+/// [key] falls back to the file path when a matched game has no id, so
+/// genuinely distinct games never merge. Shared with the home dashboard, which
+/// deduplicates its own buckets by the same rule.
+List<T> dedupeByGame<T>(Iterable<T> items,
+    {required Object Function(T) key, required int Function(T) earned}) {
+  final byGame = <Object, T>{};
+  for (final item in items) {
+    final prev = byGame[key(item)];
+    if (prev == null || earned(item) > earned(prev)) byGame[key(item)] = item;
+  }
+  return byGame.values.toList();
+}
+
 /// One game reduced to just the signals the recommender scores on.
 class RecGame {
   final String title;
@@ -54,18 +69,11 @@ class Recommender {
   Recommender._();
 
   static Recommendations build(List<RecGame> games, {int limit = 10}) {
-    // Two ROM libraries can hold the same game (same RA gameId, different file
-    // paths); collapse to one entry so a game is recommended once. Keep the
-    // most-progressed copy. Fall back to filePath when a matched game has no id
-    // so genuinely distinct games never merge.
-    final byGame = <Object, RecGame>{};
-    for (final g in games) {
-      if (g.total <= 0) continue;
-      final key = g.gameId ?? g.filePath;
-      final prev = byGame[key];
-      if (prev == null || g.earned > prev.earned) byGame[key] = g;
-    }
-    final supported = byGame.values.toList();
+    final supported = dedupeByGame(
+      games.where((g) => g.total > 0),
+      key: (g) => g.gameId ?? g.filePath,
+      earned: (g) => g.earned,
+    );
 
     // Started but not finished, highest completion first; the fastest masteries.
     final closest = supported

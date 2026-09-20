@@ -42,7 +42,11 @@ class Library extends ChangeNotifier {
   }
 
   Future<Directory> _systemsDir() async {
-    if (_systemsDirCache != null) return _systemsDirCache!;
+    // Revalidated, not just cached: a data wipe (see BackupService.clearAll)
+    // deletes this folder out from under us, and the next save has to
+    // re-create it rather than write into a path that no longer exists.
+    final cached = _systemsDirCache;
+    if (cached != null && await cached.exists()) return cached;
     final base = _baseDir ?? await getApplicationSupportDirectory();
     final dir = Directory(p.join(base.path, 'data', 'systems'));
     await dir.create(recursive: true);
@@ -285,6 +289,32 @@ class Library extends ChangeNotifier {
   bool isSystemMissing(String systemPath) =>
       _missingSystemPaths.contains(_norm(systemPath));
 
+  /// Every scanned system whose folder is not on disk right now. Snapshotted
+  /// off [_byId] first, so a concurrent save can't mutate it mid-loop.
+  Future<List<SystemData>> _goneSystems() async {
+    final gone = <SystemData>[];
+    for (final d in _byId.values.toList()) {
+      try {
+        if (await Directory(d.systemPath).exists()) continue;
+      } catch (_) {
+        // An IO error (offline drive) counts as present, so a transient
+        // failure never hides or deletes data.
+        continue;
+      }
+      gone.add(d);
+    }
+    return gone;
+  }
+
+  /// Folder paths of the systems [pruneMissingSystems] would delete, so the
+  /// caller can name them in a confirmation. An unplugged drive is
+  /// indistinguishable from a deleted folder here, which is exactly why the
+  /// delete is worth confirming.
+  Future<List<String>> missingSystemNames() async {
+    await init();
+    return [for (final d in await _goneSystems()) d.systemPath]..sort();
+  }
+
   /// Permanently deletes every system whose folder no longer exists. A manual
   /// cleanup for a moved or renamed library; the automatic path only hides
   /// missing systems ([refreshMissingSystems]) so a remounted drive returns.
@@ -293,23 +323,15 @@ class Library extends ChangeNotifier {
     await init();
     return _locked(() async {
       final dir = await _systemsDir();
-      var removed = 0;
-      for (final d in _byId.values.toList()) {
-        try {
-          if (await Directory(d.systemPath).exists()) continue;
-        } catch (_) {
-          // An IO error (offline drive) counts as present, so a transient
-          // failure never deletes data.
-          continue;
-        }
+      final gone = await _goneSystems();
+      for (final d in gone) {
         _byId.remove(d.systemId);
         _missingSystemPaths.remove(_norm(d.systemPath));
         final file = File(p.join(dir.path, '${d.systemId}.json'));
         if (await file.exists()) await file.delete();
-        removed++;
       }
-      if (removed > 0) notifyListeners();
-      return removed;
+      if (gone.isNotEmpty) notifyListeners();
+      return gone.length;
     });
   }
 

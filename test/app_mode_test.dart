@@ -12,27 +12,34 @@ void main() {
   tearDown(() => appModeListenable.value = AppMode.cleaning);
 
   test('defaults to cleaning with nothing stored', () async {
-    expect(await loadAppMode(), AppMode.cleaning);
+    await appModeListenable.init();
+    expect(appModeListenable.value, AppMode.cleaning);
   });
 
   test('an unknown stored value falls back to cleaning', () async {
     SharedPreferences.setMockInitialValues({'app_mode': 'kiosk'});
-    expect(await loadAppMode(), AppMode.cleaning);
+    await appModeListenable.init();
+    expect(appModeListenable.value, AppMode.cleaning);
   });
 
   test('save persists and publishes', () async {
-    await saveAppMode(AppMode.gaming);
+    await appModeListenable.save(AppMode.gaming);
     expect(gamingMode, isTrue);
-    expect(await loadAppMode(), AppMode.gaming);
+    // Forget the in-memory value, so init has to read it back off disk.
+    appModeListenable.value = AppMode.cleaning;
+    await appModeListenable.init();
+    expect(appModeListenable.value, AppMode.gaming);
 
-    await saveAppMode(AppMode.cleaning);
+    await appModeListenable.save(AppMode.cleaning);
     expect(gamingMode, isFalse);
-    expect(await loadAppMode(), AppMode.cleaning);
+    appModeListenable.value = AppMode.gaming;
+    await appModeListenable.init();
+    expect(appModeListenable.value, AppMode.cleaning);
   });
 
   test('init reads the stored mode', () async {
     SharedPreferences.setMockInitialValues({'app_mode': 'gaming'});
-    await initAppMode();
+    await appModeListenable.init();
     expect(appModeListenable.value, AppMode.gaming);
   });
 }

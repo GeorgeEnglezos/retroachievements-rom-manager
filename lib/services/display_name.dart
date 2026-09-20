@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'console_map.dart';
+import 'enum_setting.dart';
 import 'pref_keys.dart';
 
 /// How folder cards, the folder view title, and combined-system labels show a
@@ -13,8 +14,8 @@ const _nameModeKey = 'name_display_mode';
 /// The live name mode, shared across screens. Screens listen to this so a change
 /// made on the Settings tab applies immediately even though the IndexedStack
 /// nav keeps them all alive (they are never popped/reloaded).
-final ValueNotifier<NameMode> nameModeListenable =
-    ValueNotifier(NameMode.systemName);
+final nameModeListenable =
+    EnumSetting(_nameModeKey, NameMode.values, NameMode.systemName);
 
 /// Label for a folder (or combined group): folder name(s) or RA console name
 /// per [mode], falling back to folder names when the console is unknown.
@@ -26,26 +27,6 @@ String displayNameFor({
   final folderName = folderPaths.map((path) => p.basename(path)).join(' / ');
   if (mode == NameMode.folderName) return folderName;
   return ConsoleMap.nameFor(consoleId) ?? folderName;
-}
-
-/// Loads the saved name mode, defaulting to [NameMode.systemName].
-Future<NameMode> loadNameMode() async {
-  final prefs = await SharedPreferences.getInstance();
-  return NameMode.values.asNameMap()[prefs.getString(_nameModeKey)] ??
-      NameMode.systemName;
-}
-
-/// Reads the saved name mode into [nameModeListenable]. Call once at startup so
-/// the first build uses the saved value.
-Future<void> initNameMode() async {
-  nameModeListenable.value = await loadNameMode();
-}
-
-/// Persists the chosen name mode and publishes it to listeners.
-Future<void> saveNameMode(NameMode mode) async {
-  nameModeListenable.value = mode;
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setString(_nameModeKey, mode.name);
 }
 
 /// Whether the home grid merges folders that map to the same console into one

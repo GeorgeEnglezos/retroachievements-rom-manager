@@ -5,6 +5,7 @@ import '../models/rom_tags.dart';
 import '../services/app_mode.dart';
 import '../services/hotness.dart';
 import '../services/play_view.dart';
+import '../services/switch_grouping.dart';
 import '../theme/ui_tokens.dart';
 import 'ui/ui_badge.dart';
 import 'rom_tag_badge.dart';
@@ -58,10 +59,18 @@ Widget? achBadge(RomResult rom, UiTokens ui) =>
         ? null
         : UiBadge(label: '${rom.achievementCount} ACH', color: ui.accentGames);
 
-/// "💿 N": this listing collapses N discs of a multi-disc game.
-Widget? discBadge(int? count, UiTokens ui) => (count == null || count < 2)
-    ? null
-    : romBadge('💿 $count', ui.accent, tooltip: '$count-disc game');
+/// "💿 N": this listing collapses N discs of a multi-disc game. For a Switch
+/// title the N files are its base, updates and DLC, not discs, so it reads
+/// "📦 N" instead. [fileName] is the collapsed row's representative file.
+Widget? discBadge(int? count, UiTokens ui, {String? fileName}) {
+  if (count == null || count < 2) return null;
+  if (fileName != null && isSwitchFile(fileName)) {
+    return romBadge('📦 $count', ui.accent,
+        tooltip: '$count files: base game, updates and DLC. '
+            'Only the base game boots.');
+  }
+  return romBadge('💿 $count', ui.accent, tooltip: '$count-disc game');
+}
 
 /// Filename-derived tag chips (region, HACK, ENG, …).
 List<Widget> tagBadges(String fileName) => playView.fileTags

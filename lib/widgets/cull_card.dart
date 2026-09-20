@@ -88,10 +88,12 @@ class CullCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.search),
-                      tooltip: 'Search Google',
-                      onPressed: onSearch,
+                    UiFocusZoom(
+                      child: IconButton(
+                        icon: const Icon(Icons.search),
+                        tooltip: 'Search Google',
+                        onPressed: onSearch,
+                      ),
                     ),
                     _detailsButton(context, rom, scraped),
                   ],
@@ -128,17 +130,19 @@ class CullCard extends StatelessWidget {
 
   Widget _detailsButton(
           BuildContext context, RomResult rom, ScrapedGame? scraped) =>
-      IconButton(
-        icon: const Icon(Icons.info_outline),
-        tooltip: 'Game details',
-        onPressed: () => showDialog(
-          context: context,
-          builder: (_) => GameDetailDialog(
-            rom: rom,
-            store: PlaylistStore(),
-            discs: card.discs.length > 1 ? card.discs : null,
-            scraped: scraped,
-            onDeleted: onDeleted,
+      UiFocusZoom(
+        child: IconButton(
+          icon: const Icon(Icons.info_outline),
+          tooltip: 'Game details',
+          onPressed: () => showDialog(
+            context: context,
+            builder: (_) => GameDetailDialog(
+              rom: rom,
+              store: PlaylistStore(),
+              discs: card.discs.length > 1 ? card.discs : null,
+              scraped: scraped,
+              onDeleted: onDeleted,
+            ),
           ),
         ),
       );
@@ -319,18 +323,13 @@ class CullCard extends StatelessWidget {
     return _localImage(ui, path, cacheWidth: 400, errorIcon: 24);
   }
 
-  // RA value wins when non-empty, else the imported (Skraper) value. Mirrors
-  // GameDetailDialog's RA/scraped gap-filling (_gap).
-  String? _gap(String? ra, String? scraped) =>
-      (ra != null && ra.isNotEmpty) ? ra : scraped;
-
   // "Genre · 1997 · Publisher · 350 pts · 1.2K players · 12.3 MB", filling RA
   // gaps from imported metadata and skipping missing parts.
   String _metaLine(RomResult rom, ScrapedGame? scraped) => [
-        _gap(rom.genre, scraped?.genre),
-        _gap(rom.released, scraped?.releaseDate),
-        _gap(rom.publisher, scraped?.publisher) ??
-            _gap(rom.developer, scraped?.developer),
+        raOrScraped(rom.genre, scraped?.genre),
+        raOrScraped(rom.released, scraped?.releaseDate),
+        raOrScraped(rom.publisher, scraped?.publisher) ??
+            raOrScraped(rom.developer, scraped?.developer),
         if ((rom.points ?? 0) > 0) '${rom.points} pts',
         if ((rom.numPlayersCasual ?? 0) > 0)
           '${compactCount(rom.numPlayersCasual!)} players',

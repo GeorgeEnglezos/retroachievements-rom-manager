@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/ui_tokens.dart';
+import 'ui/ui_focusable.dart';
 
 /// GB-styled bulk selection bar. Shows either delete progress or the selection
 /// count + bulk actions (favorites / playlist / delete / exclude / close).
@@ -73,12 +74,14 @@ class BulkActionBar extends StatelessWidget {
             _btn(ui, Icons.playlist_add, 'Playlist', onPlaylist),
           _btn(ui, Icons.delete_outline, 'Delete', onDelete, fill: kDangerColor),
           if (onExclude != null) _btn(ui, Icons.block, 'Exclude', onExclude),
-          IconButton(
-            icon: Icon(Icons.close, size: 18, color: ui.text),
-            // The only bare icon on the bar; the rest carry visible text.
-            tooltip: 'Clear selection',
-            visualDensity: VisualDensity.compact,
-            onPressed: onClose,
+          UiFocusZoom(
+            child: IconButton(
+              icon: Icon(Icons.close, size: 18, color: ui.text),
+              // The only bare icon on the bar; the rest carry visible text.
+              tooltip: 'Clear selection',
+              visualDensity: VisualDensity.compact,
+              onPressed: onClose,
+            ),
           ),
         ],
       );
@@ -90,24 +93,28 @@ class BulkActionBar extends StatelessWidget {
     if (fill != null) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: TextButton.icon(
-          icon: Icon(icon, size: 16, color: _onFill),
-          label: Text(label,
-              style: ui.labelCaps.copyWith(color: _onFill, fontWeight: FontWeight.w900)),
-          style: TextButton.styleFrom(
-            backgroundColor: fill,
-            shape: RoundedRectangleBorder(borderRadius: ui.roundMd),
+        child: UiFocusZoom(
+          child: TextButton.icon(
+            icon: Icon(icon, size: 16, color: _onFill),
+            label: Text(label,
+                style: ui.labelCaps.copyWith(color: _onFill, fontWeight: FontWeight.w900)),
+            style: TextButton.styleFrom(
+              backgroundColor: fill,
+              shape: RoundedRectangleBorder(borderRadius: ui.roundMd),
+            ),
+            onPressed: onTap,
           ),
-          onPressed: onTap,
         ),
       );
     }
     final color = onTap == null ? ui.muted : ui.text;
-    return TextButton.icon(
-      icon: Icon(icon, size: 16, color: color),
-      label: Text(label,
-          style: ui.labelCaps.copyWith(color: color, fontWeight: FontWeight.w900)),
-      onPressed: onTap,
+    return UiFocusZoom(
+      child: TextButton.icon(
+        icon: Icon(icon, size: 16, color: color),
+        label: Text(label,
+            style: ui.labelCaps.copyWith(color: color, fontWeight: FontWeight.w900)),
+        onPressed: onTap,
+      ),
     );
   }
 }

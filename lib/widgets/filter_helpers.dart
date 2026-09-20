@@ -1,16 +1,6 @@
-import '../models/rom_result.dart';
-import '../services/rom_filter.dart';
+export '../models/rom_result.dart' show statusLabel;
 
-/// Display label for a ROM status chip.
-String statusLabel(RomStatus s) => switch (s) {
-      RomStatus.supported => 'Supported',
-      RomStatus.unsupported => 'No match',
-      RomStatus.notFetched => 'Not fetched',
-      RomStatus.error => 'Error',
-      RomStatus.unsupportedFormat => 'Bad format',
-      RomStatus.localOnly => 'Not on RetroAchievements',
-      _ => s.name,
-    };
+import '../services/rom_filter.dart';
 
 /// Display label for a progress-state chip.
 String progressLabel(ProgressState s) => switch (s) {

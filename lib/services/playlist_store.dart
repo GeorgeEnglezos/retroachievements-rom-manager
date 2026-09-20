@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const _prefKey = 'playlists';
+import 'pref_keys.dart';
+
+const _prefKey = PrefKeys.playlists;
 const favoritesId = 'favorites';
 const playedId = 'played';
 const trashId = 'trash';
@@ -91,11 +93,12 @@ class PlaylistStore extends ChangeNotifier {
   final Map<String, Playlist> _mem = {};
   bool _loaded = false;
 
-  // Only for tests, which reset the shared singleton between cases.
-  @visibleForTesting
-  void resetForTest() {
+  /// Empties the shared singleton. Used by a data wipe (see
+  /// BackupService.clearAll), and by tests between cases.
+  void clear() {
     _mem.clear();
     _loaded = false;
+    notifyListeners();
   }
 
   Future<void> _ensureLoaded() async {

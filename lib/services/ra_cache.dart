@@ -10,12 +10,26 @@ import 'ra_service.dart';
 class RaCache {
   RaCache({Directory? baseDir}) : _baseDir = baseDir;
 
+  /// How long a console's stored `GetGameList` snapshot is trusted before a
+  /// run re-pulls it. RA's own docs ask callers to cache this endpoint
+  /// aggressively (the response is megabytes and the data rarely changes), so
+  /// staleness is decided by age here rather than by a button the user has to
+  /// remember to press.
+  /// ponytail: one TTL for every console; split it per console if a fast-moving
+  /// one (arcade) ever needs a shorter leash than the rest.
+  static const listTtl = Duration(days: 7);
+
   final Directory? _baseDir;
   // consoleId -> (md5 -> gameId), built once per console on first access.
   final Map<int, Map<String, int>> _hashIndex = {};
   // consoleId -> (gameId -> entry).
   final Map<int, Map<int, RaGameListEntry>> _byGame = {};
   final Map<int, Future<void>> _loading = {};
+  // consoleId -> when its list was last pulled from RA. Absent means no list.
+  final Map<int, DateTime> _fetchedAt = {};
+  // Consoles this instance already decided about, so the TTL check and any
+  // re-pull happen once per run, not once per ROM.
+  final Set<int> _ttlChecked = {};
 
   Future<Directory> _dir() async {
     final base = _baseDir ?? await getApplicationSupportDirectory();
@@ -39,6 +53,10 @@ class RaCache {
         for (final g in (data['games'] as List? ?? const []))
           RaGameListEntry.fromJson(Map<String, dynamic>.from(g as Map)),
       ];
+      final at = DateTime.tryParse(data['fetchedAt'] as String? ?? '');
+      // A file written before the TTL existed, or with an unparseable date,
+      // counts as infinitely old so the next run re-pulls it once.
+      if (at != null) _fetchedAt[consoleId] = at;
       _index(consoleId, entries);
     } catch (e) {
       LogService.error('RaCache', 'parse console_$consoleId failed', err: e);
@@ -90,16 +108,19 @@ class RaCache {
 
   Future<void> _write(int consoleId, Iterable<RaGameListEntry> entries) async {
     final f = await _file(consoleId);
+    final now = DateTime.now();
+    _fetchedAt[consoleId] = now;
     await f.writeAsString(jsonEncode({
-      // Written for future TTL/debugging; no reader today.
-      'fetchedAt': DateTime.now().toIso8601String(),
+      'fetchedAt': now.toIso8601String(),
       'games': [for (final e in entries) e.toJson()],
     }));
   }
 
-  Future<bool> hasConsole(int consoleId) async {
+  /// True when this console has no stored list, or one older than [listTtl].
+  Future<bool> isStale(int consoleId) async {
     await _ensureLoaded(consoleId);
-    return _byGame.containsKey(consoleId);
+    final at = _fetchedAt[consoleId];
+    return at == null || DateTime.now().difference(at) >= listTtl;
   }
 
   /// Offline hash match: gameId for [md5] on [consoleId], or null.
@@ -120,14 +141,18 @@ class RaCache {
     await storeConsole(consoleId, entries);
   }
 
-  /// Ensures the console list is cached, then matches the hash. Null means RA
-  /// genuinely knows no game for it; a failed lookup (offline, timeout) throws
-  /// instead, because a swallowed failure would be persisted as a confirmed
-  /// no-match and every later unfetched-only scan would skip that ROM.
+  /// Ensures the console list is cached and not past [listTtl], then matches
+  /// the hash. Null means RA genuinely knows no game for it; a failed lookup
+  /// (offline, timeout) throws instead, because a swallowed failure would be
+  /// persisted as a confirmed no-match and every later unfetched-only scan
+  /// would skip that ROM.
   Future<int?> resolveGameId(
       RaService service, int? consoleId, String md5) async {
     if (consoleId == null) return null;
-    if (!await hasConsole(consoleId)) {
+    // `add` returns false once this console has been decided, so a run pulls a
+    // console's list at most once. Attempted, not succeeded: an offline run
+    // must not retry the multi-megabyte list for every ROM in the folder.
+    if (_ttlChecked.add(consoleId) && await isStale(consoleId)) {
       try {
         await refreshConsole(consoleId, service);
       } catch (e) {

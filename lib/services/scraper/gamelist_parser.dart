@@ -23,13 +23,13 @@ List<ScrapedGame> parseGamelist(File xmlFile) {
   final doc = XmlDocument.parse(xmlFile.readAsStringSync());
   final games = <ScrapedGame>[];
   for (final g in doc.findAllElements('game')) {
-    final rel = _text(g, 'path');
+    final rel = xmlText(g, 'path');
     if (rel == null) continue;
     final romPath = p.normalize(p.join(base, rel));
 
     final images = <String, String>{};
     for (final e in _imageTags.entries) {
-      final v = _text(g, e.key);
+      final v = xmlText(g, e.key);
       if (v == null) continue;
       final abs = p.normalize(p.join(base, v));
       if (File(abs).existsSync()) images[e.value] = abs;
@@ -37,21 +37,23 @@ List<ScrapedGame> parseGamelist(File xmlFile) {
 
     games.add(ScrapedGame(
       romPath: romPath,
-      title: _text(g, 'name') ?? p.basenameWithoutExtension(romPath),
-      desc: _text(g, 'desc'),
-      developer: _text(g, 'developer'),
-      publisher: _text(g, 'publisher'),
-      genre: _text(g, 'genre'),
-      releaseDate: _normDate(_text(g, 'releasedate')),
-      players: _text(g, 'players'),
-      rating: _text(g, 'rating'),
+      title: xmlText(g, 'name') ?? p.basenameWithoutExtension(romPath),
+      desc: xmlText(g, 'desc'),
+      developer: xmlText(g, 'developer'),
+      publisher: xmlText(g, 'publisher'),
+      genre: xmlText(g, 'genre'),
+      releaseDate: _normDate(xmlText(g, 'releasedate')),
+      players: xmlText(g, 'players'),
+      rating: xmlText(g, 'rating'),
       images: images,
     ));
   }
   return games;
 }
 
-String? _text(XmlElement g, String tag) {
+/// A trimmed `<tag>` child of [g], or null when missing or blank. Shared with
+/// [parseDat], which reads the same Logiqx-shaped elements.
+String? xmlText(XmlElement g, String tag) {
   final t = g.getElement(tag)?.innerText.trim();
   return (t == null || t.isEmpty) ? null : t;
 }

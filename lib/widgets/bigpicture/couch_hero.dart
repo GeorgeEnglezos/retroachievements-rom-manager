@@ -5,7 +5,9 @@ import '../../models/rom_result.dart';
 import '../../theme/ui_tokens.dart';
 import '../positioned_menu.dart';
 import '../ra_image.dart';
+import '../ui/ui_eyebrow.dart';
 import '../ui/ui_progress_bar.dart';
+import '../ui/ui_focusable.dart';
 
 /// The big-picture home's featured banner: full-bleed box art under a scrim,
 /// with the game's title, a mastery readout and a Play affordance. Focusable, so
@@ -39,7 +41,6 @@ class CouchHero extends StatefulWidget {
 
 class _CouchHeroState extends State<CouchHero> {
   final _node = FocusNode();
-  bool _focused = false;
 
   @override
   void initState() {
@@ -47,15 +48,13 @@ class _CouchHeroState extends State<CouchHero> {
     _node.addListener(_onFocus);
   }
 
+  // Focus only scrolls the banner into view; UiFocusZoom draws the highlight.
   void _onFocus() {
-    final f = _node.hasFocus;
-    if (f) {
-      Scrollable.ensureVisible(context,
-          alignment: 0,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut);
-    }
-    if (f != _focused) setState(() => _focused = f);
+    if (!_node.hasFocus) return;
+    Scrollable.ensureVisible(context,
+        alignment: 0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut);
   }
 
   @override
@@ -69,7 +68,7 @@ class _CouchHeroState extends State<CouchHero> {
     final choice = await showPositionedMenu<String>(context, position, const [
       PopupMenuItem(
         value: 'ignore',
-        child: Text('Not interested, show next'),
+        child: UiFocusZoom(child: Text('Not interested, show next')),
       ),
     ]);
     if (choice != 'ignore' || !context.mounted) return;
@@ -106,104 +105,102 @@ class _CouchHeroState extends State<CouchHero> {
           return null;
         }),
       },
-      child: GestureDetector(
-        onTap: widget.onOpen,
-        onSecondaryTapDown: (d) => _showMenu(context, d.globalPosition),
-        onLongPressStart: (d) => _showMenu(context, d.globalPosition),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          height: h,
-          decoration: BoxDecoration(
-            borderRadius: ui.roundLg,
-            border: Border.all(
-              color: _focused ? ui.accent : Colors.transparent,
-              width: 3,
-            ),
-          ),
-          child: ClipRRect(
-            borderRadius: ui.roundLg,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                art != null
-                    ? RaImage(url: raImageUrl(art), fit: BoxFit.cover)
-                    : DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [ui.accent, ui.accentAlt],
+      child: UiFocusZoom(
+        child: GestureDetector(
+          onTap: widget.onOpen,
+          onSecondaryTapDown: (d) => _showMenu(context, d.globalPosition),
+          onLongPressStart: (d) => _showMenu(context, d.globalPosition),
+          child: SizedBox(
+            height: h,
+            child: ClipRRect(
+              borderRadius: ui.roundLg,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  art != null
+                      ? RaImage(url: raImageUrl(art), fit: BoxFit.cover)
+                      : DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [ui.accent, ui.accentAlt],
+                            ),
+                          ),
+                        ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          kScrim.withValues(alpha: 0.95),
+                          kScrim.withValues(alpha: 0.62),
+                          kScrim.withValues(alpha: 0.08),
+                        ],
+                        stops: const [0, 0.5, 0.9],
+                      ),
+                    ),
+                  ),
+                  // FittedBox(scaleDown) guarantees the readout never overflows a
+                  // short banner (small windows, large text scale); it only ever
+                  // shrinks to fit, so at normal sizes it renders at full size.
+                  Padding(
+                    padding: const EdgeInsets.all(28),
+                    child: Align(
+                      alignment: Alignment.bottomLeft,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.bottomLeft,
+                        // Fixed width, not a max: FittedBox scales by the
+                        // child's intrinsic width, so a variable one made the two
+                        // banners shrink by different amounts and land on
+                        // different type and bar sizes.
+                        child: SizedBox(
+                          width: 560,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              UiEyebrow(widget.eyebrow),
+                              const SizedBox(height: 14),
+                              Text(title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: ui.display.copyWith(
+                                      color: kOnScrim,
+                                      fontSize: 40,
+                                      height: 1.0)),
+                              if (meta.isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                Text(meta,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: ui.mono.copyWith(
+                                        color: kOnScrimMuted,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500)),
+                              ],
+                              if (total > 0) ...[
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  width: 300,
+                                  child: UiProgressBar(
+                                    value: frac,
+                                    height: 7,
+                                    color: kOnScrimAccent,
+                                    trough: kOnScrim.withValues(alpha: 0.25),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       ),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [
-                        kScrim.withValues(alpha: 0.95),
-                        kScrim.withValues(alpha: 0.62),
-                        kScrim.withValues(alpha: 0.08),
-                      ],
-                      stops: const [0, 0.5, 0.9],
                     ),
                   ),
-                ),
-                // FittedBox(scaleDown) guarantees the readout never overflows a
-                // short banner (small windows, large text scale); it only ever
-                // shrinks to fit, so at normal sizes it renders at full size.
-                Padding(
-                  padding: const EdgeInsets.all(28),
-                  child: Align(
-                    alignment: Alignment.bottomLeft,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.bottomLeft,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 560),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _Eyebrow(widget.eyebrow),
-                            const SizedBox(height: 14),
-                            Text(title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: ui.display.copyWith(
-                                    color: kOnScrim,
-                                    fontSize: 40,
-                                    height: 1.0)),
-                            if (meta.isNotEmpty) ...[
-                              const SizedBox(height: 12),
-                              Text(meta,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: ui.mono.copyWith(
-                                      color: kOnScrimMuted,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500)),
-                            ],
-                            if (total > 0) ...[
-                              const SizedBox(height: 16),
-                              SizedBox(
-                                width: 300,
-                                child: UiProgressBar(
-                                  value: frac,
-                                  height: 7,
-                                  color: kOnScrimAccent,
-                                  trough: kOnScrim.withValues(alpha: 0.25),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -212,20 +209,3 @@ class _CouchHeroState extends State<CouchHero> {
   }
 }
 
-class _Eyebrow extends StatelessWidget {
-  final String label;
-  const _Eyebrow(this.label);
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-          color: kOnScrim.withValues(alpha: 0.14),
-          borderRadius: UiTokens.pill,
-          border: Border.all(color: kOnScrim.withValues(alpha: 0.4)),
-        ),
-        child: Text(label,
-            style: context.ui.labelCaps
-                .copyWith(color: kOnScrimAccent, fontSize: 10, letterSpacing: 2)),
-      );
-}

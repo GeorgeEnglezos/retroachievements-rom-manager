@@ -21,7 +21,7 @@ void main() {
   testWidgets('shows the empty message when no systems are scanned',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
-    CullStore().resetForTest();
+    CullStore().clear();
     final dataDir = Directory.systemTemp.createTempSync('cull_screen_empty');
     addTearDown(() => dataDir.deleteSync(recursive: true));
 

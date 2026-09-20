@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../services/ra_image_cache.dart';
 import 'image_viewer.dart';
+import 'ui/ui_focusable.dart';
 
 /// Base host for RA artwork served under a leading-slash path (icons, box art,
 /// screenshots). Badges live on media.retroachievements.org and are passed as
@@ -78,11 +79,13 @@ class RaImage extends StatelessWidget {
       image = SizedBox(width: width, height: height, child: image);
     }
     if (!zoomable) return image;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => showImageViewer(
-          context, CachedNetworkImageProvider(url, cacheManager: raCacheManager)),
-      child: image,
+    return UiFocusZoom(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => showImageViewer(
+            context, CachedNetworkImageProvider(url, cacheManager: raCacheManager)),
+        child: image,
+      ),
     );
   }
 

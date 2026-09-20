@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 
 import 'emulator_catalog.dart';
+import 'log_service.dart';
 
 /// A ROM launch parked because the app was opened by tapping a home-screen
 /// shortcut. Drained once by [AndroidEmulators.takePendingShortcut].
@@ -73,6 +74,33 @@ class AndroidEmulators {
   }) async =>
       _channel.invokeMethod<String>(
           'launchRom', buildLaunchSpec(package, kindId, consoleId, romPath));
+
+  /// [launchRom] with both ends logged under [logContext]. [subject] names what
+  /// is being launched in the log lines. Returns what [launchRom] returns, so
+  /// each caller words its own snackbar.
+  static Future<String?> launchRomLogged({
+    required String package,
+    required String kindId,
+    required int consoleId,
+    required String romPath,
+    required String subject,
+    required String logContext,
+  }) async {
+    LogService.info(logContext,
+        'Launch $subject (pkg=$package, kind=$kindId, console=$consoleId)');
+    final err = await launchRom(
+        package: package,
+        kindId: kindId,
+        consoleId: consoleId,
+        romPath: romPath);
+    if (err != null) {
+      LogService.error(
+          logContext, 'Launch failed for $subject (pkg=$package): $err');
+    } else {
+      LogService.info(logContext, 'Launch OK: $subject');
+    }
+    return err;
+  }
 
   /// Pins a home-screen shortcut re-launching [romPath] in [package]; null on
   /// success. [iconPath] box art falls back to the app icon.
@@ -223,7 +251,10 @@ class AndroidEmulators {
           'extras': {'bootPath': '{file.uri}'},
           'clearTask': true,
         };
-      case 'citra': // 3DS: Lime3DS, Azahar, Citra MMJ
+      // 'citra' is the legacy id: Android detection used to emit it before the
+      // Citra family was folded into the 'azahar' kind. Kept so emulators
+      // connected under the old id still launch.
+      case 'azahar' || 'citra': // 3DS: Lime3DS, Azahar, Citra MMJ
         return {
           'romPath': romPath,
           'componentPkg': pkg,

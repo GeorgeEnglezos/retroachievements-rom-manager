@@ -4,16 +4,14 @@ import '../models/folder_stats.dart';
 import '../services/console_image.dart';
 import '../services/console_map.dart';
 import '../theme/ui_tokens.dart';
-import '../theme/ui_theme.dart';
 import 'ui/console_card.dart';
-import 'ui/ui_badge.dart';
 import 'ui/ui_card.dart';
 import 'ui/ui_progress_bar.dart';
 
 // The console logos are full-color on transparency and don't tint to the theme,
-// so cards render their contents through the light palette (dark ink) and use
-// the [UiTokens.cardSurface] badge color so text stays legible on it.
-final ThemeData _lightCardTheme = uiTheme(UiTokens.light);
+// so cards render their contents through the light palette (dark ink, see
+// [lightCardInk]) and use the [UiTokens.cardSurface] badge color so text stays
+// legible on it.
 
 // A grid tile for one subfolder. The front shows the console picture (or a
 // fallback folder icon) and the name; hovering flips the card on its Y-axis to
@@ -28,6 +26,9 @@ class FolderCard extends StatefulWidget {
   final FolderStats? stats;
   final int? consoleId;
   final String? subtitle;
+
+  /// Pinned to the Library's favorites section; marked with a heart.
+  final bool favorite;
   // Null disables the tap (e.g. while a scan is running).
   final VoidCallback? onTap;
 
@@ -38,6 +39,7 @@ class FolderCard extends StatefulWidget {
     required this.stats,
     required this.consoleId,
     this.subtitle,
+    this.favorite = false,
     required this.onTap,
   });
 
@@ -71,8 +73,7 @@ class _FolderCardState extends State<FolderCard>
     // Read the surface off the real theme before the light-theme override below
     // (white in dark, warm beige in light).
     final cardColor = context.ui.cardSurface;
-    return Theme(
-      data: _lightCardTheme,
+    return lightCardInk(
       child: MouseRegion(
       onEnter: (_) => _hover(true),
       onExit: (_) => _hover(false),
@@ -117,7 +118,19 @@ class _FolderCardState extends State<FolderCard>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(child: ConsoleLogo(consoleId: widget.consoleId)),
+        Expanded(
+          child: Stack(
+            children: [
+              Positioned.fill(child: ConsoleLogo(consoleId: widget.consoleId)),
+              if (widget.favorite)
+                const Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Icon(Icons.favorite, size: 16, color: kFavoriteColor),
+                ),
+            ],
+          ),
+        ),
         const SizedBox(height: 8),
         Text(
           widget.displayName,
@@ -134,19 +147,9 @@ class _FolderCardState extends State<FolderCard>
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
-        if (!ConsoleMap.isRaSupported(widget.consoleId)) ...[
-          const SizedBox(height: 4),
-          Align(alignment: Alignment.center, child: _unsupportedChip(context)),
-        ],
       ],
     );
   }
-
-  // Marks systems RA can't validate (Switch, PS3…, or an unidentified folder).
-  Widget _unsupportedChip(BuildContext context) => UiBadge(
-        label: 'No RetroAchievements',
-        color: context.ui.muted,
-      );
 
   Widget _back(BuildContext context) {
     final s = widget.stats;
@@ -186,6 +189,9 @@ class FolderRow extends StatelessWidget {
   final FolderStats? stats;
   final int? consoleId;
   final String? subtitle;
+
+  /// Pinned to the Library's favorites section; marked with a heart.
+  final bool favorite;
   // Null disables the tap (e.g. while a scan is running).
   final VoidCallback? onTap;
 
@@ -196,6 +202,7 @@ class FolderRow extends StatelessWidget {
     required this.stats,
     required this.consoleId,
     this.subtitle,
+    this.favorite = false,
     required this.onTap,
   });
 
@@ -216,10 +223,20 @@ class FolderRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Row(children: [
+                    if (favorite) ...[
+                      const Icon(Icons.favorite,
+                          size: 14, color: kFavoriteColor),
+                      const SizedBox(width: 6),
+                    ],
+                    Expanded(
+                      child: Text(displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              const TextStyle(fontWeight: FontWeight.w600)),
+                    ),
+                  ]),
                   if (name != displayName)
                     Text(name,
                         maxLines: 1,

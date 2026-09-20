@@ -2,7 +2,7 @@ import '../models/folder_sort.dart';
 import '../models/folder_stats.dart' show achievementFraction, kNearMasteryRatio;
 import '../models/rom_result.dart';
 import '../models/rom_tags.dart';
-import 'cleanup_score.dart';
+import 'least_played_score.dart';
 import 'member_key.dart';
 
 enum ProgressState { notStarted, started, nearComplete, mastered }
@@ -43,7 +43,6 @@ List<RomResult> sortRoms(
   required FolderSort sort,
   required bool ascending,
   required bool hot,
-  required CleanupScoreMode cleanupMode,
 }) {
   final list = [...roms];
   if (hot) {
@@ -59,8 +58,6 @@ List<RomResult> sortRoms(
     case FolderSort.achievementCount:
       list.sort(
           (a, b) => _nullsLast(a.achievementCount, b.achievementCount, dir));
-    case FolderSort.points:
-      list.sort((a, b) => _nullsLast(a.points, b.points, dir));
     case FolderSort.progress:
       double? ratio(RomResult r) => (r.achievementCount ?? 0) > 0
           ? (r.earnedAchievements ?? 0) / r.achievementCount!
@@ -68,13 +65,12 @@ List<RomResult> sortRoms(
       list.sort((a, b) => _nullsLast(ratio(a), ratio(b), dir));
     case FolderSort.lastPlayed:
       list.sort((a, b) => _nullsLast(a.lastPlayed, b.lastPlayed, dir));
-    case FolderSort.cleanup:
-      double? cleanup(RomResult r) => cleanupScore(
+    case FolderSort.leastPlayed:
+      double? score(RomResult r) => leastPlayedScore(
             players: r.numPlayersCasual ?? 0,
             setCreated: r.setCreated,
-            mode: cleanupMode,
           );
-      list.sort((a, b) => _nullsLast(cleanup(a), cleanup(b), dir));
+      list.sort((a, b) => _nullsLast(score(a), score(b), dir));
   }
   return list;
 }
@@ -86,9 +82,6 @@ int _nullsLast<T extends Comparable<Object>>(T? a, T? b, int dir) {
   return dir * a.compareTo(b);
 }
 
-/// A game counts as "recently played" if RA last-played is within this window.
-const _recentlyPlayedWindow = Duration(days: 90);
-
 /// Immutable description of the active ROM-list filter. All set criteria are
 /// combined with AND; an all-default filter passes everything.
 class RomFilter {
@@ -99,7 +92,6 @@ class RomFilter {
   final Set<String> includePlaylistIds;
   final Set<String> excludePlaylistIds;
   final Set<ProgressState> progressStates;
-  final bool onlyRecentlyPlayed;
   final bool onlyNoAchievements;
 
   // Filename-derived labels (regions + tag chips like Japan / ENG / HACK). A ROM
@@ -114,7 +106,6 @@ class RomFilter {
     this.includePlaylistIds = const {},
     this.excludePlaylistIds = const {},
     this.progressStates = const {},
-    this.onlyRecentlyPlayed = false,
     this.onlyNoAchievements = false,
     this.tags = const {},
   });
@@ -127,7 +118,6 @@ class RomFilter {
     Set<String>? includePlaylistIds,
     Set<String>? excludePlaylistIds,
     Set<ProgressState>? progressStates,
-    bool? onlyRecentlyPlayed,
     bool? onlyNoAchievements,
     Set<String>? tags,
   }) =>
@@ -139,7 +129,6 @@ class RomFilter {
         includePlaylistIds: includePlaylistIds ?? this.includePlaylistIds,
         excludePlaylistIds: excludePlaylistIds ?? this.excludePlaylistIds,
         progressStates: progressStates ?? this.progressStates,
-        onlyRecentlyPlayed: onlyRecentlyPlayed ?? this.onlyRecentlyPlayed,
         onlyNoAchievements: onlyNoAchievements ?? this.onlyNoAchievements,
         tags: tags ?? this.tags,
       );
@@ -175,13 +164,6 @@ class RomFilter {
                   ? ProgressState.nearComplete
                   : ProgressState.started;
       if (!progressStates.contains(state)) return false;
-    }
-    if (onlyRecentlyPlayed) {
-      final lp = rom.lastPlayed;
-      if (lp == null ||
-          DateTime.now().difference(lp) > _recentlyPlayedWindow) {
-        return false;
-      }
     }
     if (onlyNoAchievements &&
         !(rom.status == RomStatus.supported &&

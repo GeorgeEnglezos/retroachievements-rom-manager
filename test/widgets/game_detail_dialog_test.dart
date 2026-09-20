@@ -17,15 +17,15 @@ RomResult _disc(String name) =>
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  group('beatTypeLabel', () {
-    test('only the beaten-defining RA types are labelled', () {
+  group('achievementTypeLabel', () {
+    test('the marked RA types are labelled', () {
       // These exact strings are RA's `Type` values; the highlight keys off them.
-      expect(beatTypeLabel('win_condition'), 'Win condition');
-      expect(beatTypeLabel('progression'), 'Progression');
-      // Standard, missable, and legacy-null achievements get no marker.
-      expect(beatTypeLabel('missable'), isNull);
-      expect(beatTypeLabel(null), isNull);
-      expect(beatTypeLabel(''), isNull);
+      expect(achievementTypeLabel('win_condition'), 'Win condition');
+      expect(achievementTypeLabel('progression'), 'Progression');
+      expect(achievementTypeLabel('missable'), 'Missable');
+      // Standard and legacy-null achievements get no marker.
+      expect(achievementTypeLabel(null), isNull);
+      expect(achievementTypeLabel(''), isNull);
     });
   });
 
@@ -164,7 +164,11 @@ void main() {
     expect(find.byKey(const Key('gameAchievementsPanel')), findsOneWidget);
   });
 
-  testWidgets('narrow window keeps the dialog in one column', (tester) async {
+  testWidgets('a phone keeps both panels and fills the screen', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     final rom = RomResult(filePath: 'psx/ff7.chd', fileName: 'ff7.chd')
       ..status = RomStatus.supported
       ..gameId = 123
@@ -172,7 +176,33 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: GameDetailDialog(rom: rom)));
     await tester.pump();
 
-    expect(find.byKey(const Key('gameAchievementsPanel')), findsNothing);
+    expect(find.byKey(const Key('gameDetailPanel')), findsOneWidget);
+    expect(find.byKey(const Key('gameAchievementsPanel')), findsOneWidget);
+
+    // Both panels reach the screen edges (8dp inset a side) and the same height.
+    final left = tester.getRect(find.byKey(const Key('gameDetailPanel')));
+    final right = tester.getRect(find.byKey(const Key('gameAchievementsPanel')));
+    expect(left.left, 8);
+    expect(right.right, 352);
+    expect(left.height, right.height);
+    expect(left.height, greaterThan(700));
+  });
+
+  testWidgets('a desktop window centres the pair instead of filling the screen',
+      (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final rom = RomResult(filePath: 'psx/ff7.chd', fileName: 'ff7.chd')
+      ..status = RomStatus.supported
+      ..gameId = 123
+      ..gameTitle = 'Final Fantasy VII';
+    await tester.pumpWidget(MaterialApp(home: GameDetailDialog(rom: rom)));
+    await tester.pump();
+
+    final left = tester.getRect(find.byKey(const Key('gameDetailPanel')));
+    expect(left.left, greaterThan(300)); // capped at 940 wide and centred
   });
 
   testWidgets('wide window keeps one column when there are no achievements',

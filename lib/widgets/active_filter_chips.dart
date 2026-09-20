@@ -38,14 +38,6 @@ List<Widget> activeFilterChips({
           onChanged(f.copyWith(progressStates: withoutSet(f.progressStates, ps))),
     ));
   }
-  if (f.onlyRecentlyPlayed) {
-    chips.add(UiChip(
-      key: const ValueKey('active-recently-played'),
-      label: 'Recently played',
-      selected: true,
-      onRemove: () => onChanged(f.copyWith(onlyRecentlyPlayed: false)),
-    ));
-  }
   for (final t in f.tags) {
     chips.add(UiChip(
       key: ValueKey('tag-$t'),

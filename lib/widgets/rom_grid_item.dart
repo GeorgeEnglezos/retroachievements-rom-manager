@@ -4,7 +4,7 @@ import '../models/rom_result.dart';
 import '../services/member_key.dart';
 import '../services/play_view.dart';
 import '../services/playlist_store.dart';
-import '../services/scraper/scraped_store.dart';
+import '../services/rom_tap.dart';
 import '../theme/ui_tokens.dart';
 import 'game_cover.dart';
 import 'game_detail_dialog.dart';
@@ -99,9 +99,8 @@ class RomGridItem extends StatelessWidget {
       return UiFocusable(
         onPressed: () => _onTap(context),
         borderRadius: ui.roundMd, // matches GameCover's framed-art corners
-        focusScale: 1.08, // square tile: zoom + tilt
+        focusScale: 1.16, // square tile: zoom + tilt
         flourish: FocusFlourish.tilt,
-        showRing: false,
         showShadow: false, // blurred lift shadow reads as a muddy halo here
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -116,7 +115,7 @@ class RomGridItem extends StatelessWidget {
             width: width,
             fileName: fileName,
             raName: raName,
-            artOverlays: [?discBadge(discCount, ui), ?dupBadge(rom, ui)],
+            artOverlays: [?discBadge(discCount, ui, fileName: rom.fileName), ?dupBadge(rom, ui)],
             corner: isSelectMode ? _selectionDot(ui) : null,
             meta: _leanMetaBlock(ui),
           ),
@@ -139,9 +138,8 @@ class RomGridItem extends StatelessWidget {
       child: UiCard(
         padding: EdgeInsets.zero,
         color: isFavorite ? ui.favoriteFill : null,
-        focusScale: 1.08, // square tile: zoom + tilt
+        focusScale: 1.16, // square tile: zoom + tilt
         flourish: FocusFlourish.tilt,
-        showRing: false,
         showShadow: false, // blurred lift shadow reads as a muddy halo here
         onTap: () => _onTap(context),
         child: GameCover(
@@ -151,7 +149,7 @@ class RomGridItem extends StatelessWidget {
           textPadding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
           fileName: fileName,
           raName: raName,
-          artOverlays: [?discBadge(discCount, ui), ?dupBadge(rom, ui)],
+          artOverlays: [?discBadge(discCount, ui, fileName: rom.fileName), ?dupBadge(rom, ui)],
           corner: isSelectMode ? _selectionDot(ui) : null,
           meta: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -183,19 +181,18 @@ class RomGridItem extends StatelessWidget {
     final shift = HardwareKeyboard.instance.isShiftPressed;
     if (ctrl || shift || isSelectMode) {
       onSelectToggle?.call(isShift: shift);
-    } else if (onOpen != null) {
+    } else if (onOpen != null && romTapListenable.value != RomTapAction.play) {
+      // A screen-supplied open (Home shelves, big picture) still wins while
+      // clicks open details; on Play the launch takes over.
       onOpen!();
-    } else if (canOpenDetail(rom)) {
-      showDialog(
-        context: context,
-        builder: (_) => GameDetailDialog(
-          rom: rom,
-          store: store,
-          onDeleted: onDeleted,
-          onPlaylistChanged: onPlaylistChanged,
-          onFetch: onFetch,
-          scraped: ScrapedStore.instance.get(rom.filePath),
-        ),
+    } else {
+      openRomOnTap(
+        context,
+        rom,
+        store: store,
+        onDeleted: onDeleted,
+        onPlaylistChanged: onPlaylistChanged,
+        onFetch: onFetch,
       );
     }
   }
@@ -262,16 +259,14 @@ class RomGridItem extends StatelessWidget {
   /// tile gates them. Null when neither applies.
   String? _subline(UiTokens ui) {
     final size = playView.fileSize ? rom.fileSizeLabel : null;
-    final status = rom.isLocalOnly || rom.status == RomStatus.supported
-        ? null
-        : switch (rom.status) {
-            RomStatus.notFetched => 'Not fetched',
-            RomStatus.checking => 'Checking...',
-            RomStatus.unsupported => 'No achievements',
-            RomStatus.unsupportedFormat => 'Bad format',
-            RomStatus.error => rom.errorMessage ?? 'Error',
-            _ => null,
-          };
+    final status = switch (rom.status) {
+      RomStatus.supported ||
+      RomStatus.localOnly ||
+      RomStatus.metadataOnly =>
+        null,
+      RomStatus.error => rom.errorMessage ?? statusLabel(rom.status),
+      final s => statusLabel(s),
+    };
     final parts = [?status, ?size];
     return parts.isEmpty ? null : parts.join('  ·  ');
   }

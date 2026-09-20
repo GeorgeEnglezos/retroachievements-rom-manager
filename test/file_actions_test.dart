@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -15,6 +16,46 @@ void main() {
           p.join(Directory.systemTemp.path, 'ra-rom-mgr-not-here-12345.bin');
       expect(File(missing).existsSync(), isFalse);
       expect(await FileActions.moveToRecycleBin(missing), isTrue);
+    });
+  });
+
+  group('isConsoleExe', () {
+    // Minimal PE: 'MZ', the header offset at 0x3c, then Subsystem 0x5c into
+    // the PE header. Enough for the field the launcher reads.
+    File writePe(String name, int subsystem) {
+      const peOffset = 0x100;
+      final bytes = Uint8List(peOffset + 0x5e);
+      bytes[0] = 0x4D; // M
+      bytes[1] = 0x5A; // Z
+      ByteData.sublistView(bytes).setUint32(0x3c, peOffset, Endian.little);
+      ByteData.sublistView(bytes)
+          .setUint16(peOffset + 0x5c, subsystem, Endian.little);
+      final file = File(p.join(
+          Directory.systemTemp.createTempSync('rarm-pe').path, name));
+      file.writeAsBytesSync(bytes);
+      return file;
+    }
+
+    test('reads subsystem 3 as a console program', () {
+      expect(FileActions.isConsoleExe(writePe('console.exe', 3).path), isTrue);
+    });
+
+    test('reads subsystem 2 as a GUI program', () {
+      expect(FileActions.isConsoleExe(writePe('gui.exe', 2).path), isFalse);
+    });
+
+    test('a file that is not a PE is not a console program', () {
+      final txt = File(p.join(
+          Directory.systemTemp.createTempSync('rarm-pe').path, 'notpe.exe'));
+      txt.writeAsStringSync('not an executable, just some bytes on disk');
+      expect(FileActions.isConsoleExe(txt.path), isFalse);
+    });
+
+    test('a missing file is not a console program', () {
+      expect(
+          FileActions.isConsoleExe(
+              p.join(Directory.systemTemp.path, 'rarm-absent-99999.exe')),
+          isFalse);
     });
   });
 

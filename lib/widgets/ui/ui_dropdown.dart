@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/ui_tokens.dart';
+import 'ui_focusable.dart';
 
 typedef UiDropdownItem<T> = ({T value, String label});
 
@@ -27,32 +28,34 @@ class UiDropdown<T> extends StatelessWidget {
     final ui = context.ui;
     return Opacity(
       opacity: enabled ? 1 : 0.4,
-      child: PopupMenuButton<T>(
-        enabled: enabled,
-        position: PopupMenuPosition.under,
-        onSelected: onChanged,
-        itemBuilder: (_) => [
-          for (final i in items)
-            PopupMenuItem<T>(
-              value: i.value,
-              child: Text(i.label, style: ui.body),
+      child: UiFocusZoom(
+        child: PopupMenuButton<T>(
+          enabled: enabled,
+          position: PopupMenuPosition.under,
+          onSelected: onChanged,
+          itemBuilder: (_) => [
+            for (final i in items)
+              PopupMenuItem<T>(
+                value: i.value,
+                child: UiFocusZoom(child: Text(i.label, style: ui.body)),
+              ),
+          ],
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: ui.surface,
+              borderRadius: ui.roundMd,
+              border: Border.all(color: ui.border, width: ui.borderWidth),
+              boxShadow: ui.shadow(ui.controlShadow),
             ),
-        ],
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: ui.surface,
-            borderRadius: ui.roundMd,
-            border: Border.all(color: ui.border, width: ui.borderWidth),
-            boxShadow: ui.shadow(ui.controlShadow),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(_currentLabel, style: ui.labelCaps),
-              const SizedBox(width: 4),
-              Icon(Icons.arrow_drop_down, size: 18, color: ui.text),
-            ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_currentLabel, style: ui.labelCaps),
+                const SizedBox(width: 4),
+                Icon(Icons.arrow_drop_down, size: 18, color: ui.text),
+              ],
+            ),
           ),
         ),
       ),

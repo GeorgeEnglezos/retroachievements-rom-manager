@@ -17,26 +17,6 @@ const bool _logRawInput = false;
 const _initialRepeatDelay = Duration(milliseconds: 400);
 const _repeatInterval = Duration(milliseconds: 110);
 
-// Start and the shoulder bumpers still map to these intents, but no shell binds
-// them now that the couch shell was retired, so they dispatch as inert no-ops
-// (Actions.maybeInvoke finds no action). Kept as hooks for a future global
-// handler, e.g. Start opening an exit-to-cleaning menu.
-
-/// Fired by Start. Currently unbound (see note above).
-class MenuIntent extends Intent {
-  const MenuIntent();
-}
-
-/// Fired by the left bumper. Currently unbound (see note above).
-class TabLeftIntent extends Intent {
-  const TabLeftIntent();
-}
-
-/// Fired by the right bumper. Currently unbound (see note above).
-class TabRightIntent extends Intent {
-  const TabRightIntent();
-}
-
 /// Drives Flutter's focus system from a game controller.
 ///
 /// Wraps the app once (below `MaterialApp`, so its default `Actions` are in
@@ -144,14 +124,6 @@ class _GamepadNavigatorState extends State<GamepadNavigator> {
         _invoke(const ActivateIntent());
       case GamepadAction.back:
         _back();
-      // Menu + shoulder tabs dispatch as intents; nothing binds them now (the
-      // couch shell that did was retired), so maybeInvoke ignores them.
-      case GamepadAction.menu:
-        _invoke(const MenuIntent());
-      case GamepadAction.tabLeft:
-        _invoke(const TabLeftIntent());
-      case GamepadAction.tabRight:
-        _invoke(const TabRightIntent());
       case GamepadAction.up:
       case GamepadAction.down:
       case GamepadAction.left:

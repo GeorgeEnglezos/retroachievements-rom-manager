@@ -1,6 +1,49 @@
 import 'package:flutter/material.dart';
 import '../../theme/ui_tokens.dart';
 
+/// The slight zoom every focusable surface plays on highlight. Game tiles pass
+/// a bigger scale of their own; everything else shares this.
+const double uiFocusZoom = 1.02;
+
+/// Slight highlight zoom for controls that already own a focus node: the raw
+/// Material buttons, text fields, list tiles and nav rows that never went
+/// through [UiFocusable]. Fires on focus (keyboard arrows, gamepad) and on
+/// mouse hover, the same pair [UiFocusable] reacts to. Unlike [UiFocusable] it
+/// adds no second tab stop (its [Focus] can't take focus itself, it only hears
+/// a descendant take it) and no ring or activation, which the wrapped Material
+/// widget already handles.
+class UiFocusZoom extends StatefulWidget {
+  final Widget child;
+  final double scale;
+
+  const UiFocusZoom({super.key, required this.child, this.scale = uiFocusZoom});
+
+  @override
+  State<UiFocusZoom> createState() => _UiFocusZoomState();
+}
+
+class _UiFocusZoomState extends State<UiFocusZoom> {
+  bool _focused = false;
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) => Focus(
+    canRequestFocus: false,
+    skipTraversal: true,
+    onFocusChange: (v) => setState(() => _focused = v),
+    child: MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedScale(
+        scale: _focused || _hovered ? widget.scale : 1.0,
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOut,
+        child: widget.child,
+      ),
+    ),
+  );
+}
+
 /// The one-shot motion a surface plays the moment it gains focus/hover.
 enum FocusFlourish {
   /// No motion on highlight. Standard interactive controls (buttons, chips, tabs).
@@ -23,10 +66,8 @@ enum FocusFlourish {
 /// Space via [ActivateIntent], and shows a modern selection state when focused
 /// OR hovered:
 ///
-///  * a crisp accent ring sitting a few px *outside* the surface (at its own
-///    [borderRadius], grown to match), so it frames the content instead of
-///    painting over the edge of the art/text,
-///  * a smooth zoom to [focusScale], and
+///  * a smooth zoom to [focusScale] (no border or ring: the highlight is
+///    motion only), and
 ///  * a one-shot [flourish] (tilt for tiles, light jump for rows) so a d-pad
 ///    move reads as a little lively snap rather than a static box.
 class UiFocusable extends StatefulWidget {
@@ -38,35 +79,24 @@ class UiFocusable extends StatefulWidget {
   /// (a display-only card shouldn't grab d-pad focus).
   final VoidCallback? onPressed;
 
-  /// Radius the accent ring follows — pass the surface's own (`ui.roundLg` for
-  /// cards, `ui.roundMd` for buttons, etc.); the ring is grown by [ringGap] so
-  /// it hugs a slightly larger rounded rect than the content.
+  /// Radius the lift shadow follows — pass the surface's own (`ui.roundLg`
+  /// for cards, `ui.roundMd` for buttons, etc.).
   final BorderRadius borderRadius;
 
-  /// How much the surface grows when highlighted. Defaults to 1.0 (ring only)
-  /// so wide rows never overflow their neighbours; square game tiles pass ~1.08
-  /// to opt into the zoom.
+  /// How much the surface grows when highlighted. Defaults to the shared
+  /// [uiFocusZoom] slight lift; square game tiles pass a much bigger value to
+  /// opt into the full pop.
   // ponytail: an interior grid tile scaling/tilting up paints over its
   // neighbours (a deliberate "pop"); an edge tile clips at the viewport. Fine.
   final double focusScale;
 
-  /// Ring colour. Defaults to the theme accent; [ConsoleCard] overrides it
-  /// because it forces a light sub-theme whose accent wouldn't match the app.
-  final Color? ringColor;
-
   /// Which one-shot motion to play on focus gain.
   final FocusFlourish flourish;
-
-  /// Whether to render the highlight border ring on focus/hover.
-  final bool showRing;
-
-  /// Distance between content edge and accent ring. Defaults to 4.
-  final double ringGap;
 
   /// Whether to render the blurred drop shadow behind a lifted ([focusScale]
   /// > 1.0) surface on focus/hover. Defaults to true; a dense grid of small
   /// tiles (the ROM grid) sets this false — the blur reads as a muddy halo at
-  /// that size — while keeping the zoom and ring.
+  /// that size — while keeping the zoom.
   final bool showShadow;
 
   const UiFocusable({
@@ -74,20 +104,14 @@ class UiFocusable extends StatefulWidget {
     required this.child,
     required this.borderRadius,
     this.onPressed,
-    this.focusScale = 1.0,
-    this.ringColor,
+    this.focusScale = uiFocusZoom,
     this.flourish = FocusFlourish.tilt,
-    this.showRing = true,
-    this.ringGap = _defaultRingGap,
     this.showShadow = true,
   });
 
   @override
   State<UiFocusable> createState() => _UiFocusableState();
 }
-
-/// Default gap between the content edge and the accent ring.
-const double _defaultRingGap = 4;
 
 class _UiFocusableState extends State<UiFocusable>
     with SingleTickerProviderStateMixin {
@@ -176,25 +200,14 @@ class _UiFocusableState extends State<UiFocusable>
     super.dispose();
   }
 
-  // The surface's radius grown by [widget.ringGap] so the outset ring stays concentric.
-  BorderRadius get _ringRadius {
-    final r = widget.borderRadius;
-    final g = Radius.circular(widget.ringGap);
-    return BorderRadius.only(
-      topLeft: r.topLeft + g,
-      topRight: r.topRight + g,
-      bottomLeft: r.bottomLeft + g,
-      bottomRight: r.bottomRight + g,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
     final enabled = widget.onPressed != null;
-    final ring = widget.ringColor ?? ui.accent;
     final scale = _lit ? widget.focusScale : 1.0;
-    final hasLift = widget.focusScale > 1.0;
+    // Only a real pop (the game tiles) earns the drop shadow; under the
+    // default slight zoom it just smears a halo behind every button and row.
+    final hasLift = widget.focusScale >= 1.05;
     final shadowColor = ui.brightness == Brightness.light
         ? Colors.black.withValues(alpha: 0.16)
         : Colors.black.withValues(alpha: 0.55);
@@ -227,21 +240,6 @@ class _UiFocusableState extends State<UiFocusable>
             ),
           ),
         widget.child,
-        if (_lit && widget.showRing)
-          Positioned(
-            left: -widget.ringGap,
-            top: -widget.ringGap,
-            right: -widget.ringGap,
-            bottom: -widget.ringGap,
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: _ringRadius,
-                  border: Border.all(color: ring, width: 2.5),
-                ),
-              ),
-            ),
-          ),
       ],
     );
 

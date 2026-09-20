@@ -141,8 +141,7 @@ class _ConsoleTile extends StatelessWidget {
       onTap: onSelect,
       borderColor: selected ? ui.accent : null,
       padding: const EdgeInsets.all(12),
-      focusScale: 1.05,
-      showRing: false,
+      focusScale: 1.12,
       child: Builder(
         builder: (context) => Column(
           mainAxisAlignment: MainAxisAlignment.center,

@@ -4,7 +4,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../services/android_emulators.dart';
 import '../services/app_mode.dart';
 import '../services/library.dart';
-import '../services/log_service.dart';
 import '../services/play_view.dart';
 import '../screens/cull_screen.dart';
 import '../screens/dashboard_screen.dart';
@@ -16,6 +15,7 @@ import '../screens/storage_screen.dart';
 import '../services/update_check.dart';
 import '../theme/ui_tokens.dart';
 import 'update_banner.dart';
+import 'ui/ui_focusable.dart';
 
 /// The shell's nav destinations (label, icon), indexed by the ints in
 /// [kGamingNav] / [kCleaningNav]. Public so a route pushed over the shell (a
@@ -117,25 +117,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   Future<void> _drainPendingShortcut() async {
     final pending = await AndroidEmulators.takePendingShortcut();
     if (pending == null) return;
-    LogService.info('AppShell/shortcut',
-        'Shortcut launch ${pending.romPath} '
-        '(pkg=${pending.package}, kind=${pending.kindId}, console=${pending.consoleId})');
-    final err = await AndroidEmulators.launchRom(
+    final err = await AndroidEmulators.launchRomLogged(
       package: pending.package,
       kindId: pending.kindId,
       consoleId: pending.consoleId,
       romPath: pending.romPath,
+      subject: 'shortcut ${pending.romPath}',
+      logContext: 'AppShell/shortcut',
     );
-    if (err != null) {
-      LogService.error('AppShell/shortcut',
-          'Shortcut launch failed for ${pending.romPath} '
-          '(pkg=${pending.package}): $err');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Couldn't launch shortcut: $err")));
-      }
-    } else {
-      LogService.info('AppShell/shortcut', 'Shortcut launch OK: ${pending.romPath}');
+    if (err != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Couldn't launch shortcut: $err")));
     }
   }
 
@@ -329,14 +321,21 @@ class _Sidebar extends StatelessWidget {
             child:
                 Text('RARM', style: ui.display.copyWith(fontSize: 18)),
           ),
-          for (int i = 0; i < dests.length; i++)
-            _NavTile(
-              label: dests[i].$1,
-              icon: dests[i].$2,
-              selected: i == index,
-              onTap: () => onSelect(i),
+          // Expanded + ListView: the tiles take the leftover height and scroll
+          // when the window is too short, instead of overflowing the Column.
+          Expanded(
+            child: ListView(
+              children: [
+                for (int i = 0; i < dests.length; i++)
+                  _NavTile(
+                    label: dests[i].$1,
+                    icon: dests[i].$2,
+                    selected: i == index,
+                    onTap: () => onSelect(i),
+                  ),
+              ],
             ),
-          const Spacer(),
+          ),
           // Version + author pinned bottom-left. Desktop only: mobile has no
           // left rail to hang it on.
           Padding(
@@ -382,21 +381,23 @@ class _NavTile extends StatelessWidget {
       child: Semantics(
         button: true,
         selected: selected,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: ui.roundMd,
-          child: Container(
-            decoration: BoxDecoration(
-              color: selected ? ui.navSelectedBg : Colors.transparent,
-              borderRadius: ui.roundMd,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                Icon(icon, size: 18, color: fg),
-                const SizedBox(width: 10),
-                Text(label, style: ui.labelCaps.copyWith(color: fg)),
-              ],
+        child: UiFocusZoom(
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: ui.roundMd,
+            child: Container(
+              decoration: BoxDecoration(
+                color: selected ? ui.navSelectedBg : Colors.transparent,
+                borderRadius: ui.roundMd,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(icon, size: 18, color: fg),
+                  const SizedBox(width: 10),
+                  Text(label, style: ui.labelCaps.copyWith(color: fg)),
+                ],
+              ),
             ),
           ),
         ),
@@ -432,21 +433,23 @@ class _BottomNav extends StatelessWidget {
                   button: true,
                   selected: i == index,
                   label: dests[i].$1,
-                  child: InkWell(
-                    onTap: () => onSelect(i),
-                    borderRadius: ui.roundMd,
-                    child: Container(
-                      margin:
-                          const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: i == index ? ui.navSelectedBg : Colors.transparent,
-                        borderRadius: ui.roundMd,
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Icon(
-                        dests[i].$2,
-                        color: i == index ? ui.navSelectedFg : ui.muted,
-                        size: 22,
+                  child: UiFocusZoom(
+                    child: InkWell(
+                      onTap: () => onSelect(i),
+                      borderRadius: ui.roundMd,
+                      child: Container(
+                        margin:
+                            const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: i == index ? ui.navSelectedBg : Colors.transparent,
+                          borderRadius: ui.roundMd,
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Icon(
+                          dests[i].$2,
+                          color: i == index ? ui.navSelectedFg : ui.muted,
+                          size: 22,
+                        ),
                       ),
                     ),
                   ),
@@ -526,17 +529,19 @@ class ShellRailTile extends StatelessWidget {
         label: label,
         child: Tooltip(
           message: label,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: ui.roundMd,
-            child: Container(
-              height: 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: selected ? ui.navSelectedBg : Colors.transparent,
-                borderRadius: ui.roundMd,
+          child: UiFocusZoom(
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: ui.roundMd,
+              child: Container(
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: selected ? ui.navSelectedBg : Colors.transparent,
+                  borderRadius: ui.roundMd,
+                ),
+                child: Icon(icon, size: 22, color: fg),
               ),
-              child: Icon(icon, size: 22, color: fg),
             ),
           ),
         ),

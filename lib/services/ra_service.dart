@@ -21,6 +21,12 @@ RaAward raAwardFromKind(String? kind) => switch (kind) {
 
 /// Resolves a persisted [RaAward] name; unknown/absent -> none. Kept beside the
 /// enum so persistence stays robust to future tiers.
+/// Parses a date out of a raw RA JSON value. RA sends missing dates as null,
+/// an empty string or whitespace depending on the endpoint, so every reader
+/// goes through here rather than spelling the null check its own way.
+DateTime? raDate(Object? raw) =>
+    raw is String && raw.trim().isNotEmpty ? DateTime.tryParse(raw) : null;
+
 RaAward raAwardByName(String? name) =>
     RaAward.values.firstWhere((a) => a.name == name, orElse: () => RaAward.none);
 
@@ -87,8 +93,8 @@ class Achievement {
         badgeName: j['BadgeName'] as String? ?? '',
         displayOrder: (j['DisplayOrder'] as num?)?.toInt() ?? 0,
         numAwarded: (j['NumAwarded'] as num?)?.toInt() ?? 0,
-        dateEarned: _parseDate(j['DateEarned'] as String?),
-        dateEarnedHardcore: _parseDate(j['DateEarnedHardcore'] as String?),
+        dateEarned: raDate(j['DateEarned']),
+        dateEarnedHardcore: raDate(j['DateEarnedHardcore']),
         type: (j['Type'] as String?)?.isEmpty ?? true ? null : j['Type'] as String?,
       );
 
@@ -105,11 +111,6 @@ class Achievement {
         'DateEarnedHardcore': dateEarnedHardcore?.toIso8601String(),
         'Type': type,
       };
-
-  static DateTime? _parseDate(String? s) {
-    if (s == null || s.isEmpty) return null;
-    return DateTime.tryParse(s);
-  }
 }
 
 class GameInfo {
@@ -132,8 +133,9 @@ class GameInfo {
   final DateTime? setUpdated;
   // Sum of achievement points; null without data (RA has no total field).
   final int? points;
+  // RA's NumDistinctPlayersCasual. Its Hardcore twin is a deprecated alias
+  // returning the same total, so there is only one player count worth keeping.
   final int numPlayersCasual;
-  final int numPlayersHardcore;
 
   GameInfo({
     required this.gameId,
@@ -153,7 +155,6 @@ class GameInfo {
     this.setUpdated,
     this.points,
     this.numPlayersCasual = 0,
-    this.numPlayersHardcore = 0,
   });
 
   factory GameInfo.fromJson(Map<String, dynamic> j) => GameInfo(
@@ -178,7 +179,6 @@ class GameInfo {
             : null,
         points: (j['points'] as num?)?.toInt(),
         numPlayersCasual: (j['numPlayersCasual'] as num?)?.toInt() ?? 0,
-        numPlayersHardcore: (j['numPlayersHardcore'] as num?)?.toInt() ?? 0,
       );
 
   Map<String, dynamic> toJson() => {
@@ -199,7 +199,6 @@ class GameInfo {
         'setUpdated': setUpdated?.toIso8601String(),
         'points': points,
         'numPlayersCasual': numPlayersCasual,
-        'numPlayersHardcore': numPlayersHardcore,
       };
 }
 
@@ -241,13 +240,9 @@ class CompletedGame {
             ? null
             : j['ImageIcon'] as String?,
         numAwardedHardcore: (j['NumAwardedHardcore'] as num?)?.toInt() ?? 0,
-        lastPlayed: (j['MostRecentAwardedDate'] as String?)?.isNotEmpty ?? false
-            ? DateTime.tryParse(j['MostRecentAwardedDate'] as String)
-            : null,
+        lastPlayed: raDate(j['MostRecentAwardedDate']),
         highestAward: raAwardFromKind(j['HighestAwardKind'] as String?),
-        highestAwardDate: (j['HighestAwardDate'] as String?)?.isNotEmpty ?? false
-            ? DateTime.tryParse(j['HighestAwardDate'] as String)
-            : null,
+        highestAwardDate: raDate(j['HighestAwardDate']),
       );
 }
 
@@ -283,9 +278,7 @@ class RecentUnlock {
         badgeName: j['BadgeName'] as String? ?? '',
         points: (j['Points'] as num?)?.toInt() ?? 0,
         hardcore: ((j['HardcoreMode'] as num?)?.toInt() ?? 0) == 1,
-        date: (j['Date'] as String?)?.isNotEmpty ?? false
-            ? DateTime.tryParse(j['Date'] as String)
-            : null,
+        date: raDate(j['Date']),
       );
 
   /// RA's field names, so a cached blob round-trips back through [fromJson].
@@ -340,7 +333,7 @@ class RaGameListEntry {
         imageIcon: j['ImageIcon'] as String?,
         achievementCount: (j['NumAchievements'] as num?)?.toInt() ?? 0,
         points: (j['Points'] as num?)?.toInt(),
-        dateModified: _parseDate(j['DateModified'] as String?),
+        dateModified: raDate(j['DateModified']),
         hashes: [
           for (final h in (j['Hashes'] ?? const []) as List)
             (h as String).toLowerCase(),
@@ -357,9 +350,6 @@ class RaGameListEntry {
         'DateModified': dateModified?.toIso8601String(),
         'Hashes': hashes,
       };
-
-  static DateTime? _parseDate(String? s) =>
-      (s == null || s.isEmpty) ? null : DateTime.tryParse(s);
 }
 
 class RaService {
@@ -638,7 +628,6 @@ class RaService {
       setUpdated: setUpdated,
       points: points,
       numPlayersCasual: asInt('NumDistinctPlayersCasual'),
-      numPlayersHardcore: asInt('NumDistinctPlayersHardcore'),
     );
 
     final earnedCasual = (data['NumAwardedToUser'] as num?)?.toInt() ?? 0;
@@ -654,9 +643,7 @@ class RaService {
       // endpoint under-reports beaten awards the completion sweep records.
       highestAward: deriveBeatenAward(
           achievementsList, raAwardFromKind(data['HighestAwardKind'] as String?)),
-      highestAwardDate: (data['HighestAwardDate'] as String?)?.isNotEmpty ?? false
-          ? DateTime.tryParse(data['HighestAwardDate'] as String)
-          : null,
+      highestAwardDate: raDate(data['HighestAwardDate']),
       achievements: achievementsList,
     );
 

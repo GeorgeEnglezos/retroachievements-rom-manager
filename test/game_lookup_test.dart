@@ -339,4 +339,122 @@ void main() {
       expect(rom, isNull);
     });
   });
+
+  group('gameInfoFromCache', () {
+    RaGameListEntry listed({int? consoleId}) => RaGameListEntry(
+          gameId: 7,
+          title: 'Racer',
+          consoleId: consoleId,
+          imageIcon: '/Images/icon.png',
+          achievementCount: 24,
+          points: 300,
+          dateModified: DateTime(2026, 3, 4),
+        );
+
+    test('carries what a library row draws and leaves the rest for the dialog',
+        () {
+      final info = gameInfoFromCache(listed(consoleId: 1));
+      expect(info.title, 'Racer');
+      expect(info.achievementCount, 24);
+      expect(info.points, 300);
+      expect(info.imageIcon, '/Images/icon.png');
+      expect(info.setUpdated, DateTime(2026, 3, 4));
+      // Fetched on demand by the detail dialog, not during a scan.
+      expect(info.imageBoxArt, isNull);
+      expect(info.imageIngame, isNull);
+      expect(info.genre, isNull);
+      expect(info.publisher, isNull);
+    });
+
+    test('falls back to the folder console when the entry has none', () {
+      final info = gameInfoFromCache(listed(), consoleId: 1);
+      expect(info.consoleId, 1);
+      expect(info.consoleName, isNotEmpty);
+    });
+  });
+
+  group('saveGameDetail', () {
+    late Directory dataDir;
+    late Directory sysDir;
+    late Library lib;
+
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      dataDir = Directory.systemTemp.createTempSync('gl_save_data');
+      sysDir = Directory.systemTemp.createTempSync('gl_save_sys');
+      lib = Library(baseDir: dataDir);
+    });
+
+    tearDown(() {
+      dataDir.deleteSync(recursive: true);
+      sysDir.deleteSync(recursive: true);
+    });
+
+    // What a scan leaves behind: named off the cached console list, with no
+    // box art and no achievement list.
+    Future<String> seedDeferred({bool matched = true}) async {
+      final filePath = p.join(sysDir.path, 'dashrunner.md');
+      await lib.save(SystemData(
+        systemId: '',
+        systemPath: sysDir.path,
+        games: [
+          GameEntry(
+            filePath: filePath,
+            fileName: 'dashrunner.md',
+            fileSize: 42,
+            md5: 'abc',
+            gameId: matched ? 7 : null,
+            matched: matched,
+            noMatch: !matched,
+            lastScanned: DateTime(2026, 6, 1),
+            gameInfo: GameInfo(
+              gameId: 7,
+              title: 'Racer',
+              consoleName: 'Genesis',
+              consoleId: 1,
+              achievementCount: 24,
+            ),
+            progress: null,
+          ),
+        ],
+        dismissedDuplicatePairs: <String>{},
+        consoleId: 1,
+      ));
+      return filePath;
+    }
+
+    UserProgress progress() =>
+        UserProgress(gameId: 7, earnedAchievements: 5, earnedHardcore: 2);
+
+    test('persists the detail so the next open reads it off disk', () async {
+      final filePath = await seedDeferred();
+
+      await saveGameDetail(filePath,
+          info: _info(), progress: progress(), library: lib);
+
+      final stored = (await Library(baseDir: dataDir).load(sysDir.path))
+          .games
+          .single;
+      expect(stored.gameInfo!.imageBoxArt, '/Images/box.png');
+      expect(stored.gameInfo!.imageIngame, '/Images/ingame.png');
+      expect(stored.gameInfo!.publisher, 'Sega');
+      expect(stored.progress!.earnedAchievements, 5);
+    });
+
+    test('is a no-op for a file in no scanned system', () async {
+      await seedDeferred();
+      // Must not throw, and must not touch the stored entry.
+      await saveGameDetail(p.join(dataDir.path, 'elsewhere.md'),
+          info: _info(), progress: progress(), library: lib);
+      expect((await lib.load(sysDir.path)).games.single.gameInfo!.imageBoxArt,
+          isNull);
+    });
+
+    test('is a no-op for an unmatched entry', () async {
+      final filePath = await seedDeferred(matched: false);
+      await saveGameDetail(filePath,
+          info: _info(), progress: progress(), library: lib);
+      expect((await lib.load(sysDir.path)).games.single.progress, isNull);
+    });
+  });
 }

@@ -1,10 +1,43 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:rarm/models/game_entry.dart';
 import 'package:rarm/models/home_index.dart';
 import 'package:rarm/models/rom_result.dart';
+import 'package:rarm/models/user_progress.dart';
 import 'package:rarm/services/home_dashboard.dart';
+import 'package:rarm/services/library.dart';
 import 'package:rarm/services/member_key.dart';
 import 'package:rarm/services/ra_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class _FakeRa extends RaService {
+  _FakeRa() : super(username: 'u', apiKey: 'k');
+
+  final fetched = <int>[];
+  bool throwDetail = false;
+
+  @override
+  Future<(GameInfo, UserProgress)> getGameInfoAndUserProgress(
+      int gameId) async {
+    fetched.add(gameId);
+    if (throwDetail) throw Exception('network down');
+    return (
+      GameInfo(
+        gameId: gameId,
+        title: 'Racer',
+        consoleName: 'Mega Drive',
+        consoleId: 1,
+        achievementCount: 24,
+        imageIcon: '/Images/icon.png',
+        imageBoxArt: '/Images/box.png',
+        imageIngame: '/Images/ingame.png',
+      ),
+      UserProgress(gameId: gameId, earnedAchievements: 5, earnedHardcore: 2),
+    );
+  }
+}
 
 RomResult _game(
   String path, {
@@ -31,6 +64,8 @@ RomResult _game(
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('spotlight is the highest-completion in-progress game', () {
     final d = buildHomeDashboard([
       _game('/a.sfc', total: 10, earned: 2), // 20%
@@ -170,5 +205,116 @@ void main() {
     expect(d.stats.mastered, 1);
     expect(d.stats.achievementsEarned, 14);
     expect(d.stats.totalSizeBytes, 1000);
+  });
+
+  group('fetchSpotlightArt', () {
+    late Directory dataDir;
+    late Directory sysDir;
+    late Library lib;
+
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      dataDir = Directory.systemTemp.createTempSync('hd_art_data');
+      sysDir = Directory.systemTemp.createTempSync('hd_art_sys');
+      lib = Library(baseDir: dataDir);
+    });
+
+    tearDown(() {
+      dataDir.deleteSync(recursive: true);
+      sysDir.deleteSync(recursive: true);
+    });
+
+    // What a scan leaves behind: named off the cached console list, with no
+    // box art or screenshots.
+    Future<String> seedDeferred(int gameId, String file) async {
+      final filePath = p.join(sysDir.path, file);
+      final data = await lib.load(sysDir.path);
+      await lib.save(data.copyWith(
+        systemPath: sysDir.path,
+        consoleId: 1,
+        games: [
+          ...data.games,
+          GameEntry(
+            filePath: filePath,
+            fileName: file,
+            fileSize: 42,
+            md5: 'abc\$gameId',
+            gameId: gameId,
+            matched: true,
+            noMatch: false,
+            lastScanned: DateTime(2026, 6, 1),
+            gameInfo: GameInfo(
+              gameId: gameId,
+              title: 'Racer',
+              consoleName: 'Mega Drive',
+              consoleId: 1,
+              achievementCount: 24,
+            ),
+            progress: null,
+          ),
+        ],
+      ));
+      return filePath;
+    }
+
+    test('fetches art for both banners and persists it', () async {
+      final masteryPath = await seedDeferred(101, 'a.md');
+      final beatPath = await seedDeferred(102, 'b.md');
+      final dash = buildHomeDashboard([
+        _game(masteryPath, total: 10, earned: 9, gameId: 101),
+        _game(beatPath, total: 10, earned: 4, gameId: 102),
+      ]);
+      expect(dash.spotlight!.gameId, 101);
+      expect(dash.beatSpotlight!.gameId, 102);
+      final ra = _FakeRa();
+
+      await fetchSpotlightArt(dash, library: lib, service: ra);
+
+      expect(ra.fetched, [101, 102]);
+      // Applied in memory so the banners can draw without a reload...
+      expect(dash.spotlight!.heroArt, '/Images/ingame.png');
+      // ...and the system's display name survives the RA payload.
+      expect(dash.spotlight!.consoleName, 'SNES');
+      // ...and persisted so the next Home load costs nothing.
+      final stored = (await Library(baseDir: dataDir).load(sysDir.path)).games;
+      expect(stored.every((g) => g.gameInfo!.imageIngame != null), isTrue);
+    });
+
+    test('skips a game that already has hero art', () async {
+      final path = await seedDeferred(103, 'c.md');
+      final rom = _game(path, total: 10, earned: 9, gameId: 103)
+        ..imageIngame = '/Images/have.png';
+      final ra = _FakeRa();
+
+      await fetchSpotlightArt(buildHomeDashboard([rom]), library: lib, service: ra);
+
+      expect(ra.fetched, isEmpty);
+    });
+
+    test('fetches a game only once per session, so a failed art lookup '
+        'cannot loop through the library save it triggers', () async {
+      final path = await seedDeferred(104, 'd.md');
+      final dash =
+          buildHomeDashboard([_game(path, total: 10, earned: 9, gameId: 104)]);
+      final ra = _FakeRa();
+
+      await fetchSpotlightArt(dash, library: lib, service: ra);
+      await fetchSpotlightArt(dash, library: lib, service: ra);
+
+      expect(ra.fetched, [104]);
+    });
+
+    test('a failed fetch leaves the stored entry alone', () async {
+      final path = await seedDeferred(105, 'e.md');
+      final dash =
+          buildHomeDashboard([_game(path, total: 10, earned: 9, gameId: 105)]);
+      final ra = _FakeRa()..throwDetail = true;
+
+      await fetchSpotlightArt(dash, library: lib, service: ra);
+
+      expect(dash.spotlight!.heroArt, isNull);
+      expect((await lib.load(sysDir.path)).games.single.gameInfo!.imageIngame,
+          isNull);
+    });
   });
 }

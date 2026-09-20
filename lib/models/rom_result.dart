@@ -17,6 +17,24 @@ enum RomStatus {
   metadataOnly,
 }
 
+
+/// The one wording for each status. Every surface that names a status (filter
+/// chip, row subtitle, grid cell) reads it from here, so the same state isn't
+/// worded three ways; the switch is exhaustive so a new status has to be named
+/// rather than falling through a default. Listings suppress the states that
+/// need no note and the row tile overrides [RomStatus.unsupportedFormat] with
+/// its longer, format-specific hint.
+String statusLabel(RomStatus s) => switch (s) {
+      RomStatus.notFetched => 'Not fetched',
+      RomStatus.checking => 'Checking...',
+      RomStatus.supported => 'Supported',
+      RomStatus.unsupported => 'No achievements',
+      RomStatus.unsupportedFormat => 'Bad format',
+      RomStatus.error => 'Error',
+      RomStatus.localOnly => 'Not on RetroAchievements',
+      RomStatus.metadataOnly => 'No achievements',
+    };
+
 // RA returns a placeholder title like "GAME #1100002368" for matched games that
 // have no real name yet (and folder_view falls back to "Game #<id>" on a failed
 // detail fetch). In those cases the original file name is more useful.
@@ -61,7 +79,6 @@ class RomResult {
   DateTime? setUpdated;
   int? points;
   int? numPlayersCasual;
-  int? numPlayersHardcore;
   int? earnedAchievements;
   int? earnedHardcore;
   // Highest RA award (beaten/completed/mastered); null until progress loads.

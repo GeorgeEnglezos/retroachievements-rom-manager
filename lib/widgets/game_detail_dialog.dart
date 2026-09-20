@@ -1,19 +1,20 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../models/folder_stats.dart' show compactCount;
 import '../models/rom_result.dart';
 import '../models/scraped_game.dart';
 import '../services/credentials.dart';
 import '../services/disc_grouping.dart';
+import '../services/switch_grouping.dart';
 import '../services/app_mode.dart';
-import '../services/file_actions.dart';
+import '../services/game_lookup.dart';
 import '../services/library.dart';
 import '../services/console_image.dart';
 import '../services/mastery_effort.dart';
 import '../services/member_key.dart';
 import '../services/playlist_store.dart';
 import '../services/ra_service.dart';
+import '../services/rom_tap.dart';
 import '../services/scraper/scraped_store.dart';
 import '../theme/ui_tokens.dart';
 import 'confirm_recycle_dialog.dart';
@@ -21,19 +22,20 @@ import 'image_viewer.dart';
 import 'ui/ui_badge.dart';
 import 'ui/ui_card.dart';
 import 'ui/ui_segmented.dart';
-import 'playlist_picker.dart';
 import 'ra_image.dart';
 import 'rom_actions.dart';
 import 'rom_progress.dart';
 
-/// The label for a "beaten"-defining RetroAchievements type, or null for a
-/// standard or missable achievement. RA marks the achievements that finish a
-/// game as `progression` (steps required) plus a `win_condition` (the finale);
-/// earning all of them is what awards the "beaten" badge. Pure and top-level so
-/// the set of RA type strings that count stays unit-testable.
-String? beatTypeLabel(String? type) => switch (type) {
+/// The label for a marked RetroAchievements type, or null for a standard
+/// achievement. RA marks the achievements that finish a game as `progression`
+/// (steps required) plus a `win_condition` (the finale); earning all of them is
+/// what awards the "beaten" badge. `missable` is one a playthrough can put out
+/// of reach. Pure and top-level so the set of RA type strings that count stays
+/// unit-testable.
+String? achievementTypeLabel(String? type) => switch (type) {
       'win_condition' => 'Win condition',
       'progression' => 'Progression',
+      'missable' => 'Missable',
       _ => null,
     };
 
@@ -43,6 +45,42 @@ bool canOpenDetail(RomResult rom) =>
     rom.status == RomStatus.supported ||
     rom.isLocalOnly ||
     ScrapedStore.instance.get(rom.filePath) != null;
+
+/// A plain click on [rom]: launch it, or open its details, per the saved tap
+/// setting (see rom_tap.dart). Both ROM tiles and the screens that open the
+/// dialog straight from a click funnel through here, so the setting reaches
+/// every click on a game.
+Future<void> openRomOnTap(
+  BuildContext context,
+  RomResult rom, {
+  required PlaylistStore store,
+  VoidCallback? onDeleted,
+  VoidCallback? onPlaylistChanged,
+  VoidCallback? onFetch,
+}) async {
+  if (romTapListenable.value == RomTapAction.play) {
+    await RomActions(
+      rom: rom,
+      store: store,
+      onDeleted: onDeleted,
+      onPlaylistChanged: onPlaylistChanged,
+      onFetch: onFetch,
+    ).handle(context, 'play');
+    return;
+  }
+  if (!canOpenDetail(rom)) return;
+  await showDialog<void>(
+    context: context,
+    builder: (_) => GameDetailDialog(
+      rom: rom,
+      store: store,
+      onDeleted: onDeleted,
+      onPlaylistChanged: onPlaylistChanged,
+      onFetch: onFetch,
+      scraped: ScrapedStore.instance.get(rom.filePath),
+    ),
+  );
+}
 
 class GameDetailDialog extends StatefulWidget {
   final RomResult rom;
@@ -85,10 +123,22 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   RomResult get rom => _discs[_selected];
   bool get _multiDisc => _discs.length > 1;
 
+  // A Switch title's files are parts of one game, not interchangeable discs.
+  // Derived from the files themselves so callers pass nothing extra.
+  bool get _switchTitle => _multiDisc && isSwitchFile(_discs.first.fileName);
+
+  // Only a Switch title's base file boots: updates and DLC are content the
+  // emulator loads through it. Play always targets the base, whichever part
+  // the switcher has selected. [DiscGroup] sorts the base first.
+  RomResult get _playTarget => _switchTitle ? _discs.first : rom;
+
   List<Achievement>? _achievements;
   bool _achievementsLoading = false;
   String? _achievementsError;
-  bool _listView = false;
+  // Null until the user picks a view. A grid tile carries its title, points and
+  // type only in a hover tooltip, which a touch screen has no way to show, so
+  // phones start on the list instead.
+  bool? _listView;
   bool _isFavorite = false;
 
   String get _memberKey =>
@@ -147,13 +197,25 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
 
       final (username, apiKey) = creds;
       final service = RaService(username: username, apiKey: apiKey);
-      final (_, progress) = await service.getGameInfoAndUserProgress(gameId);
+      final (info, progress) = await service.getGameInfoAndUserProgress(gameId);
 
       if (current()) {
         setState(() {
+          // Scans skip this call (one request per matched ROM), so opening the
+          // game is what fills in box art, screenshots, genre, developer and
+          // publisher. Applied here and persisted below so it is fetched once,
+          // not on every open.
+          applyGameInfo(rom, info);
+          applyProgress(rom, progress);
           _achievements = progress.achievements;
           _achievementsLoading = false;
         });
+        await saveGameDetail(
+          rom.filePath,
+          info: info,
+          progress: progress,
+          library: Library.instance,
+        );
       }
     } catch (_) {
       if (current()) {
@@ -166,18 +228,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   }
 
   Future<void> _handle(String choice) async {
-    final messenger = ScaffoldMessenger.of(context);
-    void snack(String text) =>
-        messenger.showSnackBar(SnackBar(content: Text(text)));
-
     switch (choice) {
-      case 'reveal':
-        if (!await FileActions.revealInExplorer(rom.filePath)) {
-          snack("Couldn't reveal file");
-        }
-      case 'copy':
-        await Clipboard.setData(ClipboardData(text: rom.filePath));
-        snack('Path copied');
       case 'fetch':
         // Per-disc fetch closes the modal (like single-ROM fetch);
         // reopen to fetch the next disc.
@@ -187,22 +238,17 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
           widget.onFetch?.call();
         }
         if (mounted) Navigator.pop(context);
-      case 'google':
-        if (!await FileActions.openUrl(
-            FileActions.googleSearchUrl(rom.filePath))) {
-          snack("Couldn't open browser");
-        }
-      case 'ra':
-        if (rom.gameId != null &&
-            !await FileActions.openUrl(FileActions.raGameUrl(rom.gameId!))) {
-          snack("Couldn't open browser");
-        }
-      case 'playlist':
-        if (!mounted) return;
-        await PlaylistPicker.show(context, widget.store!, _memberKey);
-        widget.onPlaylistChanged?.call();
       case 'delete':
-        await _confirmDelete(messenger);
+        // Multi-disc aware, so it can't go through RomActions.
+        await _confirmDelete(ScaffoldMessenger.of(context));
+      default:
+        // Reveal, copy, google, ra and playlist behave exactly as they do on a
+        // tile, down to the snackbar wording, so the tile owns them.
+        await RomActions(
+          rom: rom,
+          store: widget.store ?? PlaylistStore(),
+          onPlaylistChanged: widget.onPlaylistChanged,
+        ).handle(context, choice);
     }
   }
 
@@ -235,9 +281,11 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   Widget _actionButton(String choice, IconData icon, String tooltip) {
     return Tooltip(
       message: tooltip,
-      child: IconButton(
-        icon: Icon(icon, size: 20),
-        onPressed: () => _handle(choice),
+      child: UiFocusZoom(
+        child: IconButton(
+          icon: Icon(icon, size: 20),
+          onPressed: () => _handle(choice),
+        ),
       ),
     );
   }
@@ -278,18 +326,31 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
           ),
         ),
         // Play sits beside Favorite; Delete keeps its own row so three labels
-        // never have to share a narrow (phone) dialog width.
+        // never have to share a narrow (phone) dialog width. Narrower still
+        // (a phone's half-width panel) even two labels stop fitting, so they
+        // stack.
         Padding(
           padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          child: Row(
-            children: [
-              Expanded(child: _playButton()),
-              if (showPlaylist) ...[
+          child: LayoutBuilder(builder: (context, c) {
+            if (!showPlaylist) return _playButton();
+            if (c.maxWidth < 240) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _playButton(),
+                  const SizedBox(height: 8),
+                  _favoriteButton(),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: _playButton()),
                 const SizedBox(width: 8),
                 Expanded(child: _favoriteButton()),
               ],
-            ],
-          ),
+            );
+          }),
         ),
         if (!gamingMode)
           Padding(
@@ -303,45 +364,54 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   // Same launch path as the tile context menu (emulator lookup, set-emulator
   // prompt, error snack) so both surfaces behave identically.
   Widget _playButton() {
-    return FilledButton.icon(
-      onPressed: () => RomActions(rom: rom, store: widget.store ?? PlaylistStore())
-          .handle(context, 'play'),
-      icon: const Icon(Icons.play_arrow, size: 18),
-      label: const Text('Play (beta)'),
+    return UiFocusZoom(
+      child: FilledButton.icon(
+        onPressed: () =>
+            RomActions(rom: _playTarget, store: widget.store ?? PlaylistStore())
+                .handle(context, 'play'),
+        icon: const Icon(Icons.play_arrow, size: 18),
+        label: const Text('Play (beta)'),
+      ),
     );
   }
 
   Widget _favoriteButton() {
     if (_isFavorite) {
-      return FilledButton.icon(
-        onPressed: _toggleFavorite,
-        icon: const Icon(Icons.favorite, size: 18),
-        label: const Text('Favorited'),
-        style: FilledButton.styleFrom(
-          backgroundColor: kFavoriteColor,
-          foregroundColor: Colors.white,
+      return UiFocusZoom(
+        child: FilledButton.icon(
+          onPressed: _toggleFavorite,
+          icon: const Icon(Icons.favorite, size: 18),
+          label: const Text('Favorited'),
+          style: FilledButton.styleFrom(
+            backgroundColor: kFavoriteColor,
+            foregroundColor: Colors.white,
+          ),
         ),
       );
     }
-    return OutlinedButton.icon(
-      onPressed: _toggleFavorite,
-      icon: const Icon(Icons.favorite_border, size: 18),
-      label: const Text('Favorite'),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: kFavoriteColor,
-        side: const BorderSide(color: kFavoriteColor),
+    return UiFocusZoom(
+      child: OutlinedButton.icon(
+        onPressed: _toggleFavorite,
+        icon: const Icon(Icons.favorite_border, size: 18),
+        label: const Text('Favorite'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: kFavoriteColor,
+          side: const BorderSide(color: kFavoriteColor),
+        ),
       ),
     );
   }
 
   Widget _deleteButton() {
-    return FilledButton.icon(
-      onPressed: () => _handle('delete'),
-      icon: const Icon(Icons.delete_outline, size: 18),
-      label: const Text('Delete'),
-      style: FilledButton.styleFrom(
-        backgroundColor: kDangerColor,
-        foregroundColor: Colors.white,
+    return UiFocusZoom(
+      child: FilledButton.icon(
+        onPressed: () => _handle('delete'),
+        icon: const Icon(Icons.delete_outline, size: 18),
+        label: const Text('Delete'),
+        style: FilledButton.styleFrom(
+          backgroundColor: kDangerColor,
+          foregroundColor: Colors.white,
+        ),
       ),
     );
   }
@@ -351,16 +421,25 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   bool get _hasAchievementPanel =>
       rom.status == RomStatus.supported && rom.gameId != null;
 
+  static bool _isPhone(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < kBreakCompact;
+
+  // Below the desktop breakpoint the dialog drops its wide margins and fills
+  // the screen, which is the only way two panels fit on a phone.
+  static bool _isFullBleed(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < kBreakWide;
+
   @override
-  Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= kBreakWide;
-    return wide && _hasAchievementPanel
-        ? _splitLayout(context)
-        : _singleLayout(context);
-  }
+  Widget build(BuildContext context) =>
+      _hasAchievementPanel ? _splitLayout(context) : _singleLayout(context);
 
   Widget _singleLayout(BuildContext context) {
+    // A phone has no width to spare: Dialog's default 40dp side inset eats a
+    // fifth of the screen, leaving the meta rows cramped.
+    final phone = _isPhone(context);
     return Dialog(
+      insetPadding: EdgeInsets.symmetric(
+          horizontal: phone ? 8 : 40, vertical: phone ? 16 : 24),
       backgroundColor: context.ui.surface,
       shape: RoundedRectangleBorder(
         borderRadius: context.ui.roundLg,
@@ -388,19 +467,27 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     );
   }
 
-  // Wide screens split the modal into two cards side by side: the game on the
-  // left, your achievements on the right, each scrolling on its own.
+  // A matched game always splits into two cards side by side: the game on the
+  // left, your achievements on the right, each scrolling on its own. A desktop
+  // window centres the pair; anything narrower gives them the whole screen,
+  // since two panels in a phone-width dialog have nothing to spare.
   Widget _splitLayout(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final full = _isFullBleed(context);
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
+      insetPadding: EdgeInsets.all(full ? 8 : 24),
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: 940,
-          maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+          maxWidth: full ? double.infinity : 940,
+          maxHeight: full ? double.infinity : size.height * 0.85,
         ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          // Stretched, the two panels are the same height and fill the screen;
+          // on a desktop they size to their content instead.
+          crossAxisAlignment:
+              full ? CrossAxisAlignment.stretch : CrossAxisAlignment.start,
           children: [
             Expanded(
               flex: 5,
@@ -418,13 +505,13 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
                 ),
               ),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: full ? 8 : 16),
             Expanded(
               flex: 5,
               child: _panel(
                 key: const Key('gameAchievementsPanel'),
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: EdgeInsets.all(_panelPad(context)),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
@@ -445,6 +532,10 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     );
   }
 
+  // Inner padding of a panel. Half a phone's width is too little to spend 20 a
+  // side on whitespace.
+  double _panelPad(BuildContext context) => _isFullBleed(context) ? 12 : 20;
+
   Widget _panel({required Key key, required Widget child}) => UiCard(
         key: key,
         padding: EdgeInsets.zero,
@@ -455,13 +546,15 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
 
   Widget _buildInfo(BuildContext context, {bool withProgress = true}) {
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(_panelPad(context)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-              gameDisplayName(rom.gameTitle,
-                  _multiDisc ? stripDiscToken(rom.fileName) : rom.fileName),
+              _switchTitle
+                  ? switchDisplayTitle(_discs.first.fileName)
+                  : gameDisplayName(rom.gameTitle,
+                      _multiDisc ? stripDiscToken(rom.fileName) : rom.fileName),
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
           if (rom.consoleName != null)
@@ -561,20 +654,22 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
           double? height,
           BoxFit fit = BoxFit.contain,
           double errorIconSize = 64}) =>
-      GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => showImageViewer(context, FileImage(File(path))),
-        child: Image.file(
-          File(path),
-          width: width,
-          height: height,
-          fit: fit,
-          errorBuilder: (_, _, _) => Container(
+      UiFocusZoom(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => showImageViewer(context, FileImage(File(path))),
+          child: Image.file(
+            File(path),
             width: width,
             height: height,
-            color: context.ui.trough,
-            child: Icon(Icons.broken_image,
-                size: errorIconSize, color: context.ui.muted),
+            fit: fit,
+            errorBuilder: (_, _, _) => Container(
+              width: width,
+              height: height,
+              color: context.ui.trough,
+              child: Icon(Icons.broken_image,
+                  size: errorIconSize, color: context.ui.muted),
+            ),
           ),
         ),
       );
@@ -618,6 +713,14 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   }
 
   Widget _buildDiscSwitcher(BuildContext context) {
+    // Discs are numbered; a Switch title's parts are named (Base / Update /
+    // DLC), since which one you are looking at is not a number.
+    final labels = _switchTitle
+        ? switchPartLabels([for (final d in _discs) d.fileName])
+        : [
+            for (var i = 0; i < _discs.length; i++)
+              'Disc ${discNumber(_discs[i].fileName) ?? i + 1}',
+          ];
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Column(
@@ -630,16 +733,16 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
               onChanged: _selectDisc,
               segments: [
                 for (var i = 0; i < _discs.length; i++)
-                  (
-                    value: i,
-                    label: 'Disc ${discNumber(_discs[i].fileName) ?? i + 1}',
-                    icon: null,
-                  ),
+                  (value: i, label: labels[i], icon: null),
               ],
             ),
           ),
           const SizedBox(height: 4),
-          Text('File ${_selected + 1} of ${_discs.length}',
+          Text(
+              _switchTitle && switchPart(rom.fileName) != SwitchPart.base
+                  ? 'File ${_selected + 1} of ${_discs.length} · installed '
+                      'content, the base game is what boots'
+                  : 'File ${_selected + 1} of ${_discs.length}',
               style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
@@ -647,14 +750,16 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   }
 
   Widget _buildStats(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
+    // Wrap, not Row: three labelled figures do not fit across a panel that is
+    // half a phone wide, and a Row would overflow rather than fold.
+    return Wrap(
+      alignment: WrapAlignment.spaceAround,
+      spacing: 16,
+      runSpacing: 8,
       children: [
         _stat(context, '${rom.achievementCount ?? 0}', 'Achievements'),
         if ((rom.points ?? 0) > 0) _stat(context, '${rom.points}', 'Points'),
         _stat(context, _fmt(rom.numPlayersCasual), 'Players'),
-        if ((rom.numPlayersHardcore ?? 0) > 0)
-          _stat(context, _fmt(rom.numPlayersHardcore), 'Hardcore'),
       ],
     );
   }
@@ -668,48 +773,53 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     );
   }
 
-  // RA value wins, but only when non-empty; an empty RA field falls through to
-  // the scraped value.
-  String? _gap(String? ra, String? scraped) =>
-      (ra != null && ra.isNotEmpty) ? ra : scraped;
-
   Widget _buildMetaRows(BuildContext context) {
     final s = widget.scraped;
     final rows = <(String, String?)>[
-      ('Developer', _gap(rom.developer, s?.developer)),
-      ('Publisher', _gap(rom.publisher, s?.publisher)),
-      ('Genre', _gap(rom.genre, s?.genre)),
-      ('Released', _gap(rom.released, s?.releaseDate)),
+      ('Developer', raOrScraped(rom.developer, s?.developer)),
+      ('Publisher', raOrScraped(rom.publisher, s?.publisher)),
+      ('Genre', raOrScraped(rom.genre, s?.genre)),
+      ('Released', raOrScraped(rom.released, s?.releaseDate)),
       ('Players', s?.players),
       ('Rating', s?.rating),
       ('Set released', rom.setCreated != null ? _fmtDate(rom.setCreated!) : null),
       ('Set updated', rom.setUpdated != null ? _fmtDate(rom.setUpdated!) : null),
     ];
-    return Column(
-      children: [
-        for (final (label, value) in rows)
-          if (value != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 88,
-                    child: Text(label,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.primary,
-                            )),
-                  ),
-                  Expanded(
-                    child: Text(value,
-                        style: Theme.of(context).textTheme.bodySmall),
-                  ),
-                ],
+    final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.primary,
+        );
+    final valueStyle = Theme.of(context).textTheme.bodySmall;
+    // An 88dp label gutter leaves nothing for the value in a panel that is half
+    // a phone wide, so below that the label moves above its value.
+    return LayoutBuilder(builder: (context, c) {
+      final stacked = c.maxWidth < 240;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final (label, value) in rows)
+            if (value != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: stacked
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(label, style: labelStyle),
+                          Text(value, style: valueStyle),
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                              width: 88, child: Text(label, style: labelStyle)),
+                          Expanded(child: Text(value, style: valueStyle)),
+                        ],
+                      ),
               ),
-            ),
-      ],
-    );
+        ],
+      );
+    });
   }
 
   Widget _buildProgressSection(BuildContext context) {
@@ -781,6 +891,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     }
 
     final effort = masteryEffort(list);
+    final listView = _listView ?? _isPhone(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -797,7 +908,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
               ),
             ),
             UiSegmented<bool>(
-              value: _listView,
+              value: listView,
               onChanged: (v) => setState(() => _listView = v),
               segments: const [
                 (value: false, label: '', icon: Icons.grid_view),
@@ -815,7 +926,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
             ),
           ),
         const SizedBox(height: 8),
-        if (_listView)
+        if (listView)
           Column(children: list.map(_buildBadgeRow).toList())
         else
           // Grow each tile so a whole number of columns fills the panel width
@@ -836,28 +947,52 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     );
   }
 
-  /// The marker for a "beaten"-defining achievement: the win condition that
-  /// finishes the game, or a progression step on the way there. Null for
-  /// standard and missable achievements. The win condition borrows the same
-  /// accent as the "Beaten" badge shown elsewhere so the two read as one idea.
-  ({String label, IconData? icon, String? emoji, Color color, double ring})?
-      _beatMarker(Achievement a) {
-    final label = beatTypeLabel(a.type);
+  /// The marker for a typed achievement: the win condition that finishes the
+  /// game, a progression step on the way there, or a missable one. Null for
+  /// standard achievements. The win condition borrows the same accent as the
+  /// "Beaten" badge shown elsewhere so the two read as one idea.
+  ({
+    String label,
+    String mark,
+    IconData? icon,
+    String? emoji,
+    Color color,
+    double ring
+  })? _typeMarker(Achievement a) {
+    final label = achievementTypeLabel(a.type);
     if (label == null) return null;
     final ui = context.ui;
     // The win condition finishes the game: gold (the app's mastery/completion
     // accent), a crown, and a thicker ring so it clearly outranks the
     // progression steps, which get a lighter flag. No Material crown glyph
-    // exists, so the crown is an emoji (gold in both themes).
-    return a.type == 'win_condition'
-        ? (label: label, emoji: '👑', icon: null, color: ui.warning, ring: 3)
-        : (
-            label: label,
-            icon: Icons.flag_outlined,
-            emoji: null,
-            color: ui.accent,
-            ring: 2,
-          );
+    // exists, so the crown is an emoji (gold in both themes). Missable is a
+    // caution, not a rank, so it takes the danger red.
+    return switch (a.type) {
+      'win_condition' => (
+          label: label,
+          mark: '★',
+          emoji: '👑',
+          icon: null,
+          color: ui.warning,
+          ring: 3,
+        ),
+      'missable' => (
+          label: label,
+          mark: '⚠',
+          emoji: null,
+          icon: Icons.warning_amber_rounded,
+          color: kDangerColor,
+          ring: 2,
+        ),
+      _ => (
+          label: label,
+          mark: '★',
+          emoji: null,
+          icon: Icons.flag_outlined,
+          color: ui.accent,
+          ring: 2,
+        ),
+    };
   }
 
   // media.retroachievements.org badge (locked variant when unearned).
@@ -885,7 +1020,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
 
   Widget _buildBadgeRow(Achievement achievement) {
     final image = _badgeImage(achievement, 40);
-    final marker = _beatMarker(achievement);
+    final marker = _typeMarker(achievement);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -928,7 +1063,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
 
   Widget _buildBadgeTile(Achievement achievement, double size) {
     final image = _badgeImage(achievement, size);
-    final marker = _beatMarker(achievement);
+    final marker = _typeMarker(achievement);
     Widget tile =
         achievement.isEarned ? image : Opacity(opacity: 0.5, child: image);
 
@@ -974,7 +1109,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     final buf = StringBuffer();
     buf.writeln(a.title);
     if (a.description.isNotEmpty) buf.writeln(a.description);
-    if (_beatMarker(a) case final m?) buf.writeln('★ ${m.label}');
+    if (_typeMarker(a) case final m?) buf.writeln('${m.mark} ${m.label}');
     buf.write('${a.points} pts');
     if (a.isEarned) buf.write(' · Earned ${_fmtDate(a.dateEarned!)}');
     buf.write('\n${_fmt(a.numAwarded)} players earned this');

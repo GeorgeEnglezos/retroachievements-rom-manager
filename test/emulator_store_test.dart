@@ -137,6 +137,39 @@ void main() {
     expect((await EmulatorStore.emulators()).single.extraArgs, '--bar');
   });
 
+  test('Switch lists all three emulators, Ryujinx first, without connecting',
+      () async {
+    await EmulatorStore.addEmulator(Emulator(
+        id: 'c1', name: 'Citron', exePath: r'C:\e\citron.exe', kindId: 'citron'));
+    await EmulatorStore.addEmulator(Emulator(
+        id: 'r1', name: 'Ryujinx', exePath: r'C:\e\Ryujinx.exe',
+        kindId: 'ryujinx'));
+    await EmulatorStore.addEmulator(Emulator(
+        id: 'e1', name: 'Eden', exePath: r'C:\e\eden.exe', kindId: 'eden'));
+
+    // Default kind first, then the alternates; Ryujinx alone holds console -1.
+    expect((await EmulatorStore.emulatorsForConsole(-1)).map((e) => e.id),
+        ['r1', 'c1', 'e1']);
+    expect((await EmulatorStore.connections())[-1]!.emulatorId, 'r1');
+  });
+
+  test('commandForEmulator uses the yuzu-fork args and leaves -1 connected',
+      () async {
+    await EmulatorStore.setLaunchFullscreen(true);
+    await EmulatorStore.addEmulator(Emulator(
+        id: 'r1', name: 'Ryujinx', exePath: r'C:\e\Ryujinx.exe',
+        kindId: 'ryujinx'));
+    final citron = Emulator(
+        id: 'c1', name: 'Citron', exePath: r'C:\e\citron.exe',
+        kindId: 'citron');
+    await EmulatorStore.addEmulator(citron);
+
+    expect(await EmulatorStore.commandForEmulator(citron, -1),
+        r'"C:\e\citron.exe" -f -g "{file.path}"');
+    // A one-off launch must not repoint the console.
+    expect((await EmulatorStore.connections())[-1]!.emulatorId, 'r1');
+  });
+
   test('takeAndroidSweep is true once, then false forever', () async {
     expect(await EmulatorStore.takeAndroidSweep(), isTrue);
     expect(await EmulatorStore.takeAndroidSweep(), isFalse);
