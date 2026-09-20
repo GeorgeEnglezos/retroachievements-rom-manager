@@ -9,6 +9,7 @@ import '../services/library.dart';
 import '../services/member_key.dart';
 import '../services/playlist_store.dart';
 import '../services/scraper/scraped_store.dart';
+import '../services/settings_bus.dart';
 import '../theme/ui_tokens.dart';
 import '../widgets/bigpicture/couch_home.dart';
 import '../widgets/game_detail_dialog.dart';
@@ -42,6 +43,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _lib.addListener(_scheduleLoad);
+    settingsChanged.addListener(_scheduleLoad);
     // Warm the scraped store so a game's detail dialog can fall back to imported
     // artwork, matching the folder/storage screens.
     ScrapedStore.instance.load();
@@ -51,6 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     _lib.removeListener(_scheduleLoad);
+    settingsChanged.removeListener(_scheduleLoad);
     _debounce?.cancel();
     super.dispose();
   }

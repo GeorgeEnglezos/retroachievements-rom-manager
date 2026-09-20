@@ -7,6 +7,7 @@ import '../services/cull_deck_builder.dart';
 import '../services/cull_store.dart';
 import '../services/library.dart';
 import '../services/playlist_store.dart';
+import '../services/settings_bus.dart';
 import '../theme/ui_tokens.dart';
 import '../widgets/ui/ui_card.dart';
 import '../widgets/ui/ui_progress_bar.dart';
@@ -49,12 +50,14 @@ class _CullScreenState extends State<CullScreen> {
     _load();
     // Re-read after a scan writes new summaries (same pattern as StorageScreen).
     _lib.addListener(_scheduleLoad);
+    settingsChanged.addListener(_scheduleLoad);
   }
 
   @override
   void dispose() {
     _reloadTimer?.cancel();
     _lib.removeListener(_scheduleLoad);
+    settingsChanged.removeListener(_scheduleLoad);
     super.dispose();
   }
 

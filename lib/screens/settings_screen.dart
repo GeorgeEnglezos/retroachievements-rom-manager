@@ -17,6 +17,7 @@ import '../services/scraper/gamelist_importer.dart';
 import '../services/scraper/scraped_store.dart';
 import '../widgets/pick_library_folder.dart';
 import '../services/scan_settings.dart';
+import '../services/settings_bus.dart';
 import '../services/rom_tap.dart';
 import '../widgets/system_settings_section.dart';
 import '../widgets/ui/ui_card.dart';
@@ -100,10 +101,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _setStringPref(String key, String value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(key, value);
+    publishSettingsChange();
   }
 
   void _commitApiKeyOnBlur() {
-    if (!_apiKeyFocus.hasFocus) saveApiKey(_apiKeyCtrl.text.trim());
+    if (!_apiKeyFocus.hasFocus) {
+      saveApiKey(_apiKeyCtrl.text.trim()).then((_) => publishSettingsChange());
+    }
   }
 
   Future<void> _clearAll() async {
@@ -275,7 +279,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             isDense: true,
           ),
           obscureText: true,
-          onEditingComplete: () => saveApiKey(_apiKeyCtrl.text.trim()),
+          onEditingComplete: () =>
+              saveApiKey(_apiKeyCtrl.text.trim())
+                  .then((_) => publishSettingsChange()),
         ),
       ],
     );

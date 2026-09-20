@@ -9,8 +9,8 @@ import '../services/console_map.dart';
 import '../services/emulator_catalog.dart';
 import '../services/emulator_store.dart';
 import '../services/library.dart';
-import '../services/library_folder.dart';
 import '../services/scan_settings.dart';
+import '../services/settings_bus.dart';
 import '../theme/ui_theme.dart';
 import '../theme/ui_tokens.dart';
 import 'emulator_settings_section.dart';
@@ -84,13 +84,13 @@ class _SystemSettingsSectionState extends State<SystemSettingsSection> {
   @override
   void initState() {
     super.initState();
-    libraryFolderListenable.addListener(_refresh);
+    settingsChanged.addListener(_refresh);
     _refresh();
   }
 
   @override
   void dispose() {
-    libraryFolderListenable.removeListener(_refresh);
+    settingsChanged.removeListener(_refresh);
     super.dispose();
   }
 

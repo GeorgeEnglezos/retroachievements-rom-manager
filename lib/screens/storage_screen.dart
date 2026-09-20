@@ -13,6 +13,7 @@ import '../services/game_lookup.dart';
 import '../services/library.dart';
 import '../services/playlist_store.dart';
 import '../services/scan_settings.dart';
+import '../services/settings_bus.dart';
 import '../services/scraper/scraped_store.dart';
 import '../services/storage_scanner.dart';
 import '../services/storage_treemap.dart' show TreemapItem;
@@ -63,14 +64,14 @@ class _StorageScreenState extends State<StorageScreen> {
     super.initState();
     // Re-read after a scan writes new summaries, or a filter changes.
     _lib.addListener(_onIndexChanged);
-    scanFiltersListenable.addListener(_onFiltersChanged);
+    settingsChanged.addListener(_onFiltersChanged);
     _load();
   }
 
   @override
   void dispose() {
     _lib.removeListener(_onIndexChanged);
-    scanFiltersListenable.removeListener(_onFiltersChanged);
+    settingsChanged.removeListener(_onFiltersChanged);
     _filterDebounce?.cancel();
     super.dispose();
   }

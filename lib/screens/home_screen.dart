@@ -31,6 +31,7 @@ import '../services/member_key.dart';
 import '../services/playlist_store.dart';
 import '../services/pref_keys.dart';
 import '../services/scan_settings.dart';
+import '../services/settings_bus.dart';
 import '../widgets/home_search.dart';
 import '../services/library.dart';
 import '../services/scraper/gamelist_importer.dart';
@@ -179,10 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    nameModeListenable.addListener(_onDisplaySettingChanged);
-    combineSystemsListenable.addListener(_onDisplaySettingChanged);
-    libraryFolderListenable.addListener(_onLibraryFolderChanged);
-    scanFiltersListenable.addListener(_onScanFiltersChanged);
+    settingsChanged.addListener(_onSettingsChanged);
     firstScanRequest.addListener(_consumeFirstScanRequest);
     _lib.addListener(_onLibraryChanged);
     _playlistStore.addListener(_onPlaylistsChanged);
@@ -198,10 +196,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    nameModeListenable.removeListener(_onDisplaySettingChanged);
-    combineSystemsListenable.removeListener(_onDisplaySettingChanged);
-    libraryFolderListenable.removeListener(_onLibraryFolderChanged);
-    scanFiltersListenable.removeListener(_onScanFiltersChanged);
+    settingsChanged.removeListener(_onSettingsChanged);
     firstScanRequest.removeListener(_consumeFirstScanRequest);
     _lib.removeListener(_onLibraryChanged);
     _playlistStore.removeListener(_onPlaylistsChanged);
@@ -246,7 +241,15 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _onDisplaySettingChanged() {
+  // Any setting changed. Home caches the folder list, the scan filters and
+  // the display flags, and the shell's IndexedStack never rebuilds it, so
+  // re-read the lot rather than guessing which setting it was.
+  Future<void> _onSettingsChanged() async {
+    if (libraryFolderListenable.value != _rootPath) {
+      _onLibraryFolderChanged(); // relists everything by itself
+      return;
+    }
+    await _onScanFiltersChanged();
     if (mounted) setState(() {});
   }
 

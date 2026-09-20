@@ -139,6 +139,7 @@ class ScanSettings {
       current[folderName] = consoleId;
     }
     await prefs.setString(_consoleOverridesKey, jsonEncode(current));
+    _publish();
   }
 
   /// Console id for a folder: override wins, else [ConsoleMap]; null unknown.

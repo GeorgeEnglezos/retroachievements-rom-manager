@@ -7,6 +7,7 @@ import '../services/game_lookup.dart';
 import '../services/library.dart';
 import '../services/playlist_store.dart';
 import '../services/scraper/scraped_store.dart';
+import '../services/settings_bus.dart';
 import '../widgets/bigpicture/couch_shelves.dart';
 import '../widgets/game_detail_dialog.dart';
 
@@ -28,7 +29,14 @@ class _RecommendationsScreenState extends State<RecommendationsScreen> {
   void initState() {
     super.initState();
     ScrapedStore.instance.load();
+    settingsChanged.addListener(_load);
     _load();
+  }
+
+  @override
+  void dispose() {
+    settingsChanged.removeListener(_load);
+    super.dispose();
   }
 
   Future<void> _load() async {
