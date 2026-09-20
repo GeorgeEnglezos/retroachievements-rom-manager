@@ -161,8 +161,12 @@ class _CouchHeroState extends State<CouchHero> {
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.bottomLeft,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 560),
+                      // Fixed width, not a max: FittedBox scales by the
+                      // child's intrinsic width, so a variable one made the two
+                      // banners shrink by different amounts and land on
+                      // different type and bar sizes.
+                      child: SizedBox(
+                        width: 560,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
