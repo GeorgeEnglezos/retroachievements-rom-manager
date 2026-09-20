@@ -1,10 +1,9 @@
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'playlist_store.dart';
+import 'pref_keys.dart';
 
-// Single-service key, so it stays private here (see pref_keys.dart).
-const _prefKey = 'cull_decided';
+const _prefKey = PrefKeys.cullDecided;
 
 enum CullVerdict { keep, trash, favorite }
 
@@ -26,9 +25,9 @@ class CullStore {
   final Set<String> _decided = {};
   bool _loaded = false;
 
-  // Only for tests, which reset the shared singleton between cases.
-  @visibleForTesting
-  void resetForTest() {
+  /// Empties the shared singleton. Used by a data wipe (see
+  /// BackupService.clearAll), and by tests between cases.
+  void clear() {
     _decided.clear();
     _loaded = false;
   }

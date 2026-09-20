@@ -9,12 +9,15 @@ import '../services/play_view.dart';
 import '../services/app_theme.dart';
 import '../services/backup_service.dart';
 import '../services/credentials.dart';
+import '../services/data_wipe.dart';
 import '../services/display_name.dart';
 import '../services/library.dart';
+import '../services/log_service.dart';
 import '../services/pref_keys.dart';
 import '../services/library_folder.dart';
 import '../services/scraper/gamelist_importer.dart';
 import '../services/scraper/scraped_store.dart';
+import '../widgets/clear_data_dialog.dart';
 import '../widgets/pick_library_folder.dart';
 import '../services/scan_settings.dart';
 import '../services/settings_bus.dart';
@@ -110,14 +113,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _clearAll() async {
-    final confirm = await showDialog<bool>(
+  /// Yes/no dialog for an action that destroys data, shared by every
+  /// destructive button in the Data section.
+  Future<bool> _confirm({
+    required String title,
+    required String message,
+    required String confirmLabel,
+  }) async {
+    final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Clear all scanned data?'),
-        content: const Text(
-            'This deletes every scan result. Your ROM files are untouched, '
-            'but everything must be re-scanned.'),
+        title: Text(title),
+        content: Text(message),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -125,21 +132,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Clear')),
+              child: Text(confirmLabel)),
         ],
       ),
     );
-    if (confirm != true) return;
-    await (widget.library ?? Library.instance).clear();
-    _toast('All scanned data cleared.');
+    return ok == true;
+  }
+
+  Future<void> _clearData() async {
+    final targets = await showClearDataDialog(context);
+    if (targets == null || targets.isEmpty || !mounted) return;
+    try {
+      await DataWipe(library: widget.library).clear(targets);
+      _toast('Deleted ${targets.length} of '
+          '${ClearTarget.values.length} kinds of data.');
+    } catch (e) {
+      LogService.error('Settings/clearData', 'wipe failed', err: e);
+      _toast('Could not delete everything, see the log for details.');
+    }
   }
 
   Future<void> _pruneMissing() async {
-    final removed =
-        await (widget.library ?? Library.instance).pruneMissingSystems();
-    _toast(removed == 0
-        ? 'No missing systems to remove.'
-        : 'Removed $removed missing system${removed == 1 ? '' : 's'}.');
+    final library = widget.library ?? Library.instance;
+    final missing = await library.missingSystemNames();
+    if (!mounted) return;
+    if (missing.isEmpty) {
+      _toast('No missing systems to remove.');
+      return;
+    }
+    // Naming them matters: an unplugged drive looks exactly like a deleted
+    // folder from here, and this delete can't be undone.
+    if (!await _confirm(
+      title: 'Remove ${missing.length} missing '
+          'system${missing.length == 1 ? '' : 's'}?',
+      message: 'These folders are not on disk right now:\n\n'
+          '${missing.join('\n')}\n\n'
+          'Their scan results will be deleted. If one of these is on a drive '
+          'that is currently unplugged, cancel and plug it back in first.',
+      confirmLabel: 'Remove',
+    )) {
+      return;
+    }
+    final removed = await library.pruneMissingSystems();
+    _toast('Removed $removed missing system${removed == 1 ? '' : 's'}.');
   }
 
   Future<void> _backup() async {
@@ -150,32 +185,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'rarm-backup-${DateTime.now().toIso8601String().split('T').first}.zip',
       );
       if (path == null) return; // cancelled
+      _toast('Backing up, this can take a while on a large library.');
       await const BackupService().create(path);
       _toast('Backup saved to $path');
     } catch (e) {
-      _toast('Backup failed');
+      LogService.error('Settings/backup', 'backup failed', err: e);
+      _toast('Backup failed, see the log for details.');
     }
   }
 
   Future<void> _restore() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Restore from backup?'),
-        content: const Text(
-            'This overwrites your current scan results, playlists, '
-            'and settings. Restart the app afterwards.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Restore')),
-        ],
-      ),
-    );
-    if (confirm != true) return;
+    if (!await _confirm(
+      title: 'Restore from backup?',
+      message: 'This replaces everything you have now: scan results, imported '
+          'metadata, cached artwork and settings. Your RetroAchievements API '
+          'key is not in a backup, so the one you have now is kept. Restart '
+          'the app afterwards.',
+      confirmLabel: 'Restore',
+    )) {
+      return;
+    }
     try {
       final res = await FilePicker.platform.pickFiles(
         dialogTitle: 'Choose a backup zip',
@@ -185,9 +214,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final path = res?.files.single.path;
       if (path == null) return; // cancelled
       await const BackupService().restore(path);
-      _toast('Restored. Restart the app to load the backup.');
+      if (!mounted) return;
+      // Every in-memory store still holds the pre-restore data, and the next
+      // save would write it back over the files just restored. Block the UI
+      // until the app is restarted rather than trust a dismissable toast.
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => const AlertDialog(
+          title: Text('Restored'),
+          content: Text('Close and reopen the app to load the backup. Using '
+              'it before then can overwrite what was just restored.'),
+        ),
+      );
+    } on FormatException {
+      _toast('That zip is not a RARM backup.');
     } catch (e) {
-      _toast('Restore failed');
+      LogService.error('Settings/restore', 'restore failed', err: e);
+      _toast('Restore failed, see the log for details.');
     }
   }
 
@@ -212,15 +256,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return;
     }
     if (result.matched.isEmpty && result.unmatched == 0) {
-      messenger.showSnackBar(
-          const SnackBar(content: Text('No gamelist.xml found in that folder')));
+      messenger.showSnackBar(SnackBar(
+          content: Text(result.errors == 0
+              ? 'No gamelist.xml or .dat found in that folder'
+              : 'Found ${result.errors} scrape file(s), but none could be '
+                  'read')));
       return;
     }
     await ScrapedStore.instance.putAll(result.matched);
     if (!mounted) return;
     messenger.showSnackBar(SnackBar(
         content: Text('Imported ${result.matched.length} games across '
-            '${result.systemCount} systems, ${result.unmatched} unmatched')));
+            '${result.systemCount} systems, ${result.unmatched} unmatched'
+            '${result.errors == 0 ? '' : ', ${result.errors} unreadable'}')));
   }
 
   void _toast(String message) {
@@ -546,15 +594,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _heading('Data',
-            'Back up or restore your library (scans, playlists, '
-            'settings). Clear scanned results to force a re-scan.'),
+            'Back up or restore everything the app has saved. Clear it all to '
+            'start over from a fresh scan.'),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
             Tooltip(
-              message: 'Writes a zip holding your scan results, playlists and '
-                  'settings. ROM files are not included.',
+              message: 'Writes a zip holding your scan results, imported '
+                  'metadata, cached artwork, playlists and settings. ROM '
+                  'files and your API key are not included.',
               child: OutlinedButton.icon(
                 onPressed: _backup,
                 icon: const Icon(Icons.save_alt),
@@ -562,8 +611,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             Tooltip(
-              message: 'Loads a backup zip, replacing everything you have now. '
-                  'Needs an app restart afterwards.',
+              message: 'Loads a backup zip, replacing everything you have '
+                  'now except your API key. Needs an app restart afterwards.',
               child: OutlinedButton.icon(
                 onPressed: _restore,
                 icon: const Icon(Icons.restore),
@@ -571,9 +620,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             Tooltip(
-              message: 'Reads gamelist.xml files from a Skraper or '
-                  'EmulationStation folder and attaches their box art and '
-                  'descriptions to ROMs you already scanned.',
+              message: 'Reads gamelist.xml and Logiqx .dat files from a '
+                  'Skraper or EmulationStation folder and attaches their box '
+                  'art and descriptions to ROMs you already scanned.',
               child: OutlinedButton.icon(
                 onPressed: _importScrapedData,
                 icon: const Icon(Icons.image_search),
@@ -603,11 +652,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             Tooltip(
-              message: 'Deletes every scan result, hash and match from the app. '
-                  'Your ROM files stay on disk, but you have to re-scan.',
+              message: 'Choose what to delete: scan results, playlists, '
+                  'imported metadata, cached artwork. Your ROM files, '
+                  'settings and login are never touched.',
               child: OutlinedButton(
-                onPressed: _clearAll,
-                child: const Text('Clear all scanned data'),
+                onPressed: _clearData,
+                child: const Text('Clear data…'),
               ),
             ),
           ],

@@ -7,7 +7,7 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    IgnoredCandidates.instance.resetForTest();
+    IgnoredCandidates.instance.clear();
   });
 
   test('a fresh store has no ignored keys', () async {
@@ -16,14 +16,14 @@ void main() {
 
   test('ignore adds the key and persists it across loads', () async {
     await IgnoredCandidates.instance.ignore('ra:1');
-    IgnoredCandidates.instance.resetForTest();
+    IgnoredCandidates.instance.clear();
     expect(await IgnoredCandidates.instance.load(), {'ra:1'});
   });
 
   test('unignore removes a previously ignored key', () async {
     await IgnoredCandidates.instance.ignore('ra:1');
     await IgnoredCandidates.instance.unignore('ra:1');
-    IgnoredCandidates.instance.resetForTest();
+    IgnoredCandidates.instance.clear();
     expect(await IgnoredCandidates.instance.load(), isEmpty);
   });
 }

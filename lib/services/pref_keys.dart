@@ -47,4 +47,14 @@ abstract final class PrefKeys {
   // Games dismissed from Home's mastery/beat spotlight banners (owned by
   // ignored_candidates.dart), a list of member keys.
   static const homeIgnoredSpotlights = 'home_ignored_spotlights';
+
+  // Games the elimination game has judged (owned by cull_store.dart).
+  static const cullDecided = 'cull_decided';
+
+  // Named collections of games (owned by playlist_store.dart).
+  static const playlists = 'playlists';
+
+  // Systems pinned to the top of the Library grid (owned by
+  // favorite_systems.dart).
+  static const favoriteSystems = 'favorite_systems';
 }

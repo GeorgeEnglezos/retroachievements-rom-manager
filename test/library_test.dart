@@ -293,6 +293,27 @@ void main() {
     expect(await lib.pruneMissingSystems(), 0);
   });
 
+  // What the settings screen names in its confirmation before pruning: an
+  // unplugged drive is indistinguishable from a deleted folder here, so the
+  // user has to see the list before the delete happens.
+  test('missingSystemNames lists what a prune would delete, without deleting',
+      () async {
+    final live = await Directory(p.join(tmp.path, 'snes')).create();
+    final gone = await Directory(p.join(tmp.path, 'ps4')).create();
+    for (final d in [live, gone]) {
+      await lib.save(SystemData(
+        systemId: '', systemPath: d.path,
+        dismissedDuplicatePairs: <String>{}, consoleId: 3,
+        games: [GameEntry.unscanned(p.join(d.path, 'game.iso'))],
+      ));
+    }
+    await gone.delete(recursive: true);
+
+    expect(await lib.missingSystemNames(), [gone.path]);
+    // Asking is not doing.
+    expect((await lib.load(gone.path)).games, hasLength(1));
+  });
+
   test('gamesFor of an unscanned path is empty', () async {
     expect(await lib.gamesFor(p.join(tmp.path, 'never')), isEmpty);
   });

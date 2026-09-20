@@ -56,8 +56,8 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    CullStore().resetForTest();
-    PlaylistStore().resetForTest();
+    CullStore().clear();
+    PlaylistStore().clear();
     // The search button opens a browser; swallow the platform call so the tap
     // exercises the deck, not url_launcher.
     messenger.setMockMethodCallHandler(launcher, (call) async => true);

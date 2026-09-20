@@ -338,7 +338,7 @@ void main() {
         tester.widget<UiProgressBar>(find.byType(UiProgressBar));
 
     testWidgets('a normal row keeps its award colour', (tester) async {
-      PlaylistStore().resetForTest();
+      PlaylistStore().clear();
       await tester.pumpWidget(hostRom(inProgress('C:\\roms\\snes\\plain.sfc')));
       await tester.pump();
       // In-progress, no award -> the supported hue, not the favorite ink.
@@ -346,7 +346,7 @@ void main() {
     });
 
     testWidgets('a favorite row flips the bar to favoriteInk', (tester) async {
-      final store = PlaylistStore()..resetForTest();
+      final store = PlaylistStore()..clear();
       final r = inProgress('C:\\roms\\snes\\fav.sfc');
       await store.toggleMember(
           favoritesId, memberKeyFor(gameId: r.gameId, filePath: r.filePath));

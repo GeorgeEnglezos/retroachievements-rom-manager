@@ -13,7 +13,7 @@ void main() {
         home: child,
       );
 
-  // The Data buttons ("Back up", "Clear all scanned data", …) say what they
+  // The Data buttons ("Back up", "Clear all data", …) say what they
   // do but not what it costs, so each one must carry a tooltip. Written as a
   // sweep so a newly added action without one turns this red.
   testWidgets('every Data action carries a tooltip', (tester) async {

@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
-const _key = 'favorite_systems';
+import 'pref_keys.dart';
+
+const _key = PrefKeys.favoriteSystems;
 
 /// Systems the user pinned to the top of the Library grid.
 ///

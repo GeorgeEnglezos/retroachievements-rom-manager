@@ -185,13 +185,12 @@ class _HomeScreenState extends State<HomeScreen> {
     firstScanRequest.addListener(_consumeFirstScanRequest);
     _lib.addListener(_onLibraryChanged);
     _playlistStore.addListener(_onPlaylistsChanged);
-    // Warm the shared scraped-data store so game dialogs can look it up.
-    // Rebuild once loaded: tiles read it synchronously for fallback thumbnails,
-    // and a cold start would otherwise show icon placeholders until an
-    // unrelated setState.
-    ScrapedStore.instance.load().then((_) {
-      if (mounted) setState(() {});
-    });
+    // Tiles read the shared scraped-data store synchronously for fallback
+    // thumbnails, so Home has to repaint whenever it changes: on the initial
+    // warm-up, and again after an import run from Settings or the wizard.
+    // Home sits in the shell's IndexedStack, so nothing else would rebuild it.
+    ScrapedStore.instance.addListener(_onScrapedChanged);
+    ScrapedStore.instance.load();
     _init();
   }
 
@@ -201,9 +200,14 @@ class _HomeScreenState extends State<HomeScreen> {
     firstScanRequest.removeListener(_consumeFirstScanRequest);
     _lib.removeListener(_onLibraryChanged);
     _playlistStore.removeListener(_onPlaylistsChanged);
+    ScrapedStore.instance.removeListener(_onScrapedChanged);
     _libraryDebounce?.cancel();
     _playlistDebounce?.cancel();
     super.dispose();
+  }
+
+  void _onScrapedChanged() {
+    if (mounted) setState(() {});
   }
 
   Timer? _libraryDebounce;

@@ -7,8 +7,8 @@ void main() {
   setUp(() {
     TestWidgetsFlutterBinding.ensureInitialized();
     SharedPreferences.setMockInitialValues({});
-    PlaylistStore().resetForTest();
-    CullStore().resetForTest();
+    PlaylistStore().clear();
+    CullStore().clear();
   });
 
   test('keep marks the key decided with no playlist side effect', () async {
@@ -106,7 +106,7 @@ void main() {
   test('decisions persist across a reload', () async {
     await CullStore().decide('ra:1', CullVerdict.keep);
     // Simulate a fresh app run over the same prefs: clear memory, keep prefs.
-    CullStore().resetForTest();
+    CullStore().clear();
     expect(await CullStore().decided(), {'ra:1'});
   });
 

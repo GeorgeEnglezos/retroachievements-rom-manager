@@ -2,17 +2,29 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// One archive member in flight: its zip path and raw bytes. Plain fields so it
-/// crosses the isolate boundary.
-typedef _Entry = ({String name, List<int> bytes});
+import 'pref_keys.dart';
 
-/// Backs up/restores all user data as one `.zip`: `<support>/data/` plus a
-/// `prefs.json` SharedPreferences snapshot. Pass [baseDir] in tests.
+/// Support-dir folders left out of a backup. Session logs are noise in one,
+/// and the current one is held open on Windows.
+const _keptDirs = {'logs'};
+
+/// The prefs snapshot's name inside the zip. A restore requires it, so it
+/// doubles as the marker that says a chosen zip really is a RARM backup.
+const _prefsEntry = 'prefs.json';
+
+/// Backs up and restores everything the app has written: the whole
+/// app-support directory (scans, imported metadata, cached artwork and icons)
+/// plus a `prefs.json` snapshot of settings. Deleting it is [DataWipe]'s job.
+/// Pass [baseDir] in tests.
+///
+/// The API key is never in a backup. It lives in [SecretStore], and the one
+/// path that does put it in prefs (a Linux box with no secret service) is
+/// filtered out here, so a backup file is safe to copy around.
 class BackupService {
   final Directory? baseDir;
   const BackupService({this.baseDir});
@@ -20,73 +32,107 @@ class BackupService {
   Future<Directory> _base() async =>
       baseDir ?? await getApplicationSupportDirectory();
 
-  /// Writes a backup zip to [outPath]. File reads are async and the zip is
-  /// encoded on a background isolate so a large library doesn't freeze the UI.
+  /// Writes a backup zip to [outPath]. Files are streamed in and out of the
+  /// archive one at a time, on a background isolate: a cached-artwork folder
+  /// runs to hundreds of MB, which neither fits in memory nor belongs on the
+  /// UI isolate. Throws on failure so the caller can report it.
   Future<void> create(String outPath) async {
     final base = await _base();
-    final entries = <_Entry>[];
-
-    final dataDir = Directory(p.join(base.path, 'data'));
-    if (await dataDir.exists()) {
-      await for (final f in dataDir.list(recursive: true)) {
-        if (f is! File) continue;
-        final rel = p.relative(f.path, from: base.path).replaceAll('\\', '/');
-        entries.add((name: rel, bytes: await f.readAsBytes()));
-      }
-    }
-
     final prefs = await SharedPreferences.getInstance();
-    final prefsMap = {for (final k in prefs.getKeys()) k: prefs.get(k)};
-    entries.add((name: 'prefs.json', bytes: utf8.encode(jsonEncode(prefsMap))));
-
-    final zip = await Isolate.run(() => _encode(entries));
-    await File(outPath).writeAsBytes(zip);
+    final snapshot = jsonEncode({
+      for (final k in prefs.getKeys())
+        if (k != PrefKeys.raApiKey) k: prefs.get(k),
+    });
+    final basePath = base.path;
+    await Isolate.run(() => _zip(basePath, outPath, snapshot));
   }
 
-  /// Restores a backup zip from [inPath], overwriting current data and prefs.
-  /// The app should be restarted afterwards so in-memory caches reload. Decoding
-  /// runs on a background isolate; entries that escape the base dir are rejected.
+  /// Restores a backup zip from [inPath], replacing current data and settings.
+  /// Throws [FormatException] if the zip holds no prefs snapshot, before
+  /// anything on disk is touched. The app should be restarted afterwards so
+  /// in-memory caches reload.
   Future<void> restore(String inPath) async {
     final base = await _base();
-    final bytes = await File(inPath).readAsBytes();
-    final entries = await Isolate.run(() => _decode(bytes));
+    final basePath = base.path;
+    final snapshot = await Isolate.run(() => _unzip(inPath, basePath));
+    await _restorePrefs(snapshot);
+  }
 
-    for (final entry in entries) {
-      if (entry.name == 'prefs.json') {
-        await _restorePrefs(utf8.decode(entry.bytes));
-        continue;
+  // Runs via Isolate.run: file IO plus zip compression, off the UI isolate.
+  // Every add is awaited; the encoder reads each file asynchronously, so a
+  // fire-and-forget add races the close and drops the entry.
+  static Future<void> _zip(
+      String basePath, String outPath, String prefsJson) async {
+    final encoder = ZipFileEncoder()..create(outPath);
+    try {
+      final base = Directory(basePath);
+      if (base.existsSync()) {
+        for (final f in base.listSync(recursive: true, followLinks: false)) {
+          if (f is! File) continue;
+          final rel = p.relative(f.path, from: basePath).replaceAll('\\', '/');
+          if (_keptDirs.contains(rel.split('/').first)) continue;
+          await encoder.addFile(f, rel);
+        }
       }
-      // Only restore data/* paths; ignore anything else for safety.
-      if (!entry.name.startsWith('data/')) continue;
-      final out = File(p.normalize(p.join(base.path, entry.name)));
-      // Zip Slip guard: a name like `data/../../x` normalises outside base.
-      if (!p.isWithin(base.path, out.path)) continue;
-      await out.parent.create(recursive: true);
-      await out.writeAsBytes(entry.bytes);
+      encoder.addArchiveFile(ArchiveFile.string(_prefsEntry, prefsJson));
+    } finally {
+      await encoder.close();
     }
   }
 
-  // CPU-bound zip work, run via Isolate.run so it stays off the UI isolate.
-  static List<int> _encode(List<_Entry> entries) {
-    final archive = Archive();
-    for (final e in entries) {
-      archive.addFile(ArchiveFile(e.name, e.bytes.length, e.bytes));
+  /// Extracts [inPath] over [basePath], replacing what is there, and returns
+  /// the prefs snapshot. Throws before deleting anything if the zip has none.
+  static String _unzip(String inPath, String basePath) {
+    final input = InputFileStream(inPath);
+    try {
+      final archive = ZipDecoder().decodeStream(input);
+      final snapshotEntry = archive.files
+          .where((e) => e.isFile && e.name == _prefsEntry)
+          .firstOrNull;
+      if (snapshotEntry == null) {
+        throw const FormatException('Not a RARM backup: no prefs.json');
+      }
+      final snapshot = utf8.decode(snapshotEntry.readBytes() ?? const []);
+
+      // Replace, don't merge: a system or cached file the backup doesn't know
+      // about would otherwise survive as a ghost alongside the restored data.
+      final base = Directory(basePath);
+      if (base.existsSync()) {
+        for (final entity in base.listSync(followLinks: false)) {
+          if (_keptDirs.contains(p.basename(entity.path))) continue;
+          entity.deleteSync(recursive: true);
+        }
+      }
+
+      for (final entry in archive) {
+        if (!entry.isFile || entry.name == _prefsEntry) continue;
+        final out = File(p.normalize(p.join(basePath, entry.name)));
+        // Zip Slip guard: a name like `data/../../x` normalises outside base.
+        if (!p.isWithin(basePath, out.path)) continue;
+        out.parent.createSync(recursive: true);
+        final sink = OutputFileStream(out.path);
+        try {
+          entry.writeContent(sink);
+        } finally {
+          sink.closeSync();
+        }
+      }
+      return snapshot;
+    } finally {
+      input.closeSync();
     }
-    return ZipEncoder().encode(archive);
   }
 
-  static List<_Entry> _decode(List<int> bytes) {
-    final archive = ZipDecoder().decodeBytes(bytes);
-    return [
-      for (final e in archive)
-        if (e.isFile) (name: e.name, bytes: e.content as List<int>),
-    ];
-  }
-
+  /// Replaces every pref with the snapshot's, keeping the API key: it was
+  /// never in the backup, so applying one must not sign the user out.
   Future<void> _restorePrefs(String json) async {
     final map = jsonDecode(json) as Map<String, dynamic>;
     final prefs = await SharedPreferences.getInstance();
+    final apiKey = prefs.getString(PrefKeys.raApiKey);
+    await prefs.clear();
+    if (apiKey != null) await prefs.setString(PrefKeys.raApiKey, apiKey);
     for (final e in map.entries) {
+      if (e.key == PrefKeys.raApiKey) continue;
       final v = e.value;
       // A prefs double that happens to be whole (5.0) round-trips
       // through JSON as an int. Harmless here; no double prefs exist.

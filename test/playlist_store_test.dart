@@ -6,7 +6,7 @@ void main() {
   setUp(() {
     TestWidgetsFlutterBinding.ensureInitialized();
     SharedPreferences.setMockInitialValues({});
-    PlaylistStore().resetForTest();
+    PlaylistStore().clear();
   });
 
   test('Favorites is seeded and listed first', () async {

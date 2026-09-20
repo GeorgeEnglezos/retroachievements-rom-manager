@@ -4,6 +4,10 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+/// Cache key, and the name of the folder and index file it writes under the
+/// app-support dir. Named so a data wipe can find them (see data_wipe.dart).
+const raImageCacheKey = 'raImageCache';
+
 /// App-wide cache manager for every RA artwork request (thumbnails, achievement
 /// icons, the profile avatar). Replaces DefaultCacheManager, which caps its
 /// index at 200 objects and stores bytes in the OS temp dir — so a library of
@@ -11,10 +15,10 @@ import 'package:path_provider/path_provider.dart';
 /// and Windows Storage Sense could wipe even those. This raises the cap and
 /// roots the byte store in the persistent app-support dir (beside the index).
 final raCacheManager = CacheManager(Config(
-  'raImageCache',
+  raImageCacheKey,
   maxNrOfCacheObjects: 20000,
   stalePeriod: const Duration(days: 365),
-  fileSystem: _AppSupportFileSystem('raImageCache'),
+  fileSystem: _AppSupportFileSystem(raImageCacheKey),
 ));
 
 /// Mirrors flutter_cache_manager's IOFileSystem but roots the byte store in the
