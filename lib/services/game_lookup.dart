@@ -34,7 +34,6 @@ void applyGameInfo(RomResult rom, GameInfo? info) {
   rom.setUpdated = info.setUpdated;
   rom.points = info.points;
   rom.numPlayersCasual = info.numPlayersCasual;
-  rom.numPlayersHardcore = info.numPlayersHardcore;
 }
 
 /// Maps a user's [progress] for a game onto a [RomResult]. Null clears the
@@ -114,7 +113,6 @@ GameInfo gameInfoFromCache(RaGameListEntry e, {int? consoleId, GameInfo? saved})
     setUpdated: e.dateModified ?? old?.setUpdated,
     points: e.points ?? old?.points,
     numPlayersCasual: old?.numPlayersCasual ?? 0,
-    numPlayersHardcore: old?.numPlayersHardcore ?? 0,
   );
 }
 

@@ -79,7 +79,6 @@ class RomResult {
   DateTime? setUpdated;
   int? points;
   int? numPlayersCasual;
-  int? numPlayersHardcore;
   int? earnedAchievements;
   int? earnedHardcore;
   // Highest RA award (beaten/completed/mastered); null until progress loads.

@@ -707,8 +707,6 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
         _stat(context, '${rom.achievementCount ?? 0}', 'Achievements'),
         if ((rom.points ?? 0) > 0) _stat(context, '${rom.points}', 'Points'),
         _stat(context, _fmt(rom.numPlayersCasual), 'Players'),
-        if ((rom.numPlayersHardcore ?? 0) > 0)
-          _stat(context, _fmt(rom.numPlayersHardcore), 'Hardcore'),
       ],
     );
   }

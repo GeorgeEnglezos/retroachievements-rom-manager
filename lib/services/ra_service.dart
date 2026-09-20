@@ -133,8 +133,9 @@ class GameInfo {
   final DateTime? setUpdated;
   // Sum of achievement points; null without data (RA has no total field).
   final int? points;
+  // RA's NumDistinctPlayersCasual. Its Hardcore twin is a deprecated alias
+  // returning the same total, so there is only one player count worth keeping.
   final int numPlayersCasual;
-  final int numPlayersHardcore;
 
   GameInfo({
     required this.gameId,
@@ -154,7 +155,6 @@ class GameInfo {
     this.setUpdated,
     this.points,
     this.numPlayersCasual = 0,
-    this.numPlayersHardcore = 0,
   });
 
   factory GameInfo.fromJson(Map<String, dynamic> j) => GameInfo(
@@ -179,7 +179,6 @@ class GameInfo {
             : null,
         points: (j['points'] as num?)?.toInt(),
         numPlayersCasual: (j['numPlayersCasual'] as num?)?.toInt() ?? 0,
-        numPlayersHardcore: (j['numPlayersHardcore'] as num?)?.toInt() ?? 0,
       );
 
   Map<String, dynamic> toJson() => {
@@ -200,7 +199,6 @@ class GameInfo {
         'setUpdated': setUpdated?.toIso8601String(),
         'points': points,
         'numPlayersCasual': numPlayersCasual,
-        'numPlayersHardcore': numPlayersHardcore,
       };
 }
 
@@ -630,7 +628,6 @@ class RaService {
       setUpdated: setUpdated,
       points: points,
       numPlayersCasual: asInt('NumDistinctPlayersCasual'),
-      numPlayersHardcore: asInt('NumDistinctPlayersHardcore'),
     );
 
     final earnedCasual = (data['NumAwardedToUser'] as num?)?.toInt() ?? 0;

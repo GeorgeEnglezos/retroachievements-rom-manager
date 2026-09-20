@@ -375,7 +375,6 @@ class _FolderViewState extends State<FolderView> {
       released: r.released,
       points: r.points,
       numPlayersCasual: r.numPlayersCasual ?? 0,
-      numPlayersHardcore: r.numPlayersHardcore ?? 0,
     );
   }
 
