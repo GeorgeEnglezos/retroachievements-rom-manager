@@ -9,6 +9,7 @@ import '../services/disc_grouping.dart';
 import '../services/switch_grouping.dart';
 import '../services/app_mode.dart';
 import '../services/file_actions.dart';
+import '../services/game_lookup.dart';
 import '../services/library.dart';
 import '../services/console_image.dart';
 import '../services/mastery_effort.dart';
@@ -28,14 +29,16 @@ import 'ra_image.dart';
 import 'rom_actions.dart';
 import 'rom_progress.dart';
 
-/// The label for a "beaten"-defining RetroAchievements type, or null for a
-/// standard or missable achievement. RA marks the achievements that finish a
-/// game as `progression` (steps required) plus a `win_condition` (the finale);
-/// earning all of them is what awards the "beaten" badge. Pure and top-level so
-/// the set of RA type strings that count stays unit-testable.
-String? beatTypeLabel(String? type) => switch (type) {
+/// The label for a marked RetroAchievements type, or null for a standard
+/// achievement. RA marks the achievements that finish a game as `progression`
+/// (steps required) plus a `win_condition` (the finale); earning all of them is
+/// what awards the "beaten" badge. `missable` is one a playthrough can put out
+/// of reach. Pure and top-level so the set of RA type strings that count stays
+/// unit-testable.
+String? achievementTypeLabel(String? type) => switch (type) {
       'win_condition' => 'Win condition',
       'progression' => 'Progression',
+      'missable' => 'Missable',
       _ => null,
     };
 
@@ -194,13 +197,29 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
 
       final (username, apiKey) = creds;
       final service = RaService(username: username, apiKey: apiKey);
-      final (_, progress) = await service.getGameInfoAndUserProgress(gameId);
+      final (info, progress) = await service.getGameInfoAndUserProgress(gameId);
 
       if (current()) {
         setState(() {
+          // Scans skip this call (one request per matched ROM), so opening the
+          // game is what fills in box art, screenshots, genre, developer and
+          // publisher. Applied here and persisted below so it is fetched once,
+          // not on every open.
+          applyGameInfo(rom, info);
+          rom.earnedAchievements = progress.earnedAchievements;
+          rom.earnedHardcore = progress.earnedHardcore;
+          rom.highestAward = progress.highestAward;
+          rom.highestAwardDate = progress.highestAwardDate;
+          rom.lastPlayed = progress.lastPlayed;
           _achievements = progress.achievements;
           _achievementsLoading = false;
         });
+        await saveGameDetail(
+          rom.filePath,
+          info: info,
+          progress: progress,
+          library: Library.instance,
+        );
       }
     } catch (_) {
       if (current()) {
@@ -894,28 +913,52 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     );
   }
 
-  /// The marker for a "beaten"-defining achievement: the win condition that
-  /// finishes the game, or a progression step on the way there. Null for
-  /// standard and missable achievements. The win condition borrows the same
-  /// accent as the "Beaten" badge shown elsewhere so the two read as one idea.
-  ({String label, IconData? icon, String? emoji, Color color, double ring})?
-      _beatMarker(Achievement a) {
-    final label = beatTypeLabel(a.type);
+  /// The marker for a typed achievement: the win condition that finishes the
+  /// game, a progression step on the way there, or a missable one. Null for
+  /// standard achievements. The win condition borrows the same accent as the
+  /// "Beaten" badge shown elsewhere so the two read as one idea.
+  ({
+    String label,
+    String mark,
+    IconData? icon,
+    String? emoji,
+    Color color,
+    double ring
+  })? _typeMarker(Achievement a) {
+    final label = achievementTypeLabel(a.type);
     if (label == null) return null;
     final ui = context.ui;
     // The win condition finishes the game: gold (the app's mastery/completion
     // accent), a crown, and a thicker ring so it clearly outranks the
     // progression steps, which get a lighter flag. No Material crown glyph
-    // exists, so the crown is an emoji (gold in both themes).
-    return a.type == 'win_condition'
-        ? (label: label, emoji: '👑', icon: null, color: ui.warning, ring: 3)
-        : (
-            label: label,
-            icon: Icons.flag_outlined,
-            emoji: null,
-            color: ui.accent,
-            ring: 2,
-          );
+    // exists, so the crown is an emoji (gold in both themes). Missable is a
+    // caution, not a rank, so it takes the danger red.
+    return switch (a.type) {
+      'win_condition' => (
+          label: label,
+          mark: '★',
+          emoji: '👑',
+          icon: null,
+          color: ui.warning,
+          ring: 3,
+        ),
+      'missable' => (
+          label: label,
+          mark: '⚠',
+          emoji: null,
+          icon: Icons.warning_amber_rounded,
+          color: kDangerColor,
+          ring: 2,
+        ),
+      _ => (
+          label: label,
+          mark: '★',
+          emoji: null,
+          icon: Icons.flag_outlined,
+          color: ui.accent,
+          ring: 2,
+        ),
+    };
   }
 
   // media.retroachievements.org badge (locked variant when unearned).
@@ -943,7 +986,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
 
   Widget _buildBadgeRow(Achievement achievement) {
     final image = _badgeImage(achievement, 40);
-    final marker = _beatMarker(achievement);
+    final marker = _typeMarker(achievement);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -986,7 +1029,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
 
   Widget _buildBadgeTile(Achievement achievement, double size) {
     final image = _badgeImage(achievement, size);
-    final marker = _beatMarker(achievement);
+    final marker = _typeMarker(achievement);
     Widget tile =
         achievement.isEarned ? image : Opacity(opacity: 0.5, child: image);
 
@@ -1032,7 +1075,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     final buf = StringBuffer();
     buf.writeln(a.title);
     if (a.description.isNotEmpty) buf.writeln(a.description);
-    if (_beatMarker(a) case final m?) buf.writeln('★ ${m.label}');
+    if (_typeMarker(a) case final m?) buf.writeln('${m.mark} ${m.label}');
     buf.write('${a.points} pts');
     if (a.isEarned) buf.write(' · Earned ${_fmtDate(a.dateEarned!)}');
     buf.write('\n${_fmt(a.numAwarded)} players earned this');

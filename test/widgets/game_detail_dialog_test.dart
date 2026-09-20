@@ -17,15 +17,15 @@ RomResult _disc(String name) =>
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  group('beatTypeLabel', () {
-    test('only the beaten-defining RA types are labelled', () {
+  group('achievementTypeLabel', () {
+    test('the marked RA types are labelled', () {
       // These exact strings are RA's `Type` values; the highlight keys off them.
-      expect(beatTypeLabel('win_condition'), 'Win condition');
-      expect(beatTypeLabel('progression'), 'Progression');
-      // Standard, missable, and legacy-null achievements get no marker.
-      expect(beatTypeLabel('missable'), isNull);
-      expect(beatTypeLabel(null), isNull);
-      expect(beatTypeLabel(''), isNull);
+      expect(achievementTypeLabel('win_condition'), 'Win condition');
+      expect(achievementTypeLabel('progression'), 'Progression');
+      expect(achievementTypeLabel('missable'), 'Missable');
+      // Standard and legacy-null achievements get no marker.
+      expect(achievementTypeLabel(null), isNull);
+      expect(achievementTypeLabel(''), isNull);
     });
   });
 
