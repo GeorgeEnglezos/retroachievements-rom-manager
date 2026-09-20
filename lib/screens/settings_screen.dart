@@ -360,7 +360,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             dense: true,
             title: const Text('Show full system names'),
             value: mode == NameMode.systemName,
-            onChanged: (on) => saveNameMode(
+            onChanged: (on) => nameModeListenable.save(
                 on ? NameMode.systemName : NameMode.folderName),
           ),
         ),
@@ -405,7 +405,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
             selected: {mode},
             showSelectedIcon: false,
-            onSelectionChanged: (s) => saveAppMode(s.first),
+            onSelectionChanged: (s) => appModeListenable.save(s.first),
           ),
         ),
       ],
@@ -429,7 +429,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
             selected: {action},
             showSelectedIcon: false,
-            onSelectionChanged: (s) => saveRomTapAction(s.first),
+            onSelectionChanged: (s) => romTapListenable.save(s.first),
           ),
         ),
       ],
@@ -511,7 +511,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _ThemeSwatch(
                   theme: theme,
                   selected: theme == current,
-                  onTap: () => saveAppTheme(theme),
+                  onTap: () => appThemeListenable.save(theme),
                 ),
             ],
           ),

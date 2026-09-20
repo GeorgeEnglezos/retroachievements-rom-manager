@@ -6,7 +6,7 @@ import 'package:gamepads/gamepads.dart' show GamepadButton, GamepadAxis;
 /// the current one in [GamepadMapper.activeDirection] and the widget layer
 /// drives edge-fire + auto-repeat off it. The rest are discrete presses that
 /// [GamepadMapper.onButton] returns once, on the press edge.
-enum GamepadAction { up, down, left, right, confirm, back, menu, tabLeft, tabRight }
+enum GamepadAction { up, down, left, right, confirm, back }
 
 /// Turns the `gamepads` package's *normalized* button/axis events into
 /// [GamepadAction]s. The package's [GamepadNormalizer] already resolves the
@@ -98,13 +98,9 @@ class GamepadMapper {
         return GamepadAction.confirm;
       case GamepadButton.b:
         return GamepadAction.back;
-      case GamepadButton.start:
-        return GamepadAction.menu;
-      case GamepadButton.leftBumper:
-        return GamepadAction.tabLeft;
-      case GamepadButton.rightBumper:
-        return GamepadAction.tabRight;
       default:
+        // Start and the bumpers land here: nothing binds them, so they map to
+        // no action rather than dispatching an intent no one handles.
         return null;
     }
   }

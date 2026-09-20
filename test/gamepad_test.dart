@@ -68,12 +68,12 @@ void main() {
       expect(m.onButton(GamepadButton.a, 0.0), isNull); // released
     });
 
-    test('b, start and shoulder bumpers map', () {
+    test('b maps to back; start and the bumpers are unbound', () {
       final m = _mapper();
       expect(m.onButton(GamepadButton.b, 1.0), GamepadAction.back);
-      expect(m.onButton(GamepadButton.start, 1.0), GamepadAction.menu);
-      expect(m.onButton(GamepadButton.leftBumper, 1.0), GamepadAction.tabLeft);
-      expect(m.onButton(GamepadButton.rightBumper, 1.0), GamepadAction.tabRight);
+      expect(m.onButton(GamepadButton.start, 1.0), isNull);
+      expect(m.onButton(GamepadButton.leftBumper, 1.0), isNull);
+      expect(m.onButton(GamepadButton.rightBumper, 1.0), isNull);
     });
 
     test('an unmapped button is ignored, not crashed', () {

@@ -30,13 +30,13 @@ void main() {
       exit(0);
     }
     await LogService.init();
-    await initNameMode();
+    await nameModeListenable.init();
     await initCombineSystems();
-    await initAppTheme();
+    await appThemeListenable.init();
     await initUiScale();
-    await initAppMode();
+    await appModeListenable.init();
     await initPlayView();
-    await initRomTap();
+    await romTapListenable.init();
     await initLibraryFolder();
     await Library.instance.init();
     final prefs = await SharedPreferences.getInstance();

@@ -25,7 +25,7 @@ void main() {
     await ScanSettings.addExcludedFiles([r'C:\roms\snes\bad.sfc']);
     expect(fired, 3);
 
-    saveNameMode(NameMode.folderName);
+    nameModeListenable.save(NameMode.folderName);
     expect(fired, 4);
 
     // Prefs with no listenable of their own (username, API key).
