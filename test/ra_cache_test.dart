@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:rarm/services/ra_service.dart';
 import 'package:rarm/services/ra_cache.dart';
 
@@ -119,6 +121,59 @@ void main() {
     expect(ra.hashCalls, 1);
   });
 
+  // Back-dates the stored file so the next cold instance sees an expired list.
+  Future<void> ageConsole(int consoleId, Duration by) async {
+    final f = File(p.join(tmp.path, 'data', 'ra_cache', 'console_$consoleId.json'));
+    final data = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+    data['fetchedAt'] =
+        DateTime.parse(data['fetchedAt'] as String).subtract(by).toIso8601String();
+    await f.writeAsString(jsonEncode(data));
+  }
+
+  test('a list within the TTL is not re-pulled', () async {
+    await RaCache(baseDir: tmp).storeConsole(1, [entry(7, ['aa'])]);
+    final cache = RaCache(baseDir: tmp);
+    final ra = _FakeRa();
+    expect(await cache.resolveGameId(ra, 1, 'aa'), 7);
+    expect(ra.listCalls, 0);
+  });
+
+  test('a list past the TTL is re-pulled once, not once per ROM', () async {
+    await RaCache(baseDir: tmp).storeConsole(1, [entry(7, ['aa'])]);
+    await ageConsole(1, RaCache.listTtl + const Duration(days: 1));
+
+    final cache = RaCache(baseDir: tmp);
+    // RA has since added a second dump for game 7 and a whole new game.
+    final ra = _FakeRa()..onList = [entry(7, ['aa', 'bb']), entry(9, ['cc'])];
+
+    expect(await cache.resolveGameId(ra, 1, 'bb'), 7); // only the fresh list has it
+    expect(await cache.resolveGameId(ra, 1, 'cc'), 9);
+    expect(await cache.resolveGameId(ra, 1, 'aa'), 7);
+    expect(ra.listCalls, 1);
+    expect(ra.hashCalls, 0); // all three resolved offline off the new list
+  });
+
+  // A dead network on a stale console must not re-request the multi-megabyte
+  // list for every ROM in the folder.
+  test('a failed re-pull is attempted once and leaves the old list usable',
+      () async {
+    await RaCache(baseDir: tmp).storeConsole(1, [entry(7, ['aa'])]);
+    await ageConsole(1, RaCache.listTtl + const Duration(days: 1));
+
+    final cache = RaCache(baseDir: tmp);
+    final ra = _FakeRa()..listThrows = true;
+    expect(await cache.resolveGameId(ra, 1, 'aa'), 7); // stale list still serves
+    expect(await cache.resolveGameId(ra, 1, 'aa'), 7);
+    expect(ra.listCalls, 1);
+  });
+
+  test('a console with no stored list is pulled on first resolve', () async {
+    final cache = RaCache(baseDir: tmp);
+    final ra = _FakeRa()..onList = [entry(7, ['aa'])];
+    expect(await cache.resolveGameId(ra, 1, 'aa'), 7);
+    expect(ra.listCalls, 1);
+  });
+
   // Null means "RA has no such game" and is persisted as a confirmed no-match,
   // which unfetched-only rescans skip forever. A dead network or a timed-out
   // request must not look like that.
@@ -137,6 +192,9 @@ class _FakeRa extends RaService {
   Map<String, int> onHash = {};
   int hashCalls = 0;
   bool hashThrows = false;
+  List<RaGameListEntry> onList = const [];
+  int listCalls = 0;
+  bool listThrows = false;
 
   @override
   Future<int?> getGameIdByHash(String md5Hash) async {
@@ -146,5 +204,9 @@ class _FakeRa extends RaService {
   }
 
   @override
-  Future<List<RaGameListEntry>> getGameList(int consoleId) async => const [];
+  Future<List<RaGameListEntry>> getGameList(int consoleId) async {
+    listCalls++;
+    if (listThrows) throw TimeoutException('dead socket');
+    return onList;
+  }
 }

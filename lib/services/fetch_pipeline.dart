@@ -162,3 +162,25 @@ Future<CompletionSweep> fetchCompletionSweep(
     userMessage: null,
   );
 }
+
+/// The [UserProgress] for [gameId] read out of a completion [sweep]. A game the
+/// sweep doesn't mention was never played, so it reads as zero rather than as
+/// unknown. [achievements] carries the stored per-achievement list over: the
+/// sweep is one call for the whole account and has no such detail, and dropping
+/// it would blank an already-populated detail dialog.
+UserProgress progressFromSweep(
+  int gameId,
+  Map<int, CompletedGame> sweep, {
+  List<Achievement> achievements = const [],
+}) {
+  final c = sweep[gameId];
+  return UserProgress(
+    gameId: gameId,
+    earnedAchievements: c?.numAwarded ?? 0,
+    earnedHardcore: c?.numAwardedHardcore ?? 0,
+    lastPlayed: c?.lastPlayed,
+    highestAward: c?.highestAward ?? RaAward.none,
+    highestAwardDate: c?.highestAwardDate,
+    achievements: achievements,
+  );
+}

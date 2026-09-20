@@ -386,9 +386,11 @@ class _FolderViewState extends State<FolderView> {
     if (ScanRun.busy) return;
     final plan = await showFetchTasksDialog(context, global: false);
     if (plan == null || !mounted) return;
+    // Phase one, local and free: pick up files added or removed since the last
+    // run so the scan below sees them.
     if (plan.refresh) {
       await _refreshFiles();
-      return;
+      if (!mounted) return;
     }
     await _runFetch(plan);
   }
@@ -456,6 +458,20 @@ class _FolderViewState extends State<FolderView> {
     run.start(label: widget.title);
 
     try {
+      // One account-wide sweep for the run, shared with every folder below.
+      // Null when it failed, which tells the runner to leave stored progress
+      // alone rather than write zeros over it.
+      Map<int, CompletedGame>? progressByGameId;
+      if (plan.progress && service != null) {
+        final sweep = await fetchCompletionSweep(service, 'FolderView/fetch');
+        progressByGameId = sweep.byGameId;
+        if (!mounted) return;
+        if (sweep.userMessage != null) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(sweep.userMessage!)));
+        }
+      }
+
       for (final sysPath in widget.folderPaths) {
         if (!mounted || run.cancelled) break;
         // Each folder is mapped on its own, so a combined view maps every row
@@ -474,6 +490,7 @@ class _FolderViewState extends State<FolderView> {
           consoleId: widget.consoleId,
           metadataProvider: metadataProvider,
           metadataCache: MetadataCache(),
+          progressByGameId: progressByGameId,
           logContext: 'FolderView/fetch',
           onTargets: run.addTotal,
           onEntry: (entry) {
@@ -499,11 +516,6 @@ class _FolderViewState extends State<FolderView> {
         // compressed GC/Wii dump; tell the user it cannot be matched yet.
         if (result.unhashable.isNotEmpty && Platform.isAndroid && mounted) {
           await showAndroidDiscHashingUnsupported(context);
-        }
-        if (result.message != null && mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(result.message!)));
         }
       }
     } finally {

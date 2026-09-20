@@ -68,6 +68,44 @@ void applyBasicInfo(RomResult rom, RaGameListEntry basic) {
   rom.points = basic.points;
 }
 
+/// A [GameInfo] built from the offline `GetGameList` cache entry, for scans
+/// that skip the per-game detail call. It carries everything a library row
+/// draws (title, icon, achievement count, points); box art, screenshots,
+/// genre, developer, publisher and the achievement list stay null until the
+/// detail dialog fetches them for the one game the user actually opened.
+///
+/// [saved] is what a previous scan stored for the same file, and the rich
+/// fields it holds are carried over. Without that, re-hashing a library would
+/// write the thin list entry straight over the entry and delete box art the
+/// user already fetched. The list stays authoritative for what it does track:
+/// title, achievement count, points, and the set's revision date.
+GameInfo gameInfoFromCache(RaGameListEntry e, {int? consoleId, GameInfo? saved}) {
+  final old = saved?.gameId == e.gameId ? saved : null;
+  return GameInfo(
+    gameId: e.gameId,
+    title: e.title,
+    consoleName:
+        ConsoleMap.nameFor(e.consoleId ?? consoleId) ?? old?.consoleName ?? '',
+    consoleId: e.consoleId ?? consoleId,
+    achievementCount: e.achievementCount,
+    imageIcon: e.imageIcon ?? old?.imageIcon,
+    imageBoxArt: old?.imageBoxArt,
+    imageTitle: old?.imageTitle,
+    imageIngame: old?.imageIngame,
+    publisher: old?.publisher,
+    developer: old?.developer,
+    genre: old?.genre,
+    released: old?.released,
+    setCreated: old?.setCreated,
+    // GetGameList's DateModified is the set's last revision, the same thing
+    // the per-game call's latest achievement DateModified approximates.
+    setUpdated: e.dateModified ?? old?.setUpdated,
+    points: e.points ?? old?.points,
+    numPlayersCasual: old?.numPlayersCasual ?? 0,
+    numPlayersHardcore: old?.numPlayersHardcore ?? 0,
+  );
+}
+
 /// Metadata providers that were removed from the app but may have left
 /// persisted [GameEntry.metadata] behind. Their blobs are stale (raw entity
 /// ids as publishers, dead lookups) and must not gate a row out of localOnly;
@@ -130,19 +168,47 @@ RomResult romFromEntry(GameEntry entry, {int? consoleId, String? consoleName}) {
               gameId: gameId, earnedAchievements: 0, earnedHardcore: 0),
     );
 
+/// The scanned system folder holding [filePath], or null when none does.
+Future<String?> _systemPathFor(String filePath, Library library) async =>
+    (await library.summaries())
+        .where((s) => p.isWithin(s.systemPath, filePath))
+        .firstOrNull
+        ?.systemPath;
+
 /// Rebuilds a full [RomResult] for [filePath] from the per-system files.
 /// Null when the file has no matched game; caller falls back.
 Future<RomResult?> resolveRom(
   String filePath, {
   required Library library,
 }) async {
-  final summaries = await library.summaries();
-  final system =
-      summaries.where((s) => p.isWithin(s.systemPath, filePath)).firstOrNull;
-  if (system == null) return null;
+  final systemPath = await _systemPathFor(filePath, library);
+  if (systemPath == null) return null;
 
-  final data = await library.load(system.systemPath);
+  final data = await library.load(systemPath);
   final entry = data.games.where((g) => g.filePath == filePath).firstOrNull;
   if (entry == null || !entry.matched || entry.gameInfo == null) return null;
   return romFromEntry(entry);
+}
+
+/// Persists freshly fetched [info] and [progress] onto the stored entry for
+/// [filePath]. Scans deliberately skip the per-game detail call (one request
+/// per matched ROM), so this is what makes box art, screenshots, genre and the
+/// achievement list stick after the detail dialog has fetched them once for a
+/// game the user actually opened. No-op when the file isn't in a scanned
+/// system, or was never matched.
+Future<void> saveGameDetail(
+  String filePath, {
+  required GameInfo info,
+  required UserProgress progress,
+  required Library library,
+}) async {
+  final systemPath = await _systemPathFor(filePath, library);
+  if (systemPath == null) return;
+
+  final data = await library.load(systemPath);
+  final i = data.games.indexWhere((g) => g.filePath == filePath);
+  if (i == -1 || !data.games[i].matched) return;
+  final games = [...data.games];
+  games[i] = games[i].copyWith(gameInfo: info, progress: progress);
+  await library.save(data.copyWith(games: games));
 }

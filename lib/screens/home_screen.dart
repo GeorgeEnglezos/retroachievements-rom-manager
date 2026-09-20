@@ -12,6 +12,7 @@ import '../models/folder_stats.dart';
 import '../models/home_sort.dart';
 import '../services/credentials.dart';
 import '../services/folder_grouping.dart';
+import '../services/fetch_pipeline.dart';
 import '../services/fetch_run.dart';
 import '../services/fetch_scope.dart';
 import '../services/app_mode.dart';
@@ -299,13 +300,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // One-shot handoff from the setup wizard: a full first sweep, no dialog.
-  // `match` already pulls each matched game's progress, so no `progress` flag.
+  // `progress` is explicit: matching no longer pulls each game's progress
+  // itself, so without it a first scan would show a library at zero for an
+  // account that has been playing for years.
   Future<void> _consumeFirstScanRequest() async {
     if (!firstScanRequest.value) return;
     firstScanRequest.value = false;
     if (!mounted) return;
     await _scanAllSystems(
-      plan: const FetchPlan(scope: FetchScope.all, match: true),
+      plan: const FetchPlan(
+          scope: FetchScope.all, match: true, progress: true),
     );
   }
 
@@ -471,7 +475,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Re-reads the root for added/removed subfolders AND re-walks file lists,
   // then reports the combined diff.
-  Future<void> _refreshFolders() async {
+  /// [quiet] skips the summary snackbar, for when this is the first phase of a
+  /// larger run rather than something the user asked for on its own.
+  Future<void> _refreshFolders({bool quiet = false}) async {
     final root = _rootPath;
     if (root == null) return;
     if (!Directory(root).existsSync()) {
@@ -496,7 +502,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     await _lib.refreshMissingSystems();
     final diff = await _refreshFiles();
-    if (!mounted) return;
+    if (!mounted || quiet) return;
 
     final parts = <String>[];
     if (foldersAdded > 0 || foldersRemoved > 0) {
@@ -659,10 +665,13 @@ class _HomeScreenState extends State<HomeScreen> {
     plan ??= await showFetchTasksDialog(context, global: true);
     if (plan == null || !mounted) return;
 
-    // Refresh is standalone: no RA calls, no scope.
+    // Phase one, local and free: re-walk the disk so folders and files added
+    // since the last run are part of this one. Quiet, because the scan that
+    // follows has its own bar and its own summary; two snackbars in a row for
+    // one press is noise.
     if (plan.refresh) {
-      await _refreshFolders();
-      return;
+      await _refreshFolders(quiet: true);
+      if (!mounted) return;
     }
 
     final dirs = List<Directory>.from(_subfolders);
@@ -770,6 +779,19 @@ class _HomeScreenState extends State<HomeScreen> {
       final detailCache = <int, (GameInfo, UserProgress)>{};
       final metadataProvider = await savedMetadataProvider();
 
+      // One completion sweep for the whole run: ceil(playedGames/500) requests
+      // no matter how many folders or ROMs follow, shared with every folder
+      // below. A failed sweep leaves this null, and the runner then writes no
+      // progress at all rather than zeroing what is already stored. Inside the
+      // bar, because on a big account it is the slowest thing before hashing.
+      Map<int, CompletedGame>? progressByGameId;
+      if (plan.progress && service != null) {
+        final sweep = await fetchCompletionSweep(service, 'HomeScreen/scan');
+        progressByGameId = sweep.byGameId;
+        if (!mounted) return;
+        if (sweep.userMessage != null) _notify(sweep.userMessage!);
+      }
+
       for (final dir in targets) {
         if (!mounted || run.cancelled) break;
         setState(() {
@@ -788,6 +810,7 @@ class _HomeScreenState extends State<HomeScreen> {
           detailCache: detailCache,
           service: service,
           metadataProvider: metadataProvider,
+          progressByGameId: progressByGameId,
           logContext: 'HomeScreen/scan',
           onEntry: (_) {
             if (!mounted) return;
@@ -796,10 +819,6 @@ class _HomeScreenState extends State<HomeScreen> {
           },
         );
         _setUpdates.addAll(result.setUpdates);
-        if (result.message != null && mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(result.message!)));
-        }
         if (mounted) {
           setState(() => _stats[dir.path] = _statsFrom(result));
         }
