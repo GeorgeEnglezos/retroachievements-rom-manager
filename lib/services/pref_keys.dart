@@ -22,6 +22,9 @@ abstract final class PrefKeys {
   // Cleaning vs play surface (owned by app_mode.dart).
   static const appMode = 'app_mode';
 
+  // What clicking a ROM does: details dialog or launch (owned by rom_tap.dart).
+  static const romTapAction = 'rom_tap_action';
+
   // Set once the first-run wizard completes or is skipped. Unset = show it.
   static const setupDone = 'setup_done';
 

@@ -91,16 +91,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _open(RomResult rom) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => GameDetailDialog(
-        rom: rom,
-        store: _store,
-        onDeleted: _load,
-        onPlaylistChanged: _load,
-        scraped: ScrapedStore.instance.get(rom.filePath),
-      ),
-    );
+    openRomOnTap(context, rom,
+        store: _store, onDeleted: _load, onPlaylistChanged: _load);
   }
 
   @override

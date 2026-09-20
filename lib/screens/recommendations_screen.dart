@@ -53,16 +53,8 @@ class _RecommendationsScreenState extends State<RecommendationsScreen> {
         ..earnedAchievements = e.progress?.earnedAchievements ?? 0;
 
   void _open(RomResult rom) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => GameDetailDialog(
-        rom: rom,
-        store: _store,
-        onDeleted: _load,
-        onPlaylistChanged: _load,
-        scraped: ScrapedStore.instance.get(rom.filePath),
-      ),
-    );
+    openRomOnTap(context, rom,
+        store: _store, onDeleted: _load, onPlaylistChanged: _load);
   }
 
   @override

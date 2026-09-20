@@ -17,6 +17,7 @@ import '../services/scraper/gamelist_importer.dart';
 import '../services/scraper/scraped_store.dart';
 import '../widgets/pick_library_folder.dart';
 import '../services/scan_settings.dart';
+import '../services/rom_tap.dart';
 import '../widgets/system_settings_section.dart';
 import '../widgets/ui/ui_card.dart';
 import '../widgets/ui_scale_control.dart';
@@ -405,6 +406,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _romTapSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _heading('Clicking a game',
+            'What a plain click on a game does. Ctrl/shift-click still '
+            'multi-selects, and Play stays on the right-click menu either way.'),
+        ValueListenableBuilder<RomTapAction>(
+          valueListenable: romTapListenable,
+          builder: (context, action, _) => SegmentedButton<RomTapAction>(
+            segments: const [
+              ButtonSegment(
+                  value: RomTapAction.detail, label: Text('Open details')),
+              ButtonSegment(value: RomTapAction.play, label: Text('Play')),
+            ],
+            selected: {action},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) => saveRomTapAction(s.first),
+          ),
+        ),
+      ],
+    );
+  }
+
   // One switch bound to a single PlayView flag.
   Widget _playSwitch(
     String title,
@@ -660,6 +685,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _scanFiltersSection(),
       _displaySection(),
       _modeSection(),
+      _romTapSection(),
       _playViewSection(),
       _themeSection(),
       _dataSection(),

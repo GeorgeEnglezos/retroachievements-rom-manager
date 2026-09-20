@@ -4,7 +4,7 @@ import '../models/rom_result.dart';
 import '../services/member_key.dart';
 import '../services/play_view.dart';
 import '../services/playlist_store.dart';
-import '../services/scraper/scraped_store.dart';
+import '../services/rom_tap.dart';
 import '../theme/ui_tokens.dart';
 import 'game_cover.dart';
 import 'game_detail_dialog.dart';
@@ -183,19 +183,18 @@ class RomGridItem extends StatelessWidget {
     final shift = HardwareKeyboard.instance.isShiftPressed;
     if (ctrl || shift || isSelectMode) {
       onSelectToggle?.call(isShift: shift);
-    } else if (onOpen != null) {
+    } else if (onOpen != null && romTapListenable.value != RomTapAction.play) {
+      // A screen-supplied open (Home shelves, big picture) still wins while
+      // clicks open details; on Play the launch takes over.
       onOpen!();
-    } else if (canOpenDetail(rom)) {
-      showDialog(
-        context: context,
-        builder: (_) => GameDetailDialog(
-          rom: rom,
-          store: store,
-          onDeleted: onDeleted,
-          onPlaylistChanged: onPlaylistChanged,
-          onFetch: onFetch,
-          scraped: ScrapedStore.instance.get(rom.filePath),
-        ),
+    } else {
+      openRomOnTap(
+        context,
+        rom,
+        store: store,
+        onDeleted: onDeleted,
+        onPlaylistChanged: onPlaylistChanged,
+        onFetch: onFetch,
       );
     }
   }

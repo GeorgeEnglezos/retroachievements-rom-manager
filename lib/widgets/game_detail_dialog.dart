@@ -15,6 +15,7 @@ import '../services/mastery_effort.dart';
 import '../services/member_key.dart';
 import '../services/playlist_store.dart';
 import '../services/ra_service.dart';
+import '../services/rom_tap.dart';
 import '../services/scraper/scraped_store.dart';
 import '../theme/ui_tokens.dart';
 import 'confirm_recycle_dialog.dart';
@@ -44,6 +45,42 @@ bool canOpenDetail(RomResult rom) =>
     rom.status == RomStatus.supported ||
     rom.isLocalOnly ||
     ScrapedStore.instance.get(rom.filePath) != null;
+
+/// A plain click on [rom]: launch it, or open its details, per the saved tap
+/// setting (see rom_tap.dart). Both ROM tiles and the screens that open the
+/// dialog straight from a click funnel through here, so the setting reaches
+/// every click on a game.
+Future<void> openRomOnTap(
+  BuildContext context,
+  RomResult rom, {
+  required PlaylistStore store,
+  VoidCallback? onDeleted,
+  VoidCallback? onPlaylistChanged,
+  VoidCallback? onFetch,
+}) async {
+  if (romTapListenable.value == RomTapAction.play) {
+    await RomActions(
+      rom: rom,
+      store: store,
+      onDeleted: onDeleted,
+      onPlaylistChanged: onPlaylistChanged,
+      onFetch: onFetch,
+    ).handle(context, 'play');
+    return;
+  }
+  if (!canOpenDetail(rom)) return;
+  await showDialog<void>(
+    context: context,
+    builder: (_) => GameDetailDialog(
+      rom: rom,
+      store: store,
+      onDeleted: onDeleted,
+      onPlaylistChanged: onPlaylistChanged,
+      onFetch: onFetch,
+      scraped: ScrapedStore.instance.get(rom.filePath),
+    ),
+  );
+}
 
 class GameDetailDialog extends StatefulWidget {
   final RomResult rom;
