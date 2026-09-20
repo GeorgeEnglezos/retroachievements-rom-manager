@@ -48,11 +48,11 @@ void main() {
     expect(await fresh.lookupGameId('aa', 1), 7);
   });
 
-  test('hasConsole false before store, true after', () async {
+  test('a console has no entries before store, and does after', () async {
     final cache = RaCache(baseDir: tmp);
-    expect(await cache.hasConsole(1), isFalse);
+    expect(await cache.entryForGame(7, 1), isNull);
     await cache.storeConsole(1, [entry(7, ['aa'])]);
-    expect(await cache.hasConsole(1), isTrue);
+    expect(await cache.entryForGame(7, 1), isNotNull);
   });
 
   test('concurrent cold lookups both resolve (no load race)', () async {

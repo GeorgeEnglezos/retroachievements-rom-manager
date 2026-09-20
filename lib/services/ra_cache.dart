@@ -116,11 +116,6 @@ class RaCache {
     }));
   }
 
-  Future<bool> hasConsole(int consoleId) async {
-    await _ensureLoaded(consoleId);
-    return _byGame.containsKey(consoleId);
-  }
-
   /// True when this console has no stored list, or one older than [listTtl].
   Future<bool> isStale(int consoleId) async {
     await _ensureLoaded(consoleId);

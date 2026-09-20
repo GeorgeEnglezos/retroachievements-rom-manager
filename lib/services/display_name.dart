@@ -29,7 +29,7 @@ String displayNameFor({
 }
 
 /// Loads the saved name mode, defaulting to [NameMode.systemName].
-Future<NameMode> loadNameMode() async {
+Future<NameMode> _loadNameMode() async {
   final prefs = await SharedPreferences.getInstance();
   return NameMode.values.asNameMap()[prefs.getString(_nameModeKey)] ??
       NameMode.systemName;
@@ -38,7 +38,7 @@ Future<NameMode> loadNameMode() async {
 /// Reads the saved name mode into [nameModeListenable]. Call once at startup so
 /// the first build uses the saved value.
 Future<void> initNameMode() async {
-  nameModeListenable.value = await loadNameMode();
+  nameModeListenable.value = await _loadNameMode();
 }
 
 /// Persists the chosen name mode and publishes it to listeners.
