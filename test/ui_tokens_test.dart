@@ -36,15 +36,15 @@ void main() {
     }
   });
 
-  test('dark is the candy cartridge palette with cream ink', () {
+  test('dark is the RetroAchievements site scheme', () {
     const dark = UiTokens.dark;
-    expect(dark.background, const Color(0xFF191627));
-    expect(dark.surface, const Color(0xFF241F37));
-    expect(dark.surfaceAlt, const Color(0xFF312B4A));
-    expect(dark.accent, const Color(0xFFEF80A9));
-    // Ink is cream, not the accent: widgets that fill with one and paint the
-    // other on top depend on the two staying different.
-    expect(dark.text, const Color(0xFFF8F1E3));
+    expect(dark.background, const Color(0xFF1A1A1A));
+    expect(dark.surface, const Color(0xFF232323));
+    expect(dark.surfaceAlt, const Color(0xFF2A2A2A));
+    expect(dark.accent, const Color(0xFFCC9900));
+    // Ink is the site's grey, not the gold: widgets that fill with one and
+    // paint the other on top depend on the two staying different.
+    expect(dark.text, const Color(0xFFC8C8C8));
     expect(dark.text, isNot(dark.accent));
   });
 
