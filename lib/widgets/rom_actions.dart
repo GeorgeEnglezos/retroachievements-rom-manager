@@ -15,6 +15,7 @@ import '../services/library.dart';
 import '../services/log_service.dart';
 import '../services/console_map.dart';
 import 'confirm_recycle_dialog.dart';
+import 'game_detail_dialog.dart';
 import 'positioned_menu.dart';
 import 'ra_image.dart';
 import '../services/emulator_store.dart';
@@ -90,6 +91,8 @@ class RomActions {
         : await EmulatorStore.emulatorsForConsole(consoleId);
     if (!context.mounted) return;
     final choice = await showPositionedMenu<String>(context, position, [
+        // The only way into the dialog once a click is set to launch.
+        if (canOpenDetail(rom)) _item('detail', Icons.info_outline, 'Game details'),
         // Beta: only a handful of emulators have been tested end to end.
         _item('play', Icons.play_arrow, 'Play (beta)'),
         if (alternatives.length > 1)
@@ -161,6 +164,18 @@ class RomActions {
         messenger.showSnackBar(SnackBar(content: Text(text)));
 
     switch (choice) {
+      case 'detail':
+        await showDialog<void>(
+          context: context,
+          builder: (_) => GameDetailDialog(
+            rom: rom,
+            store: store,
+            onDeleted: onDeleted,
+            onPlaylistChanged: onPlaylistChanged,
+            onFetch: onFetch,
+            scraped: ScrapedStore.instance.get(rom.filePath),
+          ),
+        );
       case 'play':
         await _play(context, snack);
       case 'play_with':

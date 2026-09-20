@@ -135,7 +135,10 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   List<Achievement>? _achievements;
   bool _achievementsLoading = false;
   String? _achievementsError;
-  bool _listView = false;
+  // Null until the user picks a view. A grid tile carries its title, points and
+  // type only in a hover tooltip, which a touch screen has no way to show, so
+  // phones start on the list instead.
+  bool? _listView;
   bool _isFavorite = false;
 
   String get _memberKey =>
@@ -323,18 +326,31 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
           ),
         ),
         // Play sits beside Favorite; Delete keeps its own row so three labels
-        // never have to share a narrow (phone) dialog width.
+        // never have to share a narrow (phone) dialog width. Narrower still
+        // (a phone's half-width panel) even two labels stop fitting, so they
+        // stack.
         Padding(
           padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          child: Row(
-            children: [
-              Expanded(child: _playButton()),
-              if (showPlaylist) ...[
+          child: LayoutBuilder(builder: (context, c) {
+            if (!showPlaylist) return _playButton();
+            if (c.maxWidth < 240) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _playButton(),
+                  const SizedBox(height: 8),
+                  _favoriteButton(),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: _playButton()),
                 const SizedBox(width: 8),
                 Expanded(child: _favoriteButton()),
               ],
-            ],
-          ),
+            );
+          }),
         ),
         if (!gamingMode)
           Padding(
@@ -405,16 +421,25 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   bool get _hasAchievementPanel =>
       rom.status == RomStatus.supported && rom.gameId != null;
 
+  static bool _isPhone(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < kBreakCompact;
+
+  // Below the desktop breakpoint the dialog drops its wide margins and fills
+  // the screen, which is the only way two panels fit on a phone.
+  static bool _isFullBleed(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < kBreakWide;
+
   @override
-  Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= kBreakWide;
-    return wide && _hasAchievementPanel
-        ? _splitLayout(context)
-        : _singleLayout(context);
-  }
+  Widget build(BuildContext context) =>
+      _hasAchievementPanel ? _splitLayout(context) : _singleLayout(context);
 
   Widget _singleLayout(BuildContext context) {
+    // A phone has no width to spare: Dialog's default 40dp side inset eats a
+    // fifth of the screen, leaving the meta rows cramped.
+    final phone = _isPhone(context);
     return Dialog(
+      insetPadding: EdgeInsets.symmetric(
+          horizontal: phone ? 8 : 40, vertical: phone ? 16 : 24),
       backgroundColor: context.ui.surface,
       shape: RoundedRectangleBorder(
         borderRadius: context.ui.roundLg,
@@ -442,19 +467,27 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     );
   }
 
-  // Wide screens split the modal into two cards side by side: the game on the
-  // left, your achievements on the right, each scrolling on its own.
+  // A matched game always splits into two cards side by side: the game on the
+  // left, your achievements on the right, each scrolling on its own. A desktop
+  // window centres the pair; anything narrower gives them the whole screen,
+  // since two panels in a phone-width dialog have nothing to spare.
   Widget _splitLayout(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final full = _isFullBleed(context);
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
+      insetPadding: EdgeInsets.all(full ? 8 : 24),
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: 940,
-          maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+          maxWidth: full ? double.infinity : 940,
+          maxHeight: full ? double.infinity : size.height * 0.85,
         ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          // Stretched, the two panels are the same height and fill the screen;
+          // on a desktop they size to their content instead.
+          crossAxisAlignment:
+              full ? CrossAxisAlignment.stretch : CrossAxisAlignment.start,
           children: [
             Expanded(
               flex: 5,
@@ -472,13 +505,13 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
                 ),
               ),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: full ? 8 : 16),
             Expanded(
               flex: 5,
               child: _panel(
                 key: const Key('gameAchievementsPanel'),
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: EdgeInsets.all(_panelPad(context)),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
@@ -499,6 +532,10 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     );
   }
 
+  // Inner padding of a panel. Half a phone's width is too little to spend 20 a
+  // side on whitespace.
+  double _panelPad(BuildContext context) => _isFullBleed(context) ? 12 : 20;
+
   Widget _panel({required Key key, required Widget child}) => UiCard(
         key: key,
         padding: EdgeInsets.zero,
@@ -509,7 +546,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
 
   Widget _buildInfo(BuildContext context, {bool withProgress = true}) {
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(_panelPad(context)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -713,8 +750,12 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   }
 
   Widget _buildStats(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
+    // Wrap, not Row: three labelled figures do not fit across a panel that is
+    // half a phone wide, and a Row would overflow rather than fold.
+    return Wrap(
+      alignment: WrapAlignment.spaceAround,
+      spacing: 16,
+      runSpacing: 8,
       children: [
         _stat(context, '${rom.achievementCount ?? 0}', 'Achievements'),
         if ((rom.points ?? 0) > 0) _stat(context, '${rom.points}', 'Points'),
@@ -744,31 +785,41 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
       ('Set released', rom.setCreated != null ? _fmtDate(rom.setCreated!) : null),
       ('Set updated', rom.setUpdated != null ? _fmtDate(rom.setUpdated!) : null),
     ];
-    return Column(
-      children: [
-        for (final (label, value) in rows)
-          if (value != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 88,
-                    child: Text(label,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.primary,
-                            )),
-                  ),
-                  Expanded(
-                    child: Text(value,
-                        style: Theme.of(context).textTheme.bodySmall),
-                  ),
-                ],
+    final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.primary,
+        );
+    final valueStyle = Theme.of(context).textTheme.bodySmall;
+    // An 88dp label gutter leaves nothing for the value in a panel that is half
+    // a phone wide, so below that the label moves above its value.
+    return LayoutBuilder(builder: (context, c) {
+      final stacked = c.maxWidth < 240;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final (label, value) in rows)
+            if (value != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: stacked
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(label, style: labelStyle),
+                          Text(value, style: valueStyle),
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                              width: 88, child: Text(label, style: labelStyle)),
+                          Expanded(child: Text(value, style: valueStyle)),
+                        ],
+                      ),
               ),
-            ),
-      ],
-    );
+        ],
+      );
+    });
   }
 
   Widget _buildProgressSection(BuildContext context) {
@@ -840,6 +891,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     }
 
     final effort = masteryEffort(list);
+    final listView = _listView ?? _isPhone(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -856,7 +908,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
               ),
             ),
             UiSegmented<bool>(
-              value: _listView,
+              value: listView,
               onChanged: (v) => setState(() => _listView = v),
               segments: const [
                 (value: false, label: '', icon: Icons.grid_view),
@@ -874,7 +926,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
             ),
           ),
         const SizedBox(height: 8),
-        if (_listView)
+        if (listView)
           Column(children: list.map(_buildBadgeRow).toList())
         else
           // Grow each tile so a whole number of columns fills the panel width

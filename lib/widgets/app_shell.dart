@@ -321,14 +321,21 @@ class _Sidebar extends StatelessWidget {
             child:
                 Text('RARM', style: ui.display.copyWith(fontSize: 18)),
           ),
-          for (int i = 0; i < dests.length; i++)
-            _NavTile(
-              label: dests[i].$1,
-              icon: dests[i].$2,
-              selected: i == index,
-              onTap: () => onSelect(i),
+          // Expanded + ListView: the tiles take the leftover height and scroll
+          // when the window is too short, instead of overflowing the Column.
+          Expanded(
+            child: ListView(
+              children: [
+                for (int i = 0; i < dests.length; i++)
+                  _NavTile(
+                    label: dests[i].$1,
+                    icon: dests[i].$2,
+                    selected: i == index,
+                    onTap: () => onSelect(i),
+                  ),
+              ],
             ),
-          const Spacer(),
+          ),
           // Version + author pinned bottom-left. Desktop only: mobile has no
           // left rail to hang it on.
           Padding(
