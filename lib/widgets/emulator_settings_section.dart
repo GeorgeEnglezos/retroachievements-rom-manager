@@ -8,6 +8,7 @@ import '../services/emulator_store.dart';
 import 'pick_emulator.dart';
 import 'ui/auto_save_field.dart';
 import 'ui/ui_collapsible_card.dart';
+import 'ui/ui_focusable.dart';
 
 /// The emulator inventory: the programs themselves, not what runs what. Which
 /// console each one drives is picked per system on the Systems tab, which this
@@ -160,16 +161,18 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
           else ...[
             // Fullscreen is a desktop CLI flag; hidden on Android.
             if (!Platform.isAndroid)
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: const Text('Launch games in fullscreen'),
-                value: data.launchFullscreen,
-                onChanged: (v) async {
-                  await EmulatorStore.setLaunchFullscreen(v ?? false);
-                  await _refresh();
-                },
+              UiFocusZoom(
+                child: CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text('Launch games in fullscreen'),
+                  value: data.launchFullscreen,
+                  onChanged: (v) async {
+                    await EmulatorStore.setLaunchFullscreen(v ?? false);
+                    await _refresh();
+                  },
+                ),
               ),
             if (data.emulators.isEmpty)
               const Text(
@@ -182,34 +185,36 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
                   key: ValueKey(emu.id),
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(emu.name),
-                      subtitle: Text(
-                        emu.exePath,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: Platform.isAndroid
-                                ? 'Change app'
-                                : 'Change exe',
-                            icon: const Icon(Icons.edit_outlined),
-                            onPressed: () => _editEmulatorExe(emu),
-                          ),
-                          IconButton(
-                            tooltip: 'Remove',
-                            icon: const Icon(Icons.delete_outline),
-                            onPressed: () async {
-                              await EmulatorStore.removeEmulator(emu.id);
-                              await _refresh();
-                            },
-                          ),
-                        ],
+                    UiFocusZoom(
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(emu.name),
+                        subtitle: Text(
+                          emu.exePath,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: Platform.isAndroid
+                                  ? 'Change app'
+                                  : 'Change exe',
+                              icon: const Icon(Icons.edit_outlined),
+                              onPressed: () => _editEmulatorExe(emu),
+                            ),
+                            IconButton(
+                              tooltip: 'Remove',
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () async {
+                                await EmulatorStore.removeEmulator(emu.id);
+                                await _refresh();
+                              },
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     // Args are desktop-only; Android launches via intent.
@@ -232,36 +237,40 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                OutlinedButton.icon(
-                  onPressed: _scanning ? null : _addEmulator,
-                  icon: const Icon(Icons.add),
-                  label: Text(
-                    Platform.isAndroid
-                        ? 'Add emulator (pick app)'
-                        : 'Add emulator (browse exe)',
+                UiFocusZoom(
+                  child: OutlinedButton.icon(
+                    onPressed: _scanning ? null : _addEmulator,
+                    icon: const Icon(Icons.add),
+                    label: Text(
+                      Platform.isAndroid
+                          ? 'Add emulator (pick app)'
+                          : 'Add emulator (browse exe)',
+                    ),
                   ),
                 ),
                 // Desktop searches a folder of exes; Android sweeps the
                 // installed apps, so there's nothing to browse for.
-                OutlinedButton.icon(
-                  onPressed: _scanning
-                      ? null
-                      : Platform.isAndroid
-                      ? _detectEmulatorApps
-                      : _scanForEmulators,
-                  icon: _scanning
-                      ? const SizedBox(
-                          height: 16,
-                          width: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.travel_explore),
-                  label: Text(
-                    _scanning
-                        ? 'Scanning…'
+                UiFocusZoom(
+                  child: OutlinedButton.icon(
+                    onPressed: _scanning
+                        ? null
                         : Platform.isAndroid
-                        ? 'Detect installed emulators'
-                        : 'Scan a folder for emulators',
+                        ? _detectEmulatorApps
+                        : _scanForEmulators,
+                    icon: _scanning
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.travel_explore),
+                    label: Text(
+                      _scanning
+                          ? 'Scanning…'
+                          : Platform.isAndroid
+                          ? 'Detect installed emulators'
+                          : 'Scan a folder for emulators',
+                    ),
                   ),
                 ),
               ],

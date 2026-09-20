@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../services/log_service.dart';
 import '../theme/ui_tokens.dart';
+import '../widgets/ui/ui_focusable.dart';
 
 class LogsScreen extends StatefulWidget {
   const LogsScreen({super.key});
@@ -103,26 +104,32 @@ class _LogsScreenState extends State<LogsScreen> {
         title: wide ? const Text('Logs') : null,
         actions: [
           if (_selectedLogFile == null)
-            IconButton(
-              onPressed: LogService.clear,
-              icon: const Icon(Icons.delete_outline),
-              tooltip: 'Clear current session logs',
+            UiFocusZoom(
+              child: IconButton(
+                onPressed: LogService.clear,
+                icon: const Icon(Icons.delete_outline),
+                tooltip: 'Clear current session logs',
+              ),
             ),
           if (_selectedLogContent != null)
-            IconButton(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: _selectedLogContent!));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Copied to clipboard')),
-                );
-              },
-              icon: const Icon(Icons.copy),
-              tooltip: 'Copy log to clipboard',
+            UiFocusZoom(
+              child: IconButton(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: _selectedLogContent!));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Copied to clipboard')),
+                  );
+                },
+                icon: const Icon(Icons.copy),
+                tooltip: 'Copy log to clipboard',
+              ),
             ),
-          IconButton(
-            onPressed: _refreshFileList,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh file list',
+          UiFocusZoom(
+            child: IconButton(
+              onPressed: _refreshFileList,
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh file list',
+            ),
           ),
         ],
       ),
@@ -232,32 +239,34 @@ class _FileListTile extends StatelessWidget {
     final textColor = scheme.onSurfaceVariant;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected
-                ? scheme.primary.withValues(alpha: 0.15)
-                : Colors.transparent,
-            borderRadius: context.ui.roundSm,
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 14, color: iconColor ?? textColor),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: selected ? scheme.primary : textColor,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+      child: UiFocusZoom(
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: selected
+                  ? scheme.primary.withValues(alpha: 0.15)
+                  : Colors.transparent,
+              borderRadius: context.ui.roundSm,
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 14, color: iconColor ?? textColor),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: selected ? scheme.primary : textColor,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

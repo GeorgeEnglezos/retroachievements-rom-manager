@@ -15,6 +15,7 @@ import '../screens/storage_screen.dart';
 import '../services/update_check.dart';
 import '../theme/ui_tokens.dart';
 import 'update_banner.dart';
+import 'ui/ui_focusable.dart';
 
 /// The shell's nav destinations (label, icon), indexed by the ints in
 /// [kGamingNav] / [kCleaningNav]. Public so a route pushed over the shell (a
@@ -373,21 +374,23 @@ class _NavTile extends StatelessWidget {
       child: Semantics(
         button: true,
         selected: selected,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: ui.roundMd,
-          child: Container(
-            decoration: BoxDecoration(
-              color: selected ? ui.navSelectedBg : Colors.transparent,
-              borderRadius: ui.roundMd,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                Icon(icon, size: 18, color: fg),
-                const SizedBox(width: 10),
-                Text(label, style: ui.labelCaps.copyWith(color: fg)),
-              ],
+        child: UiFocusZoom(
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: ui.roundMd,
+            child: Container(
+              decoration: BoxDecoration(
+                color: selected ? ui.navSelectedBg : Colors.transparent,
+                borderRadius: ui.roundMd,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(icon, size: 18, color: fg),
+                  const SizedBox(width: 10),
+                  Text(label, style: ui.labelCaps.copyWith(color: fg)),
+                ],
+              ),
             ),
           ),
         ),
@@ -423,21 +426,23 @@ class _BottomNav extends StatelessWidget {
                   button: true,
                   selected: i == index,
                   label: dests[i].$1,
-                  child: InkWell(
-                    onTap: () => onSelect(i),
-                    borderRadius: ui.roundMd,
-                    child: Container(
-                      margin:
-                          const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: i == index ? ui.navSelectedBg : Colors.transparent,
-                        borderRadius: ui.roundMd,
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Icon(
-                        dests[i].$2,
-                        color: i == index ? ui.navSelectedFg : ui.muted,
-                        size: 22,
+                  child: UiFocusZoom(
+                    child: InkWell(
+                      onTap: () => onSelect(i),
+                      borderRadius: ui.roundMd,
+                      child: Container(
+                        margin:
+                            const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: i == index ? ui.navSelectedBg : Colors.transparent,
+                          borderRadius: ui.roundMd,
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Icon(
+                          dests[i].$2,
+                          color: i == index ? ui.navSelectedFg : ui.muted,
+                          size: 22,
+                        ),
                       ),
                     ),
                   ),
@@ -517,17 +522,19 @@ class ShellRailTile extends StatelessWidget {
         label: label,
         child: Tooltip(
           message: label,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: ui.roundMd,
-            child: Container(
-              height: 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: selected ? ui.navSelectedBg : Colors.transparent,
-                borderRadius: ui.roundMd,
+          child: UiFocusZoom(
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: ui.roundMd,
+              child: Container(
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: selected ? ui.navSelectedBg : Colors.transparent,
+                  borderRadius: ui.roundMd,
+                ),
+                child: Icon(icon, size: 22, color: fg),
               ),
-              child: Icon(icon, size: 22, color: fg),
             ),
           ),
         ),

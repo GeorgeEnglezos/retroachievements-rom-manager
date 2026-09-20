@@ -48,6 +48,7 @@ import '../widgets/ra_image.dart';
 import '../widgets/require_credentials.dart';
 import 'playlist_view.dart';
 import 'scan_health_screen.dart';
+import '../widgets/ui/ui_focusable.dart';
 
 /// Set by the setup wizard to ask for a full first sweep, and cleared by
 /// whichever [HomeScreen] takes it.
@@ -596,26 +597,30 @@ class _HomeScreenState extends State<HomeScreen> {
       items: [
         PopupMenuItem(
           value: 'favorite',
-          child: Row(
-            children: [
-              Icon(favorite ? Icons.favorite : Icons.favorite_border,
-                  size: 18, color: kFavoriteColor),
-              const SizedBox(width: 8),
-              Flexible(
-                  child:
-                      Text(favorite ? 'Remove from favorites' : 'Favorite')),
-            ],
+          child: UiFocusZoom(
+            child: Row(
+              children: [
+                Icon(favorite ? Icons.favorite : Icons.favorite_border,
+                    size: 18, color: kFavoriteColor),
+                const SizedBox(width: 8),
+                Flexible(
+                    child:
+                        Text(favorite ? 'Remove from favorites' : 'Favorite')),
+              ],
+            ),
           ),
         ),
         if (paths.length == 1)
           PopupMenuItem(
             value: 'ignore',
-            child: Row(
-              children: [
-                const Icon(Icons.visibility_off, size: 18),
-                const SizedBox(width: 8),
-                Flexible(child: Text('Ignore "$name"')),
-              ],
+            child: UiFocusZoom(
+              child: Row(
+                children: [
+                  const Icon(Icons.visibility_off, size: 18),
+                  const SizedBox(width: 8),
+                  Flexible(child: Text('Ignore "$name"')),
+                ],
+              ),
             ),
           ),
       ],
@@ -887,12 +892,16 @@ class _HomeScreenState extends State<HomeScreen> {
           content: Text('Found gamelist.xml for $found '
               'folder(s). Import artwork & details to fill gaps?'),
           actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Skip')),
-            FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Import')),
+            UiFocusZoom(
+              child: TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Skip')),
+            ),
+            UiFocusZoom(
+              child: FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Import')),
+            ),
           ],
         ),
       );
@@ -1018,13 +1027,15 @@ class _HomeScreenState extends State<HomeScreen> {
       if (narrow || landscape) ..._shortcutChips(),
       // Scan health is a desktop-sized report; phones don't get the button.
       if (!narrow && !landscape && !gamingMode)
-        IconButton(
-          style: style,
-          icon: const Icon(Icons.health_and_safety_outlined),
-          // Deliberately stays enabled during a scan; it's read-only.
-          tooltip: 'Scan health & export',
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const ScanHealthScreen()),
+        UiFocusZoom(
+          child: IconButton(
+            style: style,
+            icon: const Icon(Icons.health_and_safety_outlined),
+            // Deliberately stays enabled during a scan; it's read-only.
+            tooltip: 'Scan health & export',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ScanHealthScreen()),
+            ),
           ),
         ),
     ];
@@ -1039,49 +1050,55 @@ class _HomeScreenState extends State<HomeScreen> {
       ];
 
   Widget _shortcutButton(IconData icon, String label, VoidCallback? onTap) =>
-      IconButton(
-        style: IconButton.styleFrom(
-          minimumSize: const Size(40, 40),
-          padding: EdgeInsets.zero,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      UiFocusZoom(
+        child: IconButton(
+          style: IconButton.styleFrom(
+            minimumSize: const Size(40, 40),
+            padding: EdgeInsets.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          icon: Icon(icon),
+          tooltip: label,
+          onPressed: onTap,
         ),
-        icon: Icon(icon),
-        tooltip: label,
-        onPressed: onTap,
       );
 
   Widget _buildSortButton() {
-    return PopupMenuButton<HomeSort>(
-      tooltip: 'Sort folders',
-      child: Container(
-        height: 40,
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.sort, size: 18),
-          const SizedBox(width: 4),
-          Text(homeSortLabel(_homeSort), style: const TextStyle(fontSize: 13)),
-        ]),
+    return UiFocusZoom(
+      child: PopupMenuButton<HomeSort>(
+        tooltip: 'Sort folders',
+        child: Container(
+          height: 40,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.sort, size: 18),
+            const SizedBox(width: 4),
+            Text(homeSortLabel(_homeSort), style: const TextStyle(fontSize: 13)),
+          ]),
+        ),
+        onSelected: (v) async {
+          setState(() => _homeSort = v);
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(PrefKeys.homeSort, v.name);
+        },
+        itemBuilder: (_) => [
+          for (final sort in HomeSort.values)
+            PopupMenuItem<HomeSort>(
+              value: sort,
+              child: UiFocusZoom(
+                child: Row(children: [
+                  if (_homeSort == sort) ...[
+                    const Icon(Icons.check, size: 16),
+                    const SizedBox(width: 6),
+                  ] else
+                    const SizedBox(width: 22),
+                  Text(homeSortLabel(sort)),
+                ]),
+              ),
+            ),
+        ],
       ),
-      onSelected: (v) async {
-        setState(() => _homeSort = v);
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(PrefKeys.homeSort, v.name);
-      },
-      itemBuilder: (_) => [
-        for (final sort in HomeSort.values)
-          PopupMenuItem<HomeSort>(
-            value: sort,
-            child: Row(children: [
-              if (_homeSort == sort) ...[
-                const Icon(Icons.check, size: 16),
-                const SizedBox(width: 6),
-              ] else
-                const SizedBox(width: 22),
-              Text(homeSortLabel(sort)),
-            ]),
-          ),
-      ],
     );
   }
 
@@ -1091,10 +1108,12 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.all(16),
       child: Align(
         alignment: Alignment.centerRight,
-        child: FilledButton.icon(
-          icon: const Icon(Icons.folder_open),
-          label: const Text('Pick folder'),
-          onPressed: _pickFolder,
+        child: UiFocusZoom(
+          child: FilledButton.icon(
+            icon: const Icon(Icons.folder_open),
+            label: const Text('Pick folder'),
+            onPressed: _pickFolder,
+          ),
         ),
       ),
     );
@@ -1216,8 +1235,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return ConsoleCard(
         onTap: onTap,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        focusScale: 1.05,
-        showRing: false,
+        focusScale: 1.12,
         // Built under ConsoleCard's light theme so the labels come out dark.
         child: Builder(
           builder: (context) => Row(
@@ -1484,12 +1502,18 @@ class _HomeScreenState extends State<HomeScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Rename playlist'),
-          content: TextField(controller: controller, autofocus: true),
+          content: UiFocusZoom(
+            child: TextField(controller: controller, autofocus: true),
+          ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-                child: const Text('Save')),
+            UiFocusZoom(
+              child: TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ),
+            UiFocusZoom(
+              child: TextButton(
+                  onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                  child: const Text('Save')),
+            ),
           ],
         ),
       );
@@ -1507,11 +1531,13 @@ class _HomeScreenState extends State<HomeScreen> {
   PopupMenuItem<String> _menuRow(String value, IconData icon, String label) =>
       PopupMenuItem(
         value: value,
-        child: Row(children: [
-          Icon(icon, size: 18),
-          const SizedBox(width: 8),
-          Text(label),
-        ]),
+        child: UiFocusZoom(
+          child: Row(children: [
+            Icon(icon, size: 18),
+            const SizedBox(width: 8),
+            Text(label),
+          ]),
+        ),
       );
 
 }

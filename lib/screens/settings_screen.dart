@@ -126,13 +126,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: Text(title),
         content: Text(message),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: Text(confirmLabel)),
+          UiFocusZoom(
+            child: TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
+          ),
+          UiFocusZoom(
+            child: TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: Text(confirmLabel)),
+          ),
         ],
       ),
     );
@@ -309,27 +313,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
       children: [
         _heading('Account',
             'Web API key from retroachievements.org → Settings → Keys.'),
-        TextField(
-          controller: _usernameCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Username',
-            isDense: true,
+        UiFocusZoom(
+          child: TextField(
+            controller: _usernameCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Username',
+              isDense: true,
+            ),
+            onChanged: (v) => _setStringPref(PrefKeys.raUsername, v.trim()),
           ),
-          onChanged: (v) => _setStringPref(PrefKeys.raUsername, v.trim()),
         ),
         const SizedBox(height: 12),
-        TextField(
-          key: const Key('settings-apikey'),
-          controller: _apiKeyCtrl,
-          focusNode: _apiKeyFocus,
-          decoration: const InputDecoration(
-            labelText: 'Web API key',
-            isDense: true,
+        UiFocusZoom(
+          child: TextField(
+            key: const Key('settings-apikey'),
+            controller: _apiKeyCtrl,
+            focusNode: _apiKeyFocus,
+            decoration: const InputDecoration(
+              labelText: 'Web API key',
+              isDense: true,
+            ),
+            obscureText: true,
+            onEditingComplete: () =>
+                saveApiKey(_apiKeyCtrl.text.trim())
+                    .then((_) => publishSettingsChange()),
           ),
-          obscureText: true,
-          onEditingComplete: () =>
-              saveApiKey(_apiKeyCtrl.text.trim())
-                  .then((_) => publishSettingsChange()),
         ),
       ],
     );
@@ -342,53 +350,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _heading('Scan filters',
             'Comma-separated. Unlisted extensions are skipped; ignored folders '
             'are hidden and never scanned.'),
-        TextField(
-          controller: _extensionsCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Extensions',
-            hintText: 'chd, nds, gb, gba, ...',
-            isDense: true,
+        UiFocusZoom(
+          child: TextField(
+            controller: _extensionsCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Extensions',
+              hintText: 'chd, nds, gb, gba, ...',
+              isDense: true,
+            ),
+            minLines: 1,
+            maxLines: 3,
+            onChanged: (v) => ScanSettings.setEnabledExtensions(v),
           ),
-          minLines: 1,
-          maxLines: 3,
-          onChanged: (v) => ScanSettings.setEnabledExtensions(v),
         ),
         Align(
           alignment: Alignment.centerRight,
           child: Tooltip(
             message: 'Replaces the list above with the extensions the app '
                 'ships with, discarding your edits.',
-            child: TextButton(
-              onPressed: _resetExtensions,
-              child: const Text('Reset to defaults'),
+            child: UiFocusZoom(
+              child: TextButton(
+                onPressed: _resetExtensions,
+                child: const Text('Reset to defaults'),
+              ),
             ),
           ),
         ),
-        TextField(
-          controller: _ignoredCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Ignored folders',
-            hintText: 'BIOS, Saves, Cheats',
-            isDense: true,
+        UiFocusZoom(
+          child: TextField(
+            controller: _ignoredCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Ignored folders',
+              hintText: 'BIOS, Saves, Cheats',
+              isDense: true,
+            ),
+            minLines: 1,
+            maxLines: 2,
+            onChanged: (v) => ScanSettings.setIgnoredFolders(v),
           ),
-          minLines: 1,
-          maxLines: 2,
-          onChanged: (v) => ScanSettings.setIgnoredFolders(v),
         ),
         const SizedBox(height: 12),
-        TextField(
-          controller: _excludedCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Excluded files',
-            hintText: r'C:\roms\snes\bad-dump.sfc',
-            helperText: 'Full paths, one per line. Excluded files are hidden and '
-                'skipped, but not deleted.',
-            helperMaxLines: 2,
-            isDense: true,
+        UiFocusZoom(
+          child: TextField(
+            controller: _excludedCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Excluded files',
+              hintText: r'C:\roms\snes\bad-dump.sfc',
+              helperText: 'Full paths, one per line. Excluded files are hidden and '
+                  'skipped, but not deleted.',
+              helperMaxLines: 2,
+              isDense: true,
+            ),
+            minLines: 2,
+            maxLines: 6,
+            onChanged: (v) => ScanSettings.setExcludedFilesFromText(v),
           ),
-          minLines: 2,
-          maxLines: 6,
-          onChanged: (v) => ScanSettings.setExcludedFilesFromText(v),
         ),
       ],
     );
@@ -403,26 +419,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'folder name ("SNES") on cards and titles.'),
         ValueListenableBuilder<NameMode>(
           valueListenable: nameModeListenable,
-          builder: (context, mode, _) => SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: const Text('Show full system names'),
-            value: mode == NameMode.systemName,
-            onChanged: (on) => nameModeListenable.save(
-                on ? NameMode.systemName : NameMode.folderName),
+          builder: (context, mode, _) => UiFocusZoom(
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: const Text('Show full system names'),
+              value: mode == NameMode.systemName,
+              onChanged: (on) => nameModeListenable.save(
+                  on ? NameMode.systemName : NameMode.folderName),
+            ),
           ),
         ),
         ValueListenableBuilder<bool>(
           valueListenable: combineSystemsListenable,
-          builder: (context, on, _) => SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: const Text('Combine systems'),
-            subtitle: const Text(
-                'Merge folders that map to the same console into one card '
-                'on Home.'),
-            value: on,
-            onChanged: saveCombineSystems,
+          builder: (context, on, _) => UiFocusZoom(
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: const Text('Combine systems'),
+              subtitle: const Text(
+                  'Merge folders that map to the same console into one card '
+                  'on Home.'),
+              value: on,
+              onChanged: saveCombineSystems,
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -446,14 +466,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'drives either mode.'),
         ValueListenableBuilder<AppMode>(
           valueListenable: appModeListenable,
-          builder: (context, mode, _) => SegmentedButton<AppMode>(
-            segments: const [
-              ButtonSegment(value: AppMode.cleaning, label: Text('Cleaning')),
-              ButtonSegment(value: AppMode.gaming, label: Text('Play')),
-            ],
-            selected: {mode},
-            showSelectedIcon: false,
-            onSelectionChanged: (s) => appModeListenable.save(s.first),
+          builder: (context, mode, _) => UiFocusZoom(
+            child: SegmentedButton<AppMode>(
+              segments: const [
+                ButtonSegment(value: AppMode.cleaning, label: Text('Cleaning')),
+                ButtonSegment(value: AppMode.gaming, label: Text('Play')),
+              ],
+              selected: {mode},
+              showSelectedIcon: false,
+              onSelectionChanged: (s) => appModeListenable.save(s.first),
+            ),
           ),
         ),
       ],
@@ -469,15 +491,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'multi-selects, and Play stays on the right-click menu either way.'),
         ValueListenableBuilder<RomTapAction>(
           valueListenable: romTapListenable,
-          builder: (context, action, _) => SegmentedButton<RomTapAction>(
-            segments: const [
-              ButtonSegment(
-                  value: RomTapAction.detail, label: Text('Open details')),
-              ButtonSegment(value: RomTapAction.play, label: Text('Play')),
-            ],
-            selected: {action},
-            showSelectedIcon: false,
-            onSelectionChanged: (s) => romTapListenable.save(s.first),
+          builder: (context, action, _) => UiFocusZoom(
+            child: SegmentedButton<RomTapAction>(
+              segments: const [
+                ButtonSegment(
+                    value: RomTapAction.detail, label: Text('Open details')),
+                ButtonSegment(value: RomTapAction.play, label: Text('Play')),
+              ],
+              selected: {action},
+              showSelectedIcon: false,
+              onSelectionChanged: (s) => romTapListenable.save(s.first),
+            ),
           ),
         ),
       ],
@@ -491,13 +515,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     PlayView Function(bool) update, {
     String? subtitle,
   }) {
-    return SwitchListTile(
-      contentPadding: EdgeInsets.zero,
-      dense: true,
-      title: Text(title),
-      subtitle: subtitle == null ? null : Text(subtitle),
-      value: value,
-      onChanged: (on) => savePlayView(update(on)),
+    return UiFocusZoom(
+      child: SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        title: Text(title),
+        subtitle: subtitle == null ? null : Text(subtitle),
+        value: value,
+        onChanged: (on) => savePlayView(update(on)),
+      ),
     );
   }
 
@@ -528,16 +554,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 8),
           Text('Layout', style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 4),
-          SegmentedButton<PlayLayout>(
-            segments: const [
-              ButtonSegment(value: PlayLayout.follow, label: Text('My choice')),
-              ButtonSegment(value: PlayLayout.list, label: Text('List')),
-              ButtonSegment(value: PlayLayout.grid, label: Text('Grid')),
-            ],
-            selected: {v.layout},
-            showSelectedIcon: false,
-            onSelectionChanged: (s) =>
-                savePlayView(v.copyWith(layout: s.first)),
+          UiFocusZoom(
+            child: SegmentedButton<PlayLayout>(
+              segments: const [
+                ButtonSegment(value: PlayLayout.follow, label: Text('My choice')),
+                ButtonSegment(value: PlayLayout.list, label: Text('List')),
+                ButtonSegment(value: PlayLayout.grid, label: Text('Grid')),
+              ],
+              selected: {v.layout},
+              showSelectedIcon: false,
+              onSelectionChanged: (s) =>
+                  savePlayView(v.copyWith(layout: s.first)),
+            ),
           ),
         ],
       ),
@@ -579,10 +607,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (folder != null)
             Text(folder, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 12),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.folder_open),
-            label: Text(folder == null ? 'Pick folder' : 'Change folder'),
-            onPressed: () => pickLibraryFolder(context),
+          UiFocusZoom(
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.folder_open),
+              label: Text(folder == null ? 'Pick folder' : 'Change folder'),
+              onPressed: () => pickLibraryFolder(context),
+            ),
           ),
         ],
       ),
@@ -604,60 +634,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
               message: 'Writes a zip holding your scan results, imported '
                   'metadata, cached artwork, playlists and settings. ROM '
                   'files and your API key are not included.',
-              child: OutlinedButton.icon(
-                onPressed: _backup,
-                icon: const Icon(Icons.save_alt),
-                label: const Text('Back up'),
+              child: UiFocusZoom(
+                child: OutlinedButton.icon(
+                  onPressed: _backup,
+                  icon: const Icon(Icons.save_alt),
+                  label: const Text('Back up'),
+                ),
               ),
             ),
             Tooltip(
               message: 'Loads a backup zip, replacing everything you have '
                   'now except your API key. Needs an app restart afterwards.',
-              child: OutlinedButton.icon(
-                onPressed: _restore,
-                icon: const Icon(Icons.restore),
-                label: const Text('Restore'),
+              child: UiFocusZoom(
+                child: OutlinedButton.icon(
+                  onPressed: _restore,
+                  icon: const Icon(Icons.restore),
+                  label: const Text('Restore'),
+                ),
               ),
             ),
             Tooltip(
               message: 'Reads gamelist.xml and Logiqx .dat files from a '
                   'Skraper or EmulationStation folder and attaches their box '
                   'art and descriptions to ROMs you already scanned.',
-              child: OutlinedButton.icon(
-                onPressed: _importScrapedData,
-                icon: const Icon(Icons.image_search),
-                label: const Text('Import scraped data…'),
+              child: UiFocusZoom(
+                child: OutlinedButton.icon(
+                  onPressed: _importScrapedData,
+                  icon: const Icon(Icons.image_search),
+                  label: const Text('Import scraped data…'),
+                ),
               ),
             ),
             Tooltip(
               message: 'Opens the first-run wizard again (library folder, '
                   'RetroAchievements account, emulators).',
-              child: OutlinedButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SetupWizard()),
+              child: UiFocusZoom(
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SetupWizard()),
+                  ),
+                  icon: const Icon(Icons.restart_alt),
+                  label: const Text('Re-run setup'),
                 ),
-                icon: const Icon(Icons.restart_alt),
-                label: const Text('Re-run setup'),
               ),
             ),
             Tooltip(
               message: 'Deletes scan results for library folders that no longer '
                   'exist (e.g. after moving or renaming your ROMs). Folders '
                   'still on disk are untouched.',
-              child: OutlinedButton.icon(
-                onPressed: _pruneMissing,
-                icon: const Icon(Icons.folder_off_outlined),
-                label: const Text('Remove missing systems'),
+              child: UiFocusZoom(
+                child: OutlinedButton.icon(
+                  onPressed: _pruneMissing,
+                  icon: const Icon(Icons.folder_off_outlined),
+                  label: const Text('Remove missing systems'),
+                ),
               ),
             ),
             Tooltip(
               message: 'Choose what to delete: scan results, playlists, '
                   'imported metadata, cached artwork. Your ROM files, '
                   'settings and login are never touched.',
-              child: OutlinedButton(
-                onPressed: _clearData,
-                child: const Text('Clear data…'),
+              child: UiFocusZoom(
+                child: OutlinedButton(
+                  onPressed: _clearData,
+                  child: const Text('Clear data…'),
+                ),
               ),
             ),
           ],
@@ -775,8 +817,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       tabAlignment: TabAlignment.start,
                       dividerHeight: 0,
                       tabs: [
-                        Tab(text: 'General'),
-                        Tab(text: 'Systems'),
+                        UiFocusZoom(
+                          child: Tab(text: 'General'),
+                        ),
+                        UiFocusZoom(
+                          child: Tab(text: 'Systems'),
+                        ),
                       ],
                     ),
                   ),
@@ -820,63 +866,65 @@ class _ThemeSwatch extends StatelessWidget {
     final ui = context.ui; // live theme, for the selection ring
     final t = theme.tokens; // this card's palette, for the preview
     final dots = [t.accent, t.supported, t.accentAlt, t.accentGames];
-    return InkWell(
-      onTap: onTap,
-      borderRadius: ui.roundMd,
-      child: Container(
-        width: 152,
-        decoration: BoxDecoration(
-          borderRadius: ui.roundMd,
-          border: Border.all(
-            color: selected ? ui.accent : t.border,
-            width: selected ? 2 : 1,
+    return UiFocusZoom(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: ui.roundMd,
+        child: Container(
+          width: 152,
+          decoration: BoxDecoration(
+            borderRadius: ui.roundMd,
+            border: Border.all(
+              color: selected ? ui.accent : t.border,
+              width: selected ? 2 : 1,
+            ),
           ),
-        ),
-        child: ClipRRect(
-          borderRadius: ui.roundMd,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                height: 46,
-                width: double.infinity,
-                color: t.background,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  children: [
-                    for (final c in dots)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: Container(
-                          width: 14,
-                          height: 14,
-                          decoration:
-                              BoxDecoration(color: c, shape: BoxShape.circle),
+          child: ClipRRect(
+            borderRadius: ui.roundMd,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 46,
+                  width: double.infinity,
+                  color: t.background,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    children: [
+                      for (final c in dots)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: Container(
+                            width: 14,
+                            height: 14,
+                            decoration:
+                                BoxDecoration(color: c, shape: BoxShape.circle),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: double.infinity,
+                  color: t.surface,
+                  padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          theme.label,
+                          style: t.body.copyWith(fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                  ],
+                      if (selected)
+                        Icon(Icons.check_circle, size: 16, color: ui.accent),
+                    ],
+                  ),
                 ),
-              ),
-              Container(
-                width: double.infinity,
-                color: t.surface,
-                padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        theme.label,
-                        style: t.body.copyWith(fontWeight: FontWeight.w600),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (selected)
-                      Icon(Icons.check_circle, size: 16, color: ui.accent),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

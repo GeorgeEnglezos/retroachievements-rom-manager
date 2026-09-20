@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/data_wipe.dart';
 import '../theme/ui_tokens.dart';
+import 'ui/ui_focusable.dart';
 
 /// One tickable line in the dialog: what it deletes and what that costs.
 typedef _Row = ({ClearTarget target, String label, String cost});
@@ -116,27 +117,31 @@ class _ClearDataDialogState extends State<_ClearDataDialog> {
                   style: TextStyle(fontSize: 13, height: 1.45, color: ui.muted),
                 ),
                 const SizedBox(height: 8),
-                CheckboxListTile(
-                  value: all,
-                  tristate: true,
-                  onChanged: _toggleAll,
-                  title: const Text('Everything'),
-                  controlAffinity: ListTileControlAffinity.leading,
-                  dense: true,
+                UiFocusZoom(
+                  child: CheckboxListTile(
+                    value: all,
+                    tristate: true,
+                    onChanged: _toggleAll,
+                    title: const Text('Everything'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    dense: true,
+                  ),
                 ),
                 Divider(height: 1, thickness: ui.borderWidth, color: ui.border),
                 for (final row in _rows)
-                  CheckboxListTile(
-                    value: _forced(row.target) || _chosen.contains(row.target),
-                    onChanged: _forced(row.target)
-                        ? null
-                        : (v) => _toggle(row.target, v),
-                    title: Text(row.label),
-                    subtitle: Text(row.cost,
-                        style: TextStyle(fontSize: 12, color: ui.muted)),
-                    controlAffinity: ListTileControlAffinity.leading,
-                    isThreeLine: true,
-                    dense: true,
+                  UiFocusZoom(
+                    child: CheckboxListTile(
+                      value: _forced(row.target) || _chosen.contains(row.target),
+                      onChanged: _forced(row.target)
+                          ? null
+                          : (v) => _toggle(row.target, v),
+                      title: Text(row.label),
+                      subtitle: Text(row.cost,
+                          style: TextStyle(fontSize: 12, color: ui.muted)),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      isThreeLine: true,
+                      dense: true,
+                    ),
                   ),
               ],
             ),
@@ -144,16 +149,20 @@ class _ClearDataDialogState extends State<_ClearDataDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+        UiFocusZoom(
+          child: TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
         ),
-        TextButton(
-          onPressed: _chosen.isEmpty
-              ? null
-              : () => Navigator.pop(context, expandTargets(_chosen)),
-          style: TextButton.styleFrom(foregroundColor: Colors.red),
-          child: const Text('Delete'),
+        UiFocusZoom(
+          child: TextButton(
+            onPressed: _chosen.isEmpty
+                ? null
+                : () => Navigator.pop(context, expandTargets(_chosen)),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
         ),
       ],
     );

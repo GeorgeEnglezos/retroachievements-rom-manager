@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'ui_focusable.dart';
 
 /// Text field that saves on blur/enter and reseeds when [value] changes
 /// (state is reused across reloads when the parent keys it).
@@ -46,14 +47,16 @@ class _AutoSaveTextFieldState extends State<AutoSaveTextField> {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: _ctrl,
-      focusNode: _focus,
-      decoration: InputDecoration(
-        labelText: widget.label,
-        isDense: true,
+    return UiFocusZoom(
+      child: TextField(
+        controller: _ctrl,
+        focusNode: _focus,
+        decoration: InputDecoration(
+          labelText: widget.label,
+          isDense: true,
+        ),
+        onEditingComplete: () => widget.onSave(_ctrl.text),
       ),
-      onEditingComplete: () => widget.onSave(_ctrl.text),
     );
   }
 }

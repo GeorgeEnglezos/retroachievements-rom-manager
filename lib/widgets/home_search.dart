@@ -19,6 +19,7 @@ import 'game_detail_dialog.dart';
 import 'require_credentials.dart';
 import 'rom_list_view.dart';
 import 'row_display.dart';
+import 'ui/ui_focusable.dart';
 
 /// Global search over the home index. With no query it renders [child] and
 /// shows [idleActions] beside the bar.
@@ -137,34 +138,40 @@ class _HomeSearchState extends State<HomeSearch> {
         isDense: true,
         suffixIcon: _searchQuery.isEmpty
             ? null
-            : IconButton(
-                icon: const Icon(Icons.clear),
-                onPressed: () {
-                  _searchController.clear();
-                  _onSearchChanged('');
-                },
-              ),
+            : UiFocusZoom(
+              child: IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _searchController.clear();
+                    _onSearchChanged('');
+                  },
+                ),
+            ),
       ),
       onChanged: _onSearchChanged,
     );
-    final excludeField = TextField(
-      controller: _excludeController,
-      decoration: const InputDecoration(
-        hintText: 'Exclude results containing… (Enter to add)',
-        prefixIcon: Icon(Icons.search_off),
-        isDense: true,
+    final excludeField = UiFocusZoom(
+      child: TextField(
+        controller: _excludeController,
+        decoration: const InputDecoration(
+          hintText: 'Exclude results containing… (Enter to add)',
+          prefixIcon: Icon(Icons.search_off),
+          isDense: true,
+        ),
+        onSubmitted: _addExcludeTerm,
       ),
-      onSubmitted: _addExcludeTerm,
     );
     final excludeChips = Wrap(
       spacing: 4,
       runSpacing: 4,
       children: [
         for (final term in _excludeTerms)
-          Chip(
-            label: Text(term),
-            visualDensity: VisualDensity.compact,
-            onDeleted: () => _removeExcludeTerm(term),
+          UiFocusZoom(
+            child: Chip(
+              label: Text(term),
+              visualDensity: VisualDensity.compact,
+              onDeleted: () => _removeExcludeTerm(term),
+            ),
           ),
       ],
     );
@@ -192,21 +199,25 @@ class _HomeSearchState extends State<HomeSearch> {
     // During a search only options that change the result list stay visible.
     final actions = _searchQuery.isNotEmpty
         ? <Widget>[
-            IconButton(
-              style: compactIconButton,
-              icon: Icon(_searchSectioned
-                  ? Icons.format_list_bulleted
-                  : Icons.view_agenda_outlined),
-              tooltip: _searchSectioned ? 'Flat list' : 'Grouped list',
-              onPressed: () =>
-                  setState(() => _searchSectioned = !_searchSectioned),
+            UiFocusZoom(
+              child: IconButton(
+                style: compactIconButton,
+                icon: Icon(_searchSectioned
+                    ? Icons.format_list_bulleted
+                    : Icons.view_agenda_outlined),
+                tooltip: _searchSectioned ? 'Flat list' : 'Grouped list',
+                onPressed: () =>
+                    setState(() => _searchSectioned = !_searchSectioned),
+              ),
             ),
-            IconButton(
-              style: compactIconButton,
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Refresh results',
-              onPressed:
-                  _searchPending ? null : () => _runSearch(_searchQuery),
+            UiFocusZoom(
+              child: IconButton(
+                style: compactIconButton,
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Refresh results',
+                onPressed:
+                    _searchPending ? null : () => _runSearch(_searchQuery),
+              ),
             ),
           ]
         : widget.idleActions;
@@ -340,13 +351,15 @@ class _HomeSearchState extends State<HomeSearch> {
   // (unscrolled) list; a query rarely matches more than a handful of systems.
   List<Widget> _folderResultTiles() => [
         for (final s in _folderHits)
-          ListTile(
-            dense: true,
-            leading: const Icon(Icons.folder_open),
-            title: Text(ConsoleMap.nameFor(s.consoleId) ?? s.name),
-            subtitle: Text('${s.name} · ${s.totalGames} '
-                '${s.totalGames == 1 ? 'game' : 'games'}'),
-            onTap: () => widget.onOpenFolder?.call(s.systemPath),
+          UiFocusZoom(
+            child: ListTile(
+              dense: true,
+              leading: const Icon(Icons.folder_open),
+              title: Text(ConsoleMap.nameFor(s.consoleId) ?? s.name),
+              subtitle: Text('${s.name} · ${s.totalGames} '
+                  '${s.totalGames == 1 ? 'game' : 'games'}'),
+              onTap: () => widget.onOpenFolder?.call(s.systemPath),
+            ),
           ),
       ];
 

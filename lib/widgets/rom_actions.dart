@@ -25,6 +25,7 @@ import '../services/playlist_store.dart';
 import 'play_with_dialog.dart';
 import 'playlist_picker.dart';
 import 'set_emulator_dialog.dart';
+import 'ui/ui_focusable.dart';
 
 /// Fallback status icon when a ROM has no box art.
 Widget romStatusIcon(RomResult rom) => switch (rom.status) {
@@ -134,12 +135,14 @@ class RomActions {
       {Color? color}) {
     return PopupMenuItem(
       value: value,
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 8),
-          Flexible(child: Text(label, style: TextStyle(color: color))),
-        ],
+      child: UiFocusZoom(
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 8),
+            Flexible(child: Text(label, style: TextStyle(color: color))),
+          ],
+        ),
       ),
     );
   }
@@ -436,13 +439,17 @@ class RomActions {
           "the exact titles and hashes RA accepts.",
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Close'),
+          UiFocusZoom(
+            child: TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Close'),
+            ),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Open RA supported list'),
+          UiFocusZoom(
+            child: TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Open RA supported list'),
+            ),
           ),
         ],
       ),

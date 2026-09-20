@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/playlist_store.dart';
+import 'ui/ui_focusable.dart';
 
 /// Asks for a new playlist name; null on cancel or empty input.
 Future<String?> _promptPlaylistName(BuildContext context) async {
@@ -9,17 +10,23 @@ Future<String?> _promptPlaylistName(BuildContext context) async {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('New playlist'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'Playlist name'),
+        content: UiFocusZoom(
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: 'Playlist name'),
+          ),
         ),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-              child: const Text('Create')),
+          UiFocusZoom(
+            child: TextButton(
+                onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ),
+          UiFocusZoom(
+            child: TextButton(
+                onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                child: const Text('Create')),
+          ),
         ],
       ),
     );
@@ -104,24 +111,30 @@ class _PlaylistPickerState extends State<PlaylistPicker> {
           mainAxisSize: MainAxisSize.min,
           children: [
             for (final pl in _playlists)
-              CheckboxListTile(
-                title: Text(pl.name),
-                value: _member.contains(pl.id),
-                onChanged: (v) => _toggle(pl, v ?? false),
+              UiFocusZoom(
+                child: CheckboxListTile(
+                  title: Text(pl.name),
+                  value: _member.contains(pl.id),
+                  onChanged: (v) => _toggle(pl, v ?? false),
+                ),
               ),
             const Divider(),
-            ListTile(
-              leading: const Icon(Icons.add),
-              title: const Text('New playlist…'),
-              onTap: _createNew,
+            UiFocusZoom(
+              child: ListTile(
+                leading: const Icon(Icons.add),
+                title: const Text('New playlist…'),
+                onTap: _createNew,
+              ),
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Done')),
+        UiFocusZoom(
+          child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Done')),
+        ),
       ],
     );
   }
@@ -183,24 +196,30 @@ class _BulkPlaylistPickerState extends State<_BulkPlaylistPicker> {
                 child: Text('No playlists yet.'),
               ),
             for (final pl in _playlists)
-              ListTile(
-                title: Text(pl.name),
-                trailing: const Icon(Icons.playlist_add),
-                onTap: () => _addToPlaylist(pl),
+              UiFocusZoom(
+                child: ListTile(
+                  title: Text(pl.name),
+                  trailing: const Icon(Icons.playlist_add),
+                  onTap: () => _addToPlaylist(pl),
+                ),
               ),
             const Divider(),
-            ListTile(
-              leading: const Icon(Icons.add),
-              title: const Text('New playlist…'),
-              onTap: _createNew,
+            UiFocusZoom(
+              child: ListTile(
+                leading: const Icon(Icons.add),
+                title: const Text('New playlist…'),
+                onTap: _createNew,
+              ),
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+        UiFocusZoom(
+          child: TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
         ),
       ],
     );

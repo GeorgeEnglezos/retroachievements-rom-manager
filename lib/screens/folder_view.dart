@@ -47,6 +47,7 @@ import '../widgets/row_display.dart';
 import '../widgets/require_credentials.dart';
 import '../widgets/rom_list_view.dart';
 import '../theme/ui_tokens.dart';
+import '../widgets/ui/ui_focusable.dart';
 
 class _GroupHeader {
   final Color color;
@@ -808,13 +809,15 @@ class _FolderViewState extends State<FolderView> {
     // matches the shell's landscape rail. The system name is dropped: you
     // picked the system to get here.
     final landscapePhone = context.isLandscapePhone;
-    final toggle = IconButton(
-      key: const Key('toolbar_toggle'),
-      icon: Icon(_toolbarVisible ? Icons.expand_less : Icons.tune),
-      tooltip: _toolbarVisible
-          ? 'Hide search & filters'
-          : 'Show search & filters',
-      onPressed: () => setState(() => _toolbarVisible = !_toolbarVisible),
+    final toggle = UiFocusZoom(
+      child: IconButton(
+        key: const Key('toolbar_toggle'),
+        icon: Icon(_toolbarVisible ? Icons.expand_less : Icons.tune),
+        tooltip: _toolbarVisible
+            ? 'Hide search & filters'
+            : 'Show search & filters',
+        onPressed: () => setState(() => _toolbarVisible = !_toolbarVisible),
+      ),
     );
     final content = _loading
         ? const Center(child: CircularProgressIndicator())
@@ -956,10 +959,12 @@ class _FolderViewState extends State<FolderView> {
                     child: SingleChildScrollView(
                       child: Column(
                         children: [
-                          IconButton(
-                            icon: const Icon(Icons.arrow_back),
-                            tooltip: 'Back',
-                            onPressed: () => Navigator.of(context).maybePop(),
+                          UiFocusZoom(
+                            child: IconButton(
+                              icon: const Icon(Icons.arrow_back),
+                              tooltip: 'Back',
+                              onPressed: () => Navigator.of(context).maybePop(),
+                            ),
                           ),
                           toggle,
                           Divider(

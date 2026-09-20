@@ -143,7 +143,7 @@ class CoverRow extends StatelessWidget {
 }
 
 /// One focusable game tile: the shared [RomGridItem] (same art, numbers and
-/// console line the dashboard shows) inside a controller focus ring. Focusing it
+/// console line the dashboard shows), focusable by controller. Focusing it
 /// grows it and slides it toward centre (in a scrolling row); A/tap fires
 /// [onOpen]. Shared by [CoverRow] and the couch Library grid.
 class CoverTile extends StatefulWidget {
@@ -191,7 +191,6 @@ class _CoverTileState extends State<CoverTile> {
 
   @override
   Widget build(BuildContext context) {
-    final ui = context.ui;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: FocusableActionDetector(
@@ -203,27 +202,17 @@ class _CoverTileState extends State<CoverTile> {
           }),
         },
         child: AnimatedScale(
-          scale: _focused ? 1.06 : 1.0,
+          scale: _focused ? 1.16 : 1.0,
           duration: const Duration(milliseconds: 150),
           curve: Curves.easeOut,
-          child: Container(
-            // Focus ring painted over the tile edge so it never shifts layout.
-            foregroundDecoration: BoxDecoration(
-              borderRadius: ui.roundMd,
-              border: Border.all(
-                color: _focused ? ui.accent : Colors.transparent,
-                width: 3,
-              ),
-            ),
-            child: RomGridItem(
-              rom: widget.rom,
-              store: _store,
-              lean: true,
-              raName: true,
-              width: widget.size,
-              height: widget.size,
-              onOpen: widget.onOpen,
-            ),
+          child: RomGridItem(
+            rom: widget.rom,
+            store: _store,
+            lean: true,
+            raName: true,
+            width: widget.size,
+            height: widget.size,
+            onOpen: widget.onOpen,
           ),
         ),
       ),

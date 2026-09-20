@@ -14,6 +14,7 @@ import 'playlist_picker.dart';
 import 'rom_grid_item.dart';
 import 'rom_row_tile.dart';
 import 'row_display.dart';
+import 'ui/ui_focusable.dart';
 
 /// The text block under each cover in the library grid: the title, the
 /// achievement numbers/chips, and the status/size line. A grid cell is the
@@ -466,28 +467,30 @@ class _GroupHeader extends StatelessWidget {
       color: ui.muted,
       fontWeight: FontWeight.w700,
     );
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-        child: Row(
-          children: [
-            Icon(
-              collapsed ? Icons.chevron_right : Icons.expand_more,
-              size: 18,
-              color: ui.muted,
-            ),
-            const SizedBox(width: 4),
-            if (group.color != null)
-              Container(
-                width: 4,
-                height: 14,
-                color: group.color,
-                margin: const EdgeInsets.only(right: 6),
+    return UiFocusZoom(
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(
+            children: [
+              Icon(
+                collapsed ? Icons.chevron_right : Icons.expand_more,
+                size: 18,
+                color: ui.muted,
               ),
-            Expanded(child: Text(group.label, style: style)),
-            Text('${group.rows.length}', style: style),
-          ],
+              const SizedBox(width: 4),
+              if (group.color != null)
+                Container(
+                  width: 4,
+                  height: 14,
+                  color: group.color,
+                  margin: const EdgeInsets.only(right: 6),
+                ),
+              Expanded(child: Text(group.label, style: style)),
+              Text('${group.rows.length}', style: style),
+            ],
+          ),
         ),
       ),
     );

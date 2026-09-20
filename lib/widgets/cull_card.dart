@@ -88,10 +88,12 @@ class CullCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.search),
-                      tooltip: 'Search Google',
-                      onPressed: onSearch,
+                    UiFocusZoom(
+                      child: IconButton(
+                        icon: const Icon(Icons.search),
+                        tooltip: 'Search Google',
+                        onPressed: onSearch,
+                      ),
                     ),
                     _detailsButton(context, rom, scraped),
                   ],
@@ -128,17 +130,19 @@ class CullCard extends StatelessWidget {
 
   Widget _detailsButton(
           BuildContext context, RomResult rom, ScrapedGame? scraped) =>
-      IconButton(
-        icon: const Icon(Icons.info_outline),
-        tooltip: 'Game details',
-        onPressed: () => showDialog(
-          context: context,
-          builder: (_) => GameDetailDialog(
-            rom: rom,
-            store: PlaylistStore(),
-            discs: card.discs.length > 1 ? card.discs : null,
-            scraped: scraped,
-            onDeleted: onDeleted,
+      UiFocusZoom(
+        child: IconButton(
+          icon: const Icon(Icons.info_outline),
+          tooltip: 'Game details',
+          onPressed: () => showDialog(
+            context: context,
+            builder: (_) => GameDetailDialog(
+              rom: rom,
+              store: PlaylistStore(),
+              discs: card.discs.length > 1 ? card.discs : null,
+              scraped: scraped,
+              onDeleted: onDeleted,
+            ),
           ),
         ),
       );

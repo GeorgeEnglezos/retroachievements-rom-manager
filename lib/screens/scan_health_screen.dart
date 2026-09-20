@@ -10,6 +10,7 @@ import '../services/library_export.dart';
 import '../services/library_pdf_export.dart';
 import '../services/log_service.dart';
 import '../services/scan_health.dart';
+import '../widgets/ui/ui_focusable.dart';
 
 /// Read-only summary of the scanned library, plus report export. Turns the raw
 /// scan results ([Library]) into decision-oriented counts, and lets the user
@@ -132,23 +133,29 @@ class _ScanHealthScreenState extends State<ScanHealthScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.table_chart_outlined),
-                      label: const Text('CSV'),
-                      onPressed: () =>
-                          _export('csv', () => LibraryExport.toCsv(_rows)),
+                    UiFocusZoom(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.table_chart_outlined),
+                        label: const Text('CSV'),
+                        onPressed: () =>
+                            _export('csv', () => LibraryExport.toCsv(_rows)),
+                      ),
                     ),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.data_object),
-                      label: const Text('JSON'),
-                      onPressed: () => _export(
-                          'json', () => LibraryExport.toJson(_systems, _rows)),
+                    UiFocusZoom(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.data_object),
+                        label: const Text('JSON'),
+                        onPressed: () => _export(
+                            'json', () => LibraryExport.toJson(_systems, _rows)),
+                      ),
                     ),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.description_outlined),
-                      label: const Text('Markdown'),
-                      onPressed: () => _export('md',
-                          () => LibraryExport.toMarkdown(_systems, _rows)),
+                    UiFocusZoom(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.description_outlined),
+                        label: const Text('Markdown'),
+                        onPressed: () => _export('md',
+                            () => LibraryExport.toMarkdown(_systems, _rows)),
+                      ),
                     ),
                   ],
                 ),
@@ -164,10 +171,12 @@ class _ScanHealthScreenState extends State<ScanHealthScreen> {
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.list_alt),
-                    label: const Text('Export system…'),
-                    onPressed: _systems.isEmpty ? null : _exportSystem,
+                  child: UiFocusZoom(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.list_alt),
+                      label: const Text('Export system…'),
+                      onPressed: _systems.isEmpty ? null : _exportSystem,
+                    ),
                   ),
                 ),
               ],
@@ -177,11 +186,13 @@ class _ScanHealthScreenState extends State<ScanHealthScreen> {
 
   Widget _statCard(String label, int value, IconData icon, {Color? color}) {
     return Card(
-      child: ListTile(
-        leading: Icon(icon, color: color),
-        title: Text(label),
-        trailing: Text('$value',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      child: UiFocusZoom(
+        child: ListTile(
+          leading: Icon(icon, color: color),
+          title: Text(label),
+          trailing: Text('$value',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        ),
       ),
     );
   }
@@ -250,14 +261,19 @@ class _SystemExportDialogState extends State<_SystemExportDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              DropdownButtonFormField<SystemSummary>(
-                initialValue: _system,
-                decoration: const InputDecoration(labelText: 'System'),
-                items: [
-                  for (final s in widget.systems)
-                    DropdownMenuItem(value: s, child: Text(s.name)),
-                ],
-                onChanged: (s) => setState(() => _system = s!),
+              UiFocusZoom(
+                child: DropdownButtonFormField<SystemSummary>(
+                  initialValue: _system,
+                  decoration: const InputDecoration(labelText: 'System'),
+                  items: [
+                    for (final s in widget.systems)
+                      DropdownMenuItem(
+                        value: s,
+                        child: UiFocusZoom(child: Text(s.name)),
+                      ),
+                  ],
+                  onChanged: (s) => setState(() => _system = s!),
+                ),
               ),
               const SizedBox(height: 16),
               const Text('Fields'),
@@ -265,45 +281,57 @@ class _SystemExportDialogState extends State<_SystemExportDialog> {
                 spacing: 8,
                 children: [
                   for (final f in GameField.values)
-                    FilterChip(
-                      label: Text(_fieldLabels[f]!),
-                      selected: _fields.contains(f),
-                      onSelected: (on) => setState(
-                          () => on ? _fields.add(f) : _fields.remove(f)),
+                    UiFocusZoom(
+                      child: FilterChip(
+                        label: Text(_fieldLabels[f]!),
+                        selected: _fields.contains(f),
+                        onSelected: (on) => setState(
+                            () => on ? _fields.add(f) : _fields.remove(f)),
+                      ),
                     ),
                 ],
               ),
               const SizedBox(height: 16),
               const Text('How many'),
-              SegmentedButton<int?>(
-                segments: const [
-                  ButtonSegment(value: 10, label: Text('10')),
-                  ButtonSegment(value: 50, label: Text('50')),
-                  ButtonSegment(value: null, label: Text('All')),
-                ],
-                selected: {_limit},
-                onSelectionChanged: (s) => setState(() => _limit = s.first),
+              UiFocusZoom(
+                child: SegmentedButton<int?>(
+                  segments: const [
+                    ButtonSegment(value: 10, label: Text('10')),
+                    ButtonSegment(value: 50, label: Text('50')),
+                    ButtonSegment(value: null, label: Text('All')),
+                  ],
+                  selected: {_limit},
+                  onSelectionChanged: (s) => setState(() => _limit = s.first),
+                ),
               ),
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+        UiFocusZoom(
+          child: TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
         ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, _config('csv')),
-          child: const Text('CSV'),
+        UiFocusZoom(
+          child: TextButton(
+            onPressed: () => Navigator.pop(context, _config('csv')),
+            child: const Text('CSV'),
+          ),
         ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, _config('md')),
-          child: const Text('Markdown'),
+        UiFocusZoom(
+          child: TextButton(
+            onPressed: () => Navigator.pop(context, _config('md')),
+            child: const Text('Markdown'),
+          ),
         ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, _config('pdf')),
-          child: const Text('PDF'),
+        UiFocusZoom(
+          child: TextButton(
+            onPressed: () => Navigator.pop(context, _config('pdf')),
+            child: const Text('PDF'),
+          ),
         ),
       ],
     );

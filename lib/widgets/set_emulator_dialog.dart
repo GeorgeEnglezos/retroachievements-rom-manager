@@ -6,6 +6,7 @@ import '../services/console_map.dart';
 import '../services/emulator_catalog.dart';
 import '../services/emulator_store.dart';
 import 'pick_emulator.dart';
+import 'ui/ui_focusable.dart';
 
 /// Connect an emulator to [consoleId] on the spot. True when set (caller
 /// retries the launch), false on cancel.
@@ -96,27 +97,33 @@ class _SetEmulatorDialogState extends State<_SetEmulatorDialog> {
                   const Text('Pick one of your emulators:'),
                   const SizedBox(height: 8),
                   for (final emu in _emulators)
-                    ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.videogame_asset),
-                      title: Text(emu.name),
-                      subtitle: Text(emu.exePath,
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                      onTap: _busy ? null : () => _connect(emu),
+                    UiFocusZoom(
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.videogame_asset),
+                        title: Text(emu.name),
+                        subtitle: Text(emu.exePath,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        onTap: _busy ? null : () => _connect(emu),
+                      ),
                     ),
                 ],
               ],
             ),
       actions: [
-        TextButton(
-          onPressed: _busy ? null : () => Navigator.pop(context, false),
-          child: const Text('Cancel'),
+        UiFocusZoom(
+          child: TextButton(
+            onPressed: _busy ? null : () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
         ),
-        FilledButton.icon(
-          onPressed: _busy ? null : _add,
-          icon: const Icon(Icons.add),
-          label: Text(Platform.isAndroid ? 'Pick app…' : 'Browse exe…'),
+        UiFocusZoom(
+          child: FilledButton.icon(
+            onPressed: _busy ? null : _add,
+            icon: const Icon(Icons.add),
+            label: Text(Platform.isAndroid ? 'Pick app…' : 'Browse exe…'),
+          ),
         ),
       ],
     );

@@ -5,6 +5,7 @@ import '../services/update_check.dart';
 import '../theme/ui_tokens.dart';
 import 'ui/ui_badge.dart';
 import 'ui/ui_button.dart';
+import 'ui/ui_focusable.dart';
 
 /// Strip above the app body announcing a newer release. Dismissing it is the
 /// caller's job (see [onDismiss]); this widget only reports the tap.
@@ -69,11 +70,13 @@ class UpdateBanner extends StatelessWidget {
               ),
               UiButton(label: 'GET IT', onPressed: () => _open(context)),
               const SizedBox(width: 4),
-              IconButton(
-                onPressed: onDismiss,
-                icon: const Icon(Icons.close, size: 18),
-                color: ui.muted,
-                tooltip: 'Hide until the next release',
+              UiFocusZoom(
+                child: IconButton(
+                  onPressed: onDismiss,
+                  icon: const Icon(Icons.close, size: 18),
+                  color: ui.muted,
+                  tooltip: 'Hide until the next release',
+                ),
               ),
             ],
           );

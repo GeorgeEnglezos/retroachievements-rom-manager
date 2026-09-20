@@ -7,6 +7,7 @@ import '../services/file_actions.dart';
 import '../services/playlist_store.dart';
 import '../theme/ui_tokens.dart';
 import '../widgets/cull_card.dart';
+import '../widgets/ui/ui_focusable.dart';
 
 /// The swiping view for one console: one card at a time, the next peeking
 /// behind. Swipe/arrow left = trash, right = keep; favorite counts as keep.
@@ -103,12 +104,16 @@ class _CullDeckState extends State<CullDeck> {
             'Forget all ${widget.consoleName} decisions and rebuild the deck? '
             'Trashed games stay in the Trash playlist.'),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Start over')),
+          UiFocusZoom(
+            child: TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel')),
+          ),
+          UiFocusZoom(
+            child: TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Start over')),
+          ),
         ],
       ),
     );
@@ -138,10 +143,12 @@ class _CullDeckState extends State<CullDeck> {
       appBar: AppBar(
         title: Text('${widget.consoleName} · $_done / $_total'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.replay),
-            tooltip: 'Start over for this console',
-            onPressed: _startOver,
+          UiFocusZoom(
+            child: IconButton(
+              icon: const Icon(Icons.replay),
+              tooltip: 'Start over for this console',
+              onPressed: _startOver,
+            ),
           ),
         ],
       ),
@@ -166,20 +173,26 @@ class _CullDeckState extends State<CullDeck> {
           ],
           const SizedBox(height: 12),
           if (next != null)
-            FilledButton.icon(
-              icon: const Icon(Icons.skip_next),
-              label: Text('Next: $next'),
-              onPressed: widget.onNextConsole,
+            UiFocusZoom(
+              child: FilledButton.icon(
+                icon: const Icon(Icons.skip_next),
+                label: Text('Next: $next'),
+                onPressed: widget.onNextConsole,
+              ),
             ),
           // Undo lives with the verdict buttons, which are gone once the deck
           // empties, so the finished screen keeps its own way back to the last
           // card.
-          TextButton.icon(
-            icon: const Icon(Icons.undo),
-            label: const Text('Undo last card'),
-            onPressed: _canUndo ? _undo : null,
+          UiFocusZoom(
+            child: TextButton.icon(
+              icon: const Icon(Icons.undo),
+              label: const Text('Undo last card'),
+              onPressed: _canUndo ? _undo : null,
+            ),
           ),
-          TextButton(onPressed: _startOver, child: const Text('Start over')),
+          UiFocusZoom(
+            child: TextButton(onPressed: _startOver, child: const Text('Start over')),
+          ),
         ],
       ),
     );
@@ -282,33 +295,41 @@ class _CullDeckState extends State<CullDeck> {
             spacing: 16,
             runSpacing: 8,
             children: [
-              OutlinedButton.icon(
-                icon: const Icon(Icons.undo),
-                label: const Text('UNDO'),
-                onPressed: _canUndo ? _undo : null,
-              ),
-              OutlinedButton.icon(
-                icon: Icon(Icons.delete, color: kDangerColor),
-                label: const Text('TRASH'),
-                style: OutlinedButton.styleFrom(foregroundColor: kDangerColor),
-                onPressed: () => _decide(CullVerdict.trash),
-              ),
-              OutlinedButton.icon(
-                icon: Icon(
-                  PlaylistStore().isFavorite(top.memberKey)
-                      ? Icons.favorite
-                      : Icons.favorite_border,
-                  color: kFavoriteColor,
+              UiFocusZoom(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.undo),
+                  label: const Text('UNDO'),
+                  onPressed: _canUndo ? _undo : null,
                 ),
-                label: const Text('FAVORITE'),
-                style: OutlinedButton.styleFrom(foregroundColor: kFavoriteColor),
-                onPressed: () => _decide(CullVerdict.favorite),
               ),
-              OutlinedButton.icon(
-                icon: Icon(Icons.check, color: ui.supported),
-                label: const Text('KEEP'),
-                style: OutlinedButton.styleFrom(foregroundColor: ui.supported),
-                onPressed: () => _decide(CullVerdict.keep),
+              UiFocusZoom(
+                child: OutlinedButton.icon(
+                  icon: Icon(Icons.delete, color: kDangerColor),
+                  label: const Text('TRASH'),
+                  style: OutlinedButton.styleFrom(foregroundColor: kDangerColor),
+                  onPressed: () => _decide(CullVerdict.trash),
+                ),
+              ),
+              UiFocusZoom(
+                child: OutlinedButton.icon(
+                  icon: Icon(
+                    PlaylistStore().isFavorite(top.memberKey)
+                        ? Icons.favorite
+                        : Icons.favorite_border,
+                    color: kFavoriteColor,
+                  ),
+                  label: const Text('FAVORITE'),
+                  style: OutlinedButton.styleFrom(foregroundColor: kFavoriteColor),
+                  onPressed: () => _decide(CullVerdict.favorite),
+                ),
+              ),
+              UiFocusZoom(
+                child: OutlinedButton.icon(
+                  icon: Icon(Icons.check, color: ui.supported),
+                  label: const Text('KEEP'),
+                  style: OutlinedButton.styleFrom(foregroundColor: ui.supported),
+                  onPressed: () => _decide(CullVerdict.keep),
+                ),
               ),
             ],
           ),

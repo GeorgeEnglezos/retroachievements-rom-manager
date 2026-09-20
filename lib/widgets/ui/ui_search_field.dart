@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/ui_tokens.dart';
+import 'ui_focusable.dart';
 
 /// Rounded search text field with a clear (✕) button. The [controller] is
 /// owned by the parent; this widget listens to it to show/hide the clear button.
@@ -55,13 +56,15 @@ class _SearchFieldState extends State<UiSearchField> {
         enabledBorder: _border(ui.border),
         focusedBorder: _border(ui.accent),
         suffixIcon: widget.controller.text.isNotEmpty
-            ? IconButton(
-                icon: const Icon(Icons.clear, size: 18),
-                onPressed: () {
-                  widget.controller.clear();
-                  widget.onChanged('');
-                },
-              )
+            ? UiFocusZoom(
+              child: IconButton(
+                  icon: const Icon(Icons.clear, size: 18),
+                  onPressed: () {
+                    widget.controller.clear();
+                    widget.onChanged('');
+                  },
+                ),
+            )
             : null,
       ),
       onChanged: widget.onChanged,

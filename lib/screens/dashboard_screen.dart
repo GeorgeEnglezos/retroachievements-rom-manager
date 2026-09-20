@@ -13,6 +13,7 @@ import '../services/settings_bus.dart';
 import '../theme/ui_tokens.dart';
 import '../widgets/bigpicture/couch_home.dart';
 import '../widgets/game_detail_dialog.dart';
+import '../widgets/ui/ui_focusable.dart';
 
 /// The Home tab for Cleaning and Play modes. It loads the dashboard and opens a
 /// game's detail dialog on tap, then hands the layout to [CouchHome], the single
@@ -144,10 +145,12 @@ class _EmptyDashboard extends StatelessWidget {
             ),
             if (onOpenLibrary != null) ...[
               const SizedBox(height: 20),
-              FilledButton.icon(
-                onPressed: onOpenLibrary,
-                icon: const Icon(Icons.grid_view, size: 18),
-                label: const Text('Go to Library'),
+              UiFocusZoom(
+                child: FilledButton.icon(
+                  onPressed: onOpenLibrary,
+                  icon: const Icon(Icons.grid_view, size: 18),
+                  label: const Text('Go to Library'),
+                ),
               ),
             ],
           ],

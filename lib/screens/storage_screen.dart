@@ -24,6 +24,7 @@ import '../widgets/ui/ui_panel.dart';
 import '../widgets/ra_image.dart';
 import '../widgets/rom_list_view.dart';
 import '../widgets/row_display.dart';
+import '../widgets/ui/ui_focusable.dart';
 
 /// One level of the storage drill-down: a title plus the folders/files shown at
 /// it, kept sorted by size (largest first).
@@ -245,7 +246,9 @@ class _StorageScreenState extends State<StorageScreen> {
     if (isLast) return text;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: GestureDetector(onTap: () => _jumpTo(i), child: text),
+      child: UiFocusZoom(
+        child: GestureDetector(onTap: () => _jumpTo(i), child: text),
+      ),
     );
   }
 

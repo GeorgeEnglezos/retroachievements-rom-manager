@@ -36,27 +36,29 @@ class _UiCollapsibleCardState extends State<UiCollapsibleCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // GestureDetector, not InkWell: no hover highlight or splash wanted.
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: Padding(
-              // Collapsed, the header owns the whole card, so it keeps the
-              // bottom padding too.
-              padding: EdgeInsets.fromLTRB(pad, pad, pad, _expanded ? 6 : pad),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.title,
-                      style: ui.display.copyWith(fontSize: 17),
+          UiFocusZoom(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                // Collapsed, the header owns the whole card, so it keeps the
+                // bottom padding too.
+                padding: EdgeInsets.fromLTRB(pad, pad, pad, _expanded ? 6 : pad),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.title,
+                        style: ui.display.copyWith(fontSize: 17),
+                      ),
                     ),
-                  ),
-                  Icon(
-                    _expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 20,
-                    color: ui.muted,
-                  ),
-                ],
+                    Icon(
+                      _expanded ? Icons.expand_less : Icons.expand_more,
+                      size: 20,
+                      color: ui.muted,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

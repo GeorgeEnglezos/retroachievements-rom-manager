@@ -9,6 +9,7 @@ import 'ui/ui_search_field.dart';
 import 'ui/ui_segmented.dart';
 import 'active_filter_chips.dart';
 import 'filter_panel.dart';
+import 'ui/ui_focusable.dart';
 
 /// Full-width, GB-themed two-tier folder toolbar. Owns the search field and the
 /// inline filter panel; all sort/view/duplicates state lives in the parent and
@@ -188,13 +189,15 @@ class _FolderToolbarState extends State<FolderToolbar> {
           Icon(Icons.photo_size_select_large, size: 16, color: ui.muted),
           SizedBox(
             width: 120,
-            child: Slider(
-              value: widget.gridSize
-                  .clamp(FolderToolbar.gridSizeMin, FolderToolbar.gridSizeMax),
-              min: FolderToolbar.gridSizeMin,
-              max: FolderToolbar.gridSizeMax,
-              onChanged: widget.onGridSizeChanged,
-              onChangeEnd: widget.onGridSizeChangeEnd,
+            child: UiFocusZoom(
+              child: Slider(
+                value: widget.gridSize
+                    .clamp(FolderToolbar.gridSizeMin, FolderToolbar.gridSizeMax),
+                min: FolderToolbar.gridSizeMin,
+                max: FolderToolbar.gridSizeMax,
+                onChanged: widget.onGridSizeChanged,
+                onChangeEnd: widget.onGridSizeChangeEnd,
+              ),
             ),
           ),
         ],

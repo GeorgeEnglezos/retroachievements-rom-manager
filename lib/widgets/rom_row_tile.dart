@@ -97,8 +97,6 @@ class RomRowTile extends StatelessWidget {
       child: UiCard(
         padding: EdgeInsets.zero,
         color: cardColor,
-        focusScale:
-            1.0, // wide row: ring only, no lift (would overflow the list)
         flourish: FocusFlourish.jump, // rows: a light hop, not the tile tilt
         onTap: () => _onTap(context),
         child: _buildCardContent(context, ui, fg),

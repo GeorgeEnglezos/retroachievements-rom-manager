@@ -43,10 +43,7 @@ class UiSegmented<T> extends StatelessWidget {
                 Container(width: ui.borderWidth, height: 24, color: ui.border),
               UiFocusable(
                 onPressed: enabled ? () => onChanged(segments[i].value) : null,
-                // Segments sit inside the control's antialias clip; a rectangular
-                // ring with no lift stays within it.
                 borderRadius: BorderRadius.zero,
-                focusScale: 1.0,
                 flourish: FocusFlourish.none,
                 child: GestureDetector(
                   onTap: enabled ? () => onChanged(segments[i].value) : null,

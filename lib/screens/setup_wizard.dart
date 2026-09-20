@@ -21,6 +21,7 @@ import '../widgets/ui_scale_control.dart';
 import '../widgets/ui/ui_button.dart';
 import '../widgets/ui/ui_dropdown.dart';
 import 'home_screen.dart';
+import '../widgets/ui/ui_focusable.dart';
 
 /// Where RA shows a user their Web API key. Their API docs still link the older
 /// controlpanel.php; this is the current settings page it lands on.
@@ -158,10 +159,12 @@ class _SetupWizardState extends State<SetupWizard> {
                 children: [
                   Align(
                     alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: _finish,
-                      child: Text('Skip setup',
-                          style: ui.labelCaps.copyWith(color: ui.muted)),
+                    child: UiFocusZoom(
+                      child: TextButton(
+                        onPressed: _finish,
+                        child: Text('Skip setup',
+                            style: ui.labelCaps.copyWith(color: ui.muted)),
+                      ),
                     ),
                   ),
                   Text('STEP ${_step + 1} OF ${_lastStep + 1}',
@@ -421,22 +424,26 @@ class _CredentialsStepState extends State<_CredentialsStep> {
             onPressed: _openKeyPage,
           ),
           const SizedBox(height: 16),
-          TextField(
-            key: const Key('setup-username'),
-            controller: _usernameCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Username',
-              isDense: true,
+          UiFocusZoom(
+            child: TextField(
+              key: const Key('setup-username'),
+              controller: _usernameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Username',
+                isDense: true,
+              ),
             ),
           ),
           const SizedBox(height: 12),
-          TextField(
-            key: const Key('setup-apikey'),
-            controller: _apiKeyCtrl,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'Web API key',
-              isDense: true,
+          UiFocusZoom(
+            child: TextField(
+              key: const Key('setup-apikey'),
+              controller: _apiKeyCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Web API key',
+                isDense: true,
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -818,12 +825,14 @@ class _FolderStepState extends State<_FolderStep> {
                         children: [
                           SizedBox(
                             width: _scanColumnWidth,
-                            child: Checkbox(
-                              key: Key('exclude-${row.name}'),
-                              value: !row.excluded,
-                              activeColor: ui.accent,
-                              visualDensity: VisualDensity.compact,
-                              onChanged: (v) => _setExcluded(i, v != true),
+                            child: UiFocusZoom(
+                              child: Checkbox(
+                                key: Key('exclude-${row.name}'),
+                                value: !row.excluded,
+                                activeColor: ui.accent,
+                                visualDensity: VisualDensity.compact,
+                                onChanged: (v) => _setExcluded(i, v != true),
+                              ),
                             ),
                           ),
                           Expanded(

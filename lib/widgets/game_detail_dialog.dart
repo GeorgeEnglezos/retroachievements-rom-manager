@@ -278,9 +278,11 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   Widget _actionButton(String choice, IconData icon, String tooltip) {
     return Tooltip(
       message: tooltip,
-      child: IconButton(
-        icon: Icon(icon, size: 20),
-        onPressed: () => _handle(choice),
+      child: UiFocusZoom(
+        child: IconButton(
+          icon: Icon(icon, size: 20),
+          onPressed: () => _handle(choice),
+        ),
       ),
     );
   }
@@ -346,46 +348,54 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   // Same launch path as the tile context menu (emulator lookup, set-emulator
   // prompt, error snack) so both surfaces behave identically.
   Widget _playButton() {
-    return FilledButton.icon(
-      onPressed: () =>
-          RomActions(rom: _playTarget, store: widget.store ?? PlaylistStore())
-              .handle(context, 'play'),
-      icon: const Icon(Icons.play_arrow, size: 18),
-      label: const Text('Play (beta)'),
+    return UiFocusZoom(
+      child: FilledButton.icon(
+        onPressed: () =>
+            RomActions(rom: _playTarget, store: widget.store ?? PlaylistStore())
+                .handle(context, 'play'),
+        icon: const Icon(Icons.play_arrow, size: 18),
+        label: const Text('Play (beta)'),
+      ),
     );
   }
 
   Widget _favoriteButton() {
     if (_isFavorite) {
-      return FilledButton.icon(
-        onPressed: _toggleFavorite,
-        icon: const Icon(Icons.favorite, size: 18),
-        label: const Text('Favorited'),
-        style: FilledButton.styleFrom(
-          backgroundColor: kFavoriteColor,
-          foregroundColor: Colors.white,
+      return UiFocusZoom(
+        child: FilledButton.icon(
+          onPressed: _toggleFavorite,
+          icon: const Icon(Icons.favorite, size: 18),
+          label: const Text('Favorited'),
+          style: FilledButton.styleFrom(
+            backgroundColor: kFavoriteColor,
+            foregroundColor: Colors.white,
+          ),
         ),
       );
     }
-    return OutlinedButton.icon(
-      onPressed: _toggleFavorite,
-      icon: const Icon(Icons.favorite_border, size: 18),
-      label: const Text('Favorite'),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: kFavoriteColor,
-        side: const BorderSide(color: kFavoriteColor),
+    return UiFocusZoom(
+      child: OutlinedButton.icon(
+        onPressed: _toggleFavorite,
+        icon: const Icon(Icons.favorite_border, size: 18),
+        label: const Text('Favorite'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: kFavoriteColor,
+          side: const BorderSide(color: kFavoriteColor),
+        ),
       ),
     );
   }
 
   Widget _deleteButton() {
-    return FilledButton.icon(
-      onPressed: () => _handle('delete'),
-      icon: const Icon(Icons.delete_outline, size: 18),
-      label: const Text('Delete'),
-      style: FilledButton.styleFrom(
-        backgroundColor: kDangerColor,
-        foregroundColor: Colors.white,
+    return UiFocusZoom(
+      child: FilledButton.icon(
+        onPressed: () => _handle('delete'),
+        icon: const Icon(Icons.delete_outline, size: 18),
+        label: const Text('Delete'),
+        style: FilledButton.styleFrom(
+          backgroundColor: kDangerColor,
+          foregroundColor: Colors.white,
+        ),
       ),
     );
   }
@@ -607,20 +617,22 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
           double? height,
           BoxFit fit = BoxFit.contain,
           double errorIconSize = 64}) =>
-      GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => showImageViewer(context, FileImage(File(path))),
-        child: Image.file(
-          File(path),
-          width: width,
-          height: height,
-          fit: fit,
-          errorBuilder: (_, _, _) => Container(
+      UiFocusZoom(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => showImageViewer(context, FileImage(File(path))),
+          child: Image.file(
+            File(path),
             width: width,
             height: height,
-            color: context.ui.trough,
-            child: Icon(Icons.broken_image,
-                size: errorIconSize, color: context.ui.muted),
+            fit: fit,
+            errorBuilder: (_, _, _) => Container(
+              width: width,
+              height: height,
+              color: context.ui.trough,
+              child: Icon(Icons.broken_image,
+                  size: errorIconSize, color: context.ui.muted),
+            ),
           ),
         ),
       );

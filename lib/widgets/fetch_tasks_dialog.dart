@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/fetch_plan.dart';
 import '../services/ra_cache.dart';
+import 'ui/ui_focusable.dart';
 
 /// The fetch modal: one primary action, with the rare choices folded away.
 ///
@@ -75,40 +76,46 @@ Future<FetchPlan?> showFetchTasksDialog(
                             child: Column(
                               children: [
                                 for (final s in FetchScope.values)
-                                  RadioListTile<FetchScope>(
-                                    title: Text(scopeLabel(s)),
-                                    value: s,
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
+                                  UiFocusZoom(
+                                    child: RadioListTile<FetchScope>(
+                                      title: Text(scopeLabel(s)),
+                                      value: s,
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                    ),
                                   ),
                               ],
                             ),
                           ),
                           const SizedBox(height: 8),
                         ],
-                        CheckboxListTile(
-                          title: const Text('Re-hash every ROM'),
-                          subtitle: const Text(
-                            'Slow: reads every file again, including ones '
-                            'already identified.',
+                        UiFocusZoom(
+                          child: CheckboxListTile(
+                            title: const Text('Re-hash every ROM'),
+                            subtitle: const Text(
+                              'Slow: reads every file again, including ones '
+                              'already identified.',
+                            ),
+                            value: reHashAll,
+                            onChanged: (v) =>
+                                setDlgState(() => reHashAll = v ?? false),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
                           ),
-                          value: reHashAll,
-                          onChanged: (v) =>
-                              setDlgState(() => reHashAll = v ?? false),
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
                         ),
-                        CheckboxListTile(
-                          title: const Text('Force refresh RA game lists'),
-                          subtitle: Text(
-                            'Normally re-pulled on their own every '
-                            '${RaCache.listTtl.inDays} days.',
+                        UiFocusZoom(
+                          child: CheckboxListTile(
+                            title: const Text('Force refresh RA game lists'),
+                            subtitle: Text(
+                              'Normally re-pulled on their own every '
+                              '${RaCache.listTtl.inDays} days.',
+                            ),
+                            value: refreshLists,
+                            onChanged: (v) =>
+                                setDlgState(() => refreshLists = v ?? false),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
                           ),
-                          value: refreshLists,
-                          onChanged: (v) =>
-                              setDlgState(() => refreshLists = v ?? false),
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
                         ),
                       ],
                     ),
@@ -118,23 +125,27 @@ Future<FetchPlan?> showFetchTasksDialog(
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(
-                ctx,
-                FetchPlan(
-                  scope: scope,
-                  refresh: true,
-                  refreshLists: refreshLists,
-                  match: true,
-                  matchReFetchAll: reHashAll,
-                  progress: true,
-                ),
+            UiFocusZoom(
+              child: TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
               ),
-              child: const Text('Update'),
+            ),
+            UiFocusZoom(
+              child: FilledButton(
+                onPressed: () => Navigator.pop(
+                  ctx,
+                  FetchPlan(
+                    scope: scope,
+                    refresh: true,
+                    refreshLists: refreshLists,
+                    match: true,
+                    matchReFetchAll: reHashAll,
+                    progress: true,
+                  ),
+                ),
+                child: const Text('Update'),
+              ),
             ),
           ],
         ),

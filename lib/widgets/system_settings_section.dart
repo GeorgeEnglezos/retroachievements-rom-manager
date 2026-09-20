@@ -304,30 +304,37 @@ class _SystemCard extends StatelessWidget {
                 const SizedBox(height: 12),
                 _LabelledField(
                   label: 'Console',
-                  child: DropdownButton<int?>(
-                    key: Key('console-${row.folder}'),
-                    isExpanded: true,
-                    isDense: true,
-                    value: row.override,
-                    hint: Text(
-                      'Auto ($_detectedLabel)',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onChanged: onConsoleChanged,
-                    items: [
-                      DropdownMenuItem<int?>(
-                        value: null,
-                        child: Text(
-                          'Auto-detect ($_detectedLabel)',
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                  child: UiFocusZoom(
+                    child: DropdownButton<int?>(
+                      key: Key('console-${row.folder}'),
+                      isExpanded: true,
+                      isDense: true,
+                      value: row.override,
+                      hint: Text(
+                        'Auto ($_detectedLabel)',
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      for (final e in consoleItems)
+                      onChanged: onConsoleChanged,
+                      items: [
                         DropdownMenuItem<int?>(
-                          value: e.key,
-                          child: Text(e.value, overflow: TextOverflow.ellipsis),
+                          value: null,
+                          child: UiFocusZoom(
+                            child: Text(
+                              'Auto-detect ($_detectedLabel)',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ),
-                    ],
+                        for (final e in consoleItems)
+                          DropdownMenuItem<int?>(
+                            value: e.key,
+                            child: UiFocusZoom(
+                              child:
+                                  Text(e.value, overflow: TextOverflow.ellipsis),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -344,30 +351,32 @@ class _SystemCard extends StatelessWidget {
                             'None added yet — see the Emulators tab.',
                             style: Theme.of(context).textTheme.bodySmall,
                           )
-                        : DropdownButton<String?>(
-                            key: Key('emulator-${row.folder}'),
-                            isExpanded: true,
-                            isDense: true,
-                            value:
-                                emulators.any(
-                                  (e) => e.id == connection?.emulatorId,
-                                )
-                                ? connection!.emulatorId
-                                : null,
-                            hint: const Text('Not set'),
-                            onChanged: onEmulatorChanged,
-                            items: [
-                              const DropdownMenuItem<String?>(
-                                value: null,
-                                child: Text('Not set'),
-                              ),
-                              for (final e in emulators)
-                                DropdownMenuItem<String?>(
-                                  value: e.id,
-                                  child: Text(e.name),
+                        : UiFocusZoom(
+                          child: DropdownButton<String?>(
+                              key: Key('emulator-${row.folder}'),
+                              isExpanded: true,
+                              isDense: true,
+                              value:
+                                  emulators.any(
+                                    (e) => e.id == connection?.emulatorId,
+                                  )
+                                  ? connection!.emulatorId
+                                  : null,
+                              hint: const Text('Not set'),
+                              onChanged: onEmulatorChanged,
+                              items: [
+                                const DropdownMenuItem<String?>(
+                                  value: null,
+                                  child: UiFocusZoom(child: Text('Not set')),
                                 ),
-                            ],
-                          ),
+                                for (final e in emulators)
+                                  DropdownMenuItem<String?>(
+                                    value: e.id,
+                                    child: UiFocusZoom(child: Text(e.name)),
+                                  ),
+                              ],
+                            ),
+                        ),
                   ),
                   // Emulator connections are keyed by console, not by folder,
                   // so folders mapped to the same console cannot differ. Say so

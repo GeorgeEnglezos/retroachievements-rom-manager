@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/ui_tokens.dart';
 import 'ui_focusable.dart';
-export 'ui_focusable.dart' show FocusFlourish;
+export 'ui_focusable.dart' show FocusFlourish, UiFocusZoom, uiFocusZoom;
 
 /// Rounded surface with a hairline border. Both palettes currently use a zero
 /// shadow offset, so the press feedback (translate + drop shadow) only shows if
@@ -13,22 +13,13 @@ class UiCard extends StatefulWidget {
   final Color? color;
   final Color? borderColor;
 
-  /// Focus/hover lift. Defaults to 1.0 (ring only); square game-tile cards pass
-  /// 1.05 to opt into the pop without wide rows overflowing.
+  /// Focus/hover lift. Defaults to the shared [uiFocusZoom]; square game-tile
+  /// cards pass a bigger value to opt into the full pop.
   final double focusScale;
-
-  /// Focus/hover ring colour override (see [UiFocusable.ringColor]).
-  final Color? ringColor;
 
   /// One-shot focus motion (see [UiFocusable.flourish]). List rows pass
   /// [FocusFlourish.jump]; grid tiles keep the default tilt.
   final FocusFlourish flourish;
-
-  /// Whether to render the highlight border ring on focus/hover.
-  final bool showRing;
-
-  /// Distance between content edge and accent ring.
-  final double ringGap;
 
   /// Whether to render the blurred drop shadow on a lifted card (see
   /// [UiFocusable.showShadow]).
@@ -41,11 +32,8 @@ class UiCard extends StatefulWidget {
     this.onTap,
     this.color,
     this.borderColor,
-    this.focusScale = 1.0,
-    this.ringColor,
+    this.focusScale = uiFocusZoom,
     this.flourish = FocusFlourish.tilt,
-    this.showRing = true,
-    this.ringGap = 4.0,
     this.showShadow = true,
   });
 
@@ -91,17 +79,13 @@ class _CardState extends State<UiCard> {
       child: widget.child,
     );
     if (widget.onTap == null) return body;
-    // Pointer taps + press animation on the GestureDetector; focus/hover ring
-    // and gamepad/keyboard activation on the UiFocusable shell (ring hugs the
-    // card's own roundLg corners).
+    // Pointer taps + press animation on the GestureDetector; focus/hover
+    // zoom and gamepad/keyboard activation on the UiFocusable shell.
     return UiFocusable(
       onPressed: widget.onTap,
       borderRadius: ui.roundLg,
       focusScale: widget.focusScale,
-      ringColor: widget.ringColor,
       flourish: widget.flourish,
-      showRing: widget.showRing,
-      ringGap: widget.ringGap,
       showShadow: widget.showShadow,
       child: GestureDetector(
         onTapDown: (_) => setState(() => _pressed = true),

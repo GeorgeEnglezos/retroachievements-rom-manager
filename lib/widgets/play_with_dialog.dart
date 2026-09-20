@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/emulator_store.dart';
+import 'ui/ui_focusable.dart';
 
 /// Picks which of [choices] to launch one game in. Returns null on cancel.
 /// Nothing is connected: the console keeps its own emulator, this is a
@@ -21,21 +22,25 @@ Future<Emulator?> showPlayWithDialog(
             Text('Emulators you added for $consoleName:'),
             const SizedBox(height: 8),
             for (final emu in choices)
-              ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.videogame_asset),
-                title: Text(emu.name),
-                subtitle: Text(emu.exePath,
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                onTap: () => Navigator.pop(ctx, emu),
+              UiFocusZoom(
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.videogame_asset),
+                  title: Text(emu.name),
+                  subtitle: Text(emu.exePath,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  onTap: () => Navigator.pop(ctx, emu),
+                ),
               ),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+          UiFocusZoom(
+            child: TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
           ),
         ],
       ),
