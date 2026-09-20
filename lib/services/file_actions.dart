@@ -189,7 +189,7 @@ class FileActions {
       final program = tokens.first;
       final workdir = p.isAbsolute(program) ? p.dirname(program) : null;
       if (Platform.isWindows && isConsoleExe(program)) {
-        return _startWithConsole(program, tokens.sublist(1), workdir);
+        return await _startWithConsole(program, tokens.sublist(1), workdir);
       }
       await Process.start(program, tokens.sublist(1),
           mode: ProcessStartMode.detached, workingDirectory: workdir);
