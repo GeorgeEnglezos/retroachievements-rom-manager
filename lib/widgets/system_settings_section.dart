@@ -18,6 +18,7 @@ import 'folder_card.dart' show ConsoleLogo;
 import 'ui/auto_save_field.dart';
 import 'ui/ui_badge.dart';
 import 'ui/ui_card.dart';
+import 'ui/ui_collapsible_card.dart';
 
 /// One row of the Systems tab: a library subfolder, the console it hashes as,
 /// and the emulator that runs it. Folder-keyed, because the folder is what the
@@ -54,7 +55,11 @@ class _SystemsData {
   final Set<int> sharedConsoleIds;
 
   _SystemsData(
-      this.rows, this.emulators, this.connections, this.sharedConsoleIds);
+    this.rows,
+    this.emulators,
+    this.connections,
+    this.sharedConsoleIds,
+  );
 }
 
 /// The Systems tab: every library subfolder, its console mapping and its
@@ -128,7 +133,10 @@ class _SystemSettingsSectionState extends State<SystemSettingsSection> {
       rows,
       await EmulatorStore.emulators(),
       await EmulatorStore.connections(),
-      {for (final e in counts.entries) if (e.value > 1) e.key},
+      {
+        for (final e in counts.entries)
+          if (e.value > 1) e.key,
+      },
     );
   }
 
@@ -145,8 +153,8 @@ class _SystemSettingsSectionState extends State<SystemSettingsSection> {
       if (emu == null) return;
       // The catalog knows the right core/flags for the pairs it covers;
       // anything else just gets the ROM path.
-      final args = EmulatorCatalog.defaultArgsFor(
-              consoleId, emu.kindId, emu.exePath) ??
+      final args =
+          EmulatorCatalog.defaultArgsFor(consoleId, emu.kindId, emu.exePath) ??
           '"{file.path}"';
       await EmulatorStore.setConnection(consoleId, emulatorId, args);
     }
@@ -155,79 +163,79 @@ class _SystemSettingsSectionState extends State<SystemSettingsSection> {
 
   @override
   Widget build(BuildContext context) {
-    final ui = context.ui;
     final data = _data;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // The inventory sits above the systems it feeds: add an emulator here
         // and it drops straight into the dropdowns below.
-        UiCard(
-          padding: const EdgeInsets.all(20),
-          child: EmulatorSettingsSection(onChanged: _refresh),
-        ),
+        EmulatorSettingsSection(onChanged: _refresh),
         const SizedBox(height: 24),
-        Text('Systems', style: ui.display.copyWith(fontSize: 17)),
-        const SizedBox(height: 6),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 620),
-          child: Text(
-            'The systems in your library, the same ones Home shows. The '
-            'console decides how a ROM is hashed and matched, so a wrong guess '
-            'means no achievements; disc systems (PS1, PSP, Saturn, …) must be '
-            'set, then re-scan. The emulator is what Play launches.',
-            style: TextStyle(fontSize: 13, height: 1.45, color: ui.muted),
+        UiCollapsibleCard(
+          title: 'Systems',
+          description:
+              'The systems in your library, the same ones Home shows. The '
+              'console decides how a ROM is hashed and matched, so a wrong '
+              'guess means no achievements; disc systems (PS1, PSP, Saturn, …) '
+              'must be set, then re-scan. The emulator is what Play launches.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (data == null)
+                const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              else if (data.rows.isEmpty)
+                Text(
+                  'No scanned systems yet. Pick a library folder under General and '
+                  'scan it from Home, then come back to map its consoles.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                )
+              else
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    // Two cards side by side once each still clears ~380px; the
+                    // dropdowns and the args field need that width to stay readable.
+                    final columns = constraints.maxWidth >= 800 ? 2 : 1;
+                    const gap = 16.0;
+                    final width =
+                        (constraints.maxWidth - gap * (columns - 1)) / columns;
+                    return Wrap(
+                      spacing: gap,
+                      runSpacing: gap,
+                      children: [
+                        for (final row in data.rows)
+                          SizedBox(
+                            width: width,
+                            child: _SystemCard(
+                              key: ValueKey(row.folder),
+                              row: row,
+                              emulators: data.emulators,
+                              connection: row.consoleId == null
+                                  ? null
+                                  : data.connections[row.consoleId],
+                              shared: data.sharedConsoleIds.contains(
+                                row.consoleId,
+                              ),
+                              consoleItems: _consoleItems,
+                              onConsoleChanged: (v) =>
+                                  _setConsole(row.folder, v),
+                              onEmulatorChanged: (v) =>
+                                  _setEmulator(row.consoleId!, v),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+            ],
           ),
         ),
-        const SizedBox(height: 16),
-        if (data == null)
-          const Padding(
-            padding: EdgeInsets.all(8),
-            child: SizedBox(
-                height: 16,
-                width: 16,
-                child: CircularProgressIndicator(strokeWidth: 2)),
-          )
-        else if (data.rows.isEmpty)
-          Text(
-            'No scanned systems yet. Pick a library folder under General and '
-            'scan it from Home, then come back to map its consoles.',
-            style: Theme.of(context).textTheme.bodySmall,
-          )
-        else
-          LayoutBuilder(
-            builder: (context, constraints) {
-              // Two cards side by side once each still clears ~380px; the
-              // dropdowns and the args field need that width to stay readable.
-              final columns = constraints.maxWidth >= 800 ? 2 : 1;
-              const gap = 16.0;
-              final width =
-                  (constraints.maxWidth - gap * (columns - 1)) / columns;
-              return Wrap(
-                spacing: gap,
-                runSpacing: gap,
-                children: [
-                  for (final row in data.rows)
-                    SizedBox(
-                      width: width,
-                      child: _SystemCard(
-                        key: ValueKey(row.folder),
-                        row: row,
-                        emulators: data.emulators,
-                        connection: row.consoleId == null
-                            ? null
-                            : data.connections[row.consoleId],
-                        shared: data.sharedConsoleIds.contains(row.consoleId),
-                        consoleItems: _consoleItems,
-                        onConsoleChanged: (v) => _setConsole(row.folder, v),
-                        onEmulatorChanged: (v) =>
-                            _setEmulator(row.consoleId!, v),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
       ],
     );
   }
@@ -276,12 +284,15 @@ class _SystemCard extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(row.folder,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      child: Text(
+                        row.folder,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
                     ),
-                    if (consoleId != null && !ConsoleMap.isRaSupported(consoleId))
+                    if (consoleId != null &&
+                        !ConsoleMap.isRaSupported(consoleId))
                       UiBadge(label: 'No RetroAchievements', color: ui.muted),
                   ],
                 ),
@@ -298,14 +309,18 @@ class _SystemCard extends StatelessWidget {
                     isExpanded: true,
                     isDense: true,
                     value: row.override,
-                    hint: Text('Auto ($_detectedLabel)',
-                        overflow: TextOverflow.ellipsis),
+                    hint: Text(
+                      'Auto ($_detectedLabel)',
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     onChanged: onConsoleChanged,
                     items: [
                       DropdownMenuItem<int?>(
                         value: null,
-                        child: Text('Auto-detect ($_detectedLabel)',
-                            overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          'Auto-detect ($_detectedLabel)',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       for (final e in consoleItems)
                         DropdownMenuItem<int?>(
@@ -325,24 +340,32 @@ class _SystemCard extends StatelessWidget {
                   _LabelledField(
                     label: 'Emulator',
                     child: emulators.isEmpty
-                        ? Text('None added yet — see the Emulators tab.',
-                            style: Theme.of(context).textTheme.bodySmall)
+                        ? Text(
+                            'None added yet — see the Emulators tab.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          )
                         : DropdownButton<String?>(
                             key: Key('emulator-${row.folder}'),
                             isExpanded: true,
                             isDense: true,
-                            value: emulators.any(
-                                    (e) => e.id == connection?.emulatorId)
+                            value:
+                                emulators.any(
+                                  (e) => e.id == connection?.emulatorId,
+                                )
                                 ? connection!.emulatorId
                                 : null,
                             hint: const Text('Not set'),
                             onChanged: onEmulatorChanged,
                             items: [
                               const DropdownMenuItem<String?>(
-                                  value: null, child: Text('Not set')),
+                                value: null,
+                                child: Text('Not set'),
+                              ),
                               for (final e in emulators)
                                 DropdownMenuItem<String?>(
-                                    value: e.id, child: Text(e.name)),
+                                  value: e.id,
+                                  child: Text(e.name),
+                                ),
                             ],
                           ),
                   ),
@@ -366,7 +389,10 @@ class _SystemCard extends StatelessWidget {
                         value: connection!.args,
                         label: 'Arguments ({file.path} is the ROM)',
                         onSave: (v) => EmulatorStore.setConnection(
-                            consoleId, connection!.emulatorId, v),
+                          consoleId,
+                          connection!.emulatorId,
+                          v,
+                        ),
                       ),
                     ),
                 ],
@@ -420,8 +446,10 @@ class _LabelledField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: ui.labelCaps.copyWith(fontSize: 10, color: ui.muted)),
+        Text(
+          label,
+          style: ui.labelCaps.copyWith(fontSize: 10, color: ui.muted),
+        ),
         child,
       ],
     );

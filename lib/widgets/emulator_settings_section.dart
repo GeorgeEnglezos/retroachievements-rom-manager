@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import '../services/android_emulators.dart';
 import '../services/emulator_finder.dart';
 import '../services/emulator_store.dart';
-import '../theme/ui_tokens.dart';
 import 'pick_emulator.dart';
 import 'ui/auto_save_field.dart';
+import 'ui/ui_collapsible_card.dart';
 
 /// The emulator inventory: the programs themselves, not what runs what. Which
 /// console each one drives is picked per system on the Systems tab, which this
@@ -65,8 +65,10 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
   // Adds every installed app we recognise as an emulator, skipping kinds the
   // user already has. Returns what it added.
   Future<List<Emulator>> _addDetectedApps() async {
-    final found = emulatorsFromApps(await AndroidEmulators.installedApps(),
-        existing: await EmulatorStore.emulators());
+    final found = emulatorsFromApps(
+      await AndroidEmulators.installedApps(),
+      existing: await EmulatorStore.emulators(),
+    );
     for (final emu in found) {
       await EmulatorStore.addEmulator(emu);
     }
@@ -78,10 +80,12 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
     try {
       final found = await _addDetectedApps();
       await _refresh();
-      _toast(found.isEmpty
-          ? 'No new emulator apps found.'
-          : 'Added ${found.map((e) => e.name).join(', ')}. '
-              'Connected their default systems below.');
+      _toast(
+        found.isEmpty
+            ? 'No new emulator apps found.'
+            : 'Added ${found.map((e) => e.name).join(', ')}. '
+                  'Connected their default systems below.',
+      );
     } finally {
       if (mounted) setState(() => _scanning = false);
     }
@@ -94,24 +98,30 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
     if (folder == null) return;
     setState(() => _scanning = true);
     try {
-      final found = await findEmulators(Directory(folder),
-          existing: _data?.emulators ?? const []);
+      final found = await findEmulators(
+        Directory(folder),
+        existing: _data?.emulators ?? const [],
+      );
       for (final emu in found) {
         await EmulatorStore.addEmulator(emu);
       }
       await _refresh();
-      _toast(found.isEmpty
-          ? 'No new emulators found in that folder.'
-          : 'Added ${found.map((e) => e.name).join(', ')}. '
-              'Connected their default systems below.');
+      _toast(
+        found.isEmpty
+            ? 'No new emulators found in that folder.'
+            : 'Added ${found.map((e) => e.name).join(', ')}. '
+                  'Connected their default systems below.',
+      );
     } finally {
       if (mounted) setState(() => _scanning = false);
     }
   }
 
   Future<void> _editEmulatorExe(Emulator emu) async {
-    final picked = await pickNewEmulator(context,
-        dialogTitle: 'Choose the emulator executable for ${emu.name}');
+    final picked = await pickNewEmulator(
+      context,
+      dialogTitle: 'Choose the emulator executable for ${emu.name}',
+    );
     if (picked == null) return;
     await EmulatorStore.updateEmulatorExe(emu.id, picked.exePath);
     await _refresh();
@@ -126,135 +136,140 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
   @override
   Widget build(BuildContext context) {
     final data = _data;
-    return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Emulators',
-                style: context.ui.display.copyWith(fontSize: 17)),
-            const SizedBox(height: 6),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 620),
-              child: Text(
-                Platform.isAndroid
-                    ? 'The emulator apps you have. Each system below picks one '
-                        'of them; Play then sends the ROM straight to that app.'
-                    : 'The emulators you have. Each system below picks one of '
-                        'them. Adding RetroArch auto-fills the right core for '
-                        'most systems; standalone emulators (Dolphin, PCSX2, '
-                        'DuckStation, PPSSPP) connect their own.',
-                style: TextStyle(fontSize: 13, height: 1.45, color: context.ui.muted),
+    return UiCollapsibleCard(
+      title: 'Emulators',
+      description: Platform.isAndroid
+          ? 'The emulator apps you have. Each system below picks one '
+                'of them; Play then sends the ROM straight to that app.'
+          : 'The emulators you have. Each system below picks one of '
+                'them. Adding RetroArch auto-fills the right core for '
+                'most systems; standalone emulators (Dolphin, PCSX2, '
+                'DuckStation, PPSSPP) connect their own.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (data == null)
+            const Padding(
+              padding: EdgeInsets.all(8),
+              child: SizedBox(
+                height: 16,
+                width: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
-            ),
-            const SizedBox(height: 16),
-            if (data == null)
-              const Padding(
-                padding: EdgeInsets.all(8),
-                child: SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else ...[
+            // Fullscreen is a desktop CLI flag; hidden on Android.
+            if (!Platform.isAndroid)
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text('Launch games in fullscreen'),
+                value: data.launchFullscreen,
+                onChanged: (v) async {
+                  await EmulatorStore.setLaunchFullscreen(v ?? false);
+                  await _refresh();
+                },
+              ),
+            if (data.emulators.isEmpty)
+              const Text(
+                'None yet, add one below.',
+                style: TextStyle(fontStyle: FontStyle.italic),
               )
-            else ...[
-              // Fullscreen is a desktop CLI flag; hidden on Android.
-              if (!Platform.isAndroid)
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  title: const Text('Launch games in fullscreen'),
-                  value: data.launchFullscreen,
-                  onChanged: (v) async {
-                    await EmulatorStore.setLaunchFullscreen(v ?? false);
-                    await _refresh();
-                  },
-                ),
-              if (data.emulators.isEmpty)
-                const Text('None yet, add one below.',
-                    style: TextStyle(fontStyle: FontStyle.italic))
-              else
-                for (final emu in data.emulators)
-                  Column(
-                    key: ValueKey(emu.id),
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(emu.name),
-                        subtitle: Text(emu.exePath,
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              tooltip:
-                                  Platform.isAndroid ? 'Change app' : 'Change exe',
-                              icon: const Icon(Icons.edit_outlined),
-                              onPressed: () => _editEmulatorExe(emu),
-                            ),
-                            IconButton(
-                              tooltip: 'Remove',
-                              icon: const Icon(Icons.delete_outline),
-                              onPressed: () async {
-                                await EmulatorStore.removeEmulator(emu.id);
-                                await _refresh();
-                              },
-                            ),
-                          ],
+            else
+              for (final emu in data.emulators)
+                Column(
+                  key: ValueKey(emu.id),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(emu.name),
+                      subtitle: Text(
+                        emu.exePath,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: Platform.isAndroid
+                                ? 'Change app'
+                                : 'Change exe',
+                            icon: const Icon(Icons.edit_outlined),
+                            onPressed: () => _editEmulatorExe(emu),
+                          ),
+                          IconButton(
+                            tooltip: 'Remove',
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () async {
+                              await EmulatorStore.removeEmulator(emu.id);
+                              await _refresh();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Args are desktop-only; Android launches via intent.
+                    if (!Platform.isAndroid)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: AutoSaveTextField(
+                          key: ValueKey('args-${emu.id}'),
+                          value: emu.extraArgs,
+                          label:
+                              'Extra arguments (applied to all this '
+                              "emulator's systems)",
+                          onSave: (v) => EmulatorStore.setExtraArgs(emu.id, v),
                         ),
                       ),
-                      // Args are desktop-only; Android launches via intent.
-                      if (!Platform.isAndroid)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: AutoSaveTextField(
-                            key: ValueKey('args-${emu.id}'),
-                            value: emu.extraArgs,
-                            label: 'Extra arguments (applied to all this '
-                                "emulator's systems)",
-                            onSave: (v) =>
-                                EmulatorStore.setExtraArgs(emu.id, v),
-                          ),
-                        ),
-                    ],
-                  ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: _scanning ? null : _addEmulator,
-                    icon: const Icon(Icons.add),
-                    label: Text(Platform.isAndroid
+                  ],
+                ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _scanning ? null : _addEmulator,
+                  icon: const Icon(Icons.add),
+                  label: Text(
+                    Platform.isAndroid
                         ? 'Add emulator (pick app)'
-                        : 'Add emulator (browse exe)'),
+                        : 'Add emulator (browse exe)',
                   ),
-                  // Desktop searches a folder of exes; Android sweeps the
-                  // installed apps, so there's nothing to browse for.
-                  OutlinedButton.icon(
-                    onPressed: _scanning
-                        ? null
-                        : Platform.isAndroid
-                            ? _detectEmulatorApps
-                            : _scanForEmulators,
-                    icon: _scanning
-                        ? const SizedBox(
-                            height: 16,
-                            width: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.travel_explore),
-                    label: Text(_scanning
+                ),
+                // Desktop searches a folder of exes; Android sweeps the
+                // installed apps, so there's nothing to browse for.
+                OutlinedButton.icon(
+                  onPressed: _scanning
+                      ? null
+                      : Platform.isAndroid
+                      ? _detectEmulatorApps
+                      : _scanForEmulators,
+                  icon: _scanning
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.travel_explore),
+                  label: Text(
+                    _scanning
                         ? 'Scanning…'
                         : Platform.isAndroid
-                            ? 'Detect installed emulators'
-                            : 'Scan a folder for emulators'),
+                        ? 'Detect installed emulators'
+                        : 'Scan a folder for emulators',
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ],
-        );
+        ],
+      ),
+    );
   }
 }
 
