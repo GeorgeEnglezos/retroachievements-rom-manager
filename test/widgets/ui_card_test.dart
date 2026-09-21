@@ -34,6 +34,31 @@ void main() {
     expect((card.decoration as BoxDecoration).borderRadius, isNotNull);
   });
 
+  // Regression: the card's background is a DecoratedBox. Without a Material of
+  // its own inside, a ListTile-family child paints its background and ink on
+  // the Scaffold's Material, behind the card, and newer Flutter asserts on it.
+  // Checked structurally rather than via takeException so it also fails on
+  // Flutter versions that predate the assertion.
+  testWidgets('gives its children a Material to paint ink on', (tester) async {
+    await tester.pumpWidget(_host(
+      UiCard(
+        child: SwitchListTile(
+          title: const Text('row'),
+          value: false,
+          onChanged: (_) {},
+        ),
+      ),
+    ));
+
+    expect(
+      find.descendant(
+        of: find.byType(AnimatedContainer),
+        matching: find.byType(Material),
+      ),
+      findsWidgets,
+    );
+  });
+
   testWidgets('onTap fires', (tester) async {
     var tapped = false;
     await tester.pumpWidget(_host(

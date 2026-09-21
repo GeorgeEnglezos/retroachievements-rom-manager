@@ -2,8 +2,11 @@ name: Build Multi-Platform
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
+  pull_request:
   workflow_dispatch:
     inputs:
       build_windows:
@@ -49,6 +52,11 @@ on:
 permissions:
   contents: write
 
+# Pinned on purpose: 'stable' floats, so a Flutter release could turn a green
+# repo red mid-release. Bump this deliberately and keep local Flutter in step.
+env:
+  FLUTTER_VERSION: '3.41.1'
+
 # Cancel superseded runs on a branch/PR; never cancel tag releases mid-flight.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -66,10 +74,13 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Install dependencies
-        run: flutter pub get
+        # Fail instead of silently re-resolving: CI must build the exact
+        # package versions in pubspec.lock, the ones tested locally.
+        run: flutter pub get --enforce-lockfile
 
       - name: Analyze
         # Fail on errors and warnings, but not pre-existing style infos.
@@ -184,7 +195,7 @@ jobs:
   build-windows:
     needs: [analyze-and-test, detect-nightly-changes]
     if: |
-      (github.event_name != 'workflow_dispatch' && needs.detect-nightly-changes.outputs.run_builds == 'true') ||
+      (startsWith(github.ref, 'refs/tags/v') && needs.detect-nightly-changes.outputs.run_builds == 'true') ||
       (github.event_name == 'workflow_dispatch' && inputs.build_windows)
     runs-on: windows-latest
     steps:
@@ -194,10 +205,11 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Install dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Regenerate launcher icons
         run: dart run flutter_launcher_icons
@@ -249,7 +261,7 @@ jobs:
   build-linux:
     needs: [analyze-and-test, detect-nightly-changes]
     if: |
-      (github.event_name != 'workflow_dispatch' && needs.detect-nightly-changes.outputs.run_builds == 'true') ||
+      (startsWith(github.ref, 'refs/tags/v') && needs.detect-nightly-changes.outputs.run_builds == 'true') ||
       (github.event_name == 'workflow_dispatch' && inputs.build_linux)
     runs-on: ubuntu-latest
     steps:
@@ -259,6 +271,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Install Linux dependencies
@@ -268,7 +281,7 @@ jobs:
             librsvg2-common libglib2.0-bin imagemagick libsecret-1-dev
 
       - name: Install dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Build Linux
         run: flutter build linux --release
@@ -313,7 +326,7 @@ jobs:
   build-macos:
     needs: [analyze-and-test, detect-nightly-changes]
     if: |
-      (github.event_name != 'workflow_dispatch' && needs.detect-nightly-changes.outputs.run_builds == 'true') ||
+      (startsWith(github.ref, 'refs/tags/v') && needs.detect-nightly-changes.outputs.run_builds == 'true') ||
       (github.event_name == 'workflow_dispatch' && inputs.build_macos)
     runs-on: macos-latest
     steps:
@@ -323,10 +336,11 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Install dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Build macOS
         run: flutter build macos --release
@@ -489,7 +503,7 @@ jobs:
   build-ios:
     needs: [analyze-and-test, detect-nightly-changes]
     if: |
-      (github.event_name != 'workflow_dispatch' && needs.detect-nightly-changes.outputs.run_builds == 'true') ||
+      (startsWith(github.ref, 'refs/tags/v') && needs.detect-nightly-changes.outputs.run_builds == 'true') ||
       (github.event_name == 'workflow_dispatch' && inputs.build_ios)
     runs-on: macos-latest
     steps:
@@ -499,10 +513,11 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Install dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Build iOS (no codesign)
         run: flutter build ios --release --no-codesign
@@ -514,7 +529,7 @@ jobs:
   build-android:
     needs: [analyze-and-test, detect-nightly-changes]
     if: |
-      (github.event_name != 'workflow_dispatch' && needs.detect-nightly-changes.outputs.run_builds == 'true') ||
+      (startsWith(github.ref, 'refs/tags/v') && needs.detect-nightly-changes.outputs.run_builds == 'true') ||
       (github.event_name == 'workflow_dispatch' && inputs.build_android)
     runs-on: ubuntu-latest
     steps:
@@ -530,10 +545,11 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Install dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Regenerate launcher icons
         run: dart run flutter_launcher_icons
