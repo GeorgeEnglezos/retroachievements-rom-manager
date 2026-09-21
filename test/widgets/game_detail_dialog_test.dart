@@ -164,7 +164,8 @@ void main() {
     expect(find.byKey(const Key('gameAchievementsPanel')), findsOneWidget);
   });
 
-  testWidgets('a phone keeps both panels and fills the screen', (tester) async {
+  testWidgets('a narrow window folds the two panels into one column',
+      (tester) async {
     tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -176,16 +177,30 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: GameDetailDialog(rom: rom)));
     await tester.pump();
 
-    expect(find.byKey(const Key('gameDetailPanel')), findsOneWidget);
-    expect(find.byKey(const Key('gameAchievementsPanel')), findsOneWidget);
+    expect(find.byKey(const Key('gameDetailPanel')), findsNothing);
+    expect(find.byKey(const Key('gameAchievementsPanel')), findsNothing);
+  });
+
+  testWidgets('a landscape phone keeps both panels and fills the screen',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 360);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final rom = RomResult(filePath: 'psx/ff7.chd', fileName: 'ff7.chd')
+      ..status = RomStatus.supported
+      ..gameId = 123
+      ..gameTitle = 'Final Fantasy VII';
+    await tester.pumpWidget(MaterialApp(home: GameDetailDialog(rom: rom)));
+    await tester.pump();
 
     // Both panels reach the screen edges (8dp inset a side) and the same height.
     final left = tester.getRect(find.byKey(const Key('gameDetailPanel')));
     final right = tester.getRect(find.byKey(const Key('gameAchievementsPanel')));
     expect(left.left, 8);
-    expect(right.right, 352);
+    expect(right.right, 792);
     expect(left.height, right.height);
-    expect(left.height, greaterThan(700));
+    expect(left.height, greaterThan(300));
   });
 
   testWidgets('a desktop window centres the pair instead of filling the screen',

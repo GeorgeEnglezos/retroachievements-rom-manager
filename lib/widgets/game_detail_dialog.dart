@@ -425,13 +425,17 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
       MediaQuery.sizeOf(context).width < kBreakCompact;
 
   // Below the desktop breakpoint the dialog drops its wide margins and fills
-  // the screen, which is the only way two panels fit on a phone.
+  // the screen, which is the only way two panels fit on a landscape phone.
   static bool _isFullBleed(BuildContext context) =>
       MediaQuery.sizeOf(context).width < kBreakWide;
 
+  // Two panels need a landscape phone's width at least; held upright there is
+  // no room to halve, so the achievements fold back into the one column.
   @override
   Widget build(BuildContext context) =>
-      _hasAchievementPanel ? _splitLayout(context) : _singleLayout(context);
+      _hasAchievementPanel && !_isPhone(context)
+          ? _splitLayout(context)
+          : _singleLayout(context);
 
   Widget _singleLayout(BuildContext context) {
     // A phone has no width to spare: Dialog's default 40dp side inset eats a
