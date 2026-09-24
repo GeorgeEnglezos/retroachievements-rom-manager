@@ -12,7 +12,8 @@ import 'ui/ui_focusable.dart';
 /// the library's size. None of those is a decision worth putting to the user,
 /// so the button just does them. What survives under Advanced is the one
 /// genuinely expensive choice (re-hashing ROMs already identified), the manual
-/// override for the list cache, and, on the global run, which folders to touch.
+/// override for the list cache, and, on the global run, which folders to touch
+/// and whether to delete data for folders that are gone.
 ///
 /// [global] adds the folder scope; the per-folder view has only its own.
 /// Returns null on cancel.
@@ -23,6 +24,7 @@ Future<FetchPlan?> showFetchTasksDialog(
   var scope = FetchScope.all;
   var reHashAll = false;
   var refreshLists = false;
+  var pruneMissing = false;
 
   String scopeLabel(FetchScope s) => switch (s) {
         FetchScope.changedFolders => 'Only changed folders',
@@ -88,6 +90,20 @@ Future<FetchPlan?> showFetchTasksDialog(
                             ),
                           ),
                           const SizedBox(height: 8),
+                          UiFocusZoom(
+                            child: CheckboxListTile(
+                              title: const Text('Remove missing systems'),
+                              subtitle: const Text(
+                                'Deletes scan results for folders that are no '
+                                'longer on disk. Asks before deleting.',
+                              ),
+                              value: pruneMissing,
+                              onChanged: (v) =>
+                                  setDlgState(() => pruneMissing = v ?? false),
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
                         ],
                         UiFocusZoom(
                           child: CheckboxListTile(
@@ -142,6 +158,7 @@ Future<FetchPlan?> showFetchTasksDialog(
                     match: true,
                     matchReFetchAll: reHashAll,
                     progress: true,
+                    pruneMissing: pruneMissing,
                   ),
                 ),
                 child: const Text('Update'),

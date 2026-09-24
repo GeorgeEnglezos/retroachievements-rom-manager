@@ -55,6 +55,8 @@ void main() {
     // The expensive re-hash and the list override stay off unless asked for.
     expect(plan.matchReFetchAll, isFalse);
     expect(plan.refreshLists, isFalse);
+    // Deleting data for gone folders is never a default.
+    expect(plan.pruneMissing, isFalse);
   });
 
   testWidgets('advanced options are hidden until expanded', (tester) async {
@@ -70,11 +72,13 @@ void main() {
     await tapVisible(tester, 'Re-hash every ROM');
     await tapVisible(tester, 'Force refresh RA game lists');
     await tapVisible(tester, 'Only changed folders');
+    await tapVisible(tester, 'Remove missing systems');
     await tapVisible(tester, 'Update');
 
     final plan = captured.single!;
     expect(plan.matchReFetchAll, isTrue);
     expect(plan.refreshLists, isTrue);
+    expect(plan.pruneMissing, isTrue);
     expect(plan.scope, FetchScope.changedFolders);
   });
 
@@ -83,6 +87,8 @@ void main() {
     await open(tester, global: false);
     await expand(tester);
     expect(find.text('All folders'), findsNothing);
+    // Pruning is library-wide, so it has no place in a one-folder run.
+    expect(find.text('Remove missing systems'), findsNothing);
     expect(find.text('Re-hash every ROM'), findsOneWidget);
   });
 

@@ -667,6 +667,45 @@ class _HomeScreenState extends State<HomeScreen> {
   // Sweeps every subfolder in turn, updating each folder card live.
   // [plan] pre-builds the run and skips the task dialog, used by the setup
   // wizard's first scan. Interactive callers pass nothing and get the dialog.
+  // Declining the confirm skips only the prune; the update still runs.
+  Future<void> _pruneMissing() async {
+    final missing = await _lib.missingSystemNames();
+    if (!mounted) return;
+    if (missing.isEmpty) {
+      _notify('No missing systems to remove.');
+      return;
+    }
+    // Naming them matters: an unplugged drive looks exactly like a deleted
+    // folder from here, and this delete can't be undone.
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Remove ${missing.length} missing '
+            'system${missing.length == 1 ? '' : 's'}?'),
+        content: Text('These folders are not on disk right now:\n\n'
+            '${missing.join('\n')}\n\n'
+            'Their scan results will be deleted. If one of these is on a drive '
+            'that is currently unplugged, cancel and plug it back in first.'),
+        actions: [
+          UiFocusZoom(
+            child: TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
+          ),
+          UiFocusZoom(
+            child: TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Remove')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final removed = await _lib.pruneMissingSystems();
+    _notify('Removed $removed missing system${removed == 1 ? '' : 's'}.');
+  }
+
   Future<void> _scanAllSystems({FetchPlan? plan}) async {
     // A stale snackbar action (its onPressed was built before the run started)
     // or the folder view's FAB could otherwise start a second run over the same
@@ -681,6 +720,10 @@ class _HomeScreenState extends State<HomeScreen> {
     // one press is noise.
     if (plan.refresh) {
       await _refreshFolders(quiet: true);
+      if (!mounted) return;
+    }
+    if (plan.pruneMissing) {
+      await _pruneMissing();
       if (!mounted) return;
     }
 
