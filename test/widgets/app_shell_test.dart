@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:rarm/services/app_mode.dart';
 import 'package:rarm/services/play_view.dart';
 import 'package:rarm/screens/home_screen.dart';
+import 'package:rarm/screens/setup_wizard.dart';
 import 'package:rarm/widgets/app_shell.dart';
 
 void main() {
@@ -133,6 +134,16 @@ void main() {
     await tester.tap(find.byTooltip('LIBRARY'));
     await tester.pump();
     expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 1);
+  });
+
+  testWidgets('first run opens setup as a modal over the shell',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: AppShell(showSetup: true)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(SetupWizard), findsOneWidget);
+    expect(find.byType(AppShell), findsOneWidget);
   });
 
   testWidgets('portrait phone keeps the top title and shows no rail',

@@ -670,10 +670,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   'RetroAchievements account, emulators).',
               child: UiFocusZoom(
                 child: OutlinedButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SetupWizard()),
-                  ),
+                  onPressed: () => showSetupWizard(context),
                   icon: const Icon(Icons.restart_alt),
                   label: const Text('Re-run setup'),
                 ),

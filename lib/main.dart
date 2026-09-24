@@ -4,7 +4,6 @@ import 'package:device_preview/device_preview.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'screens/setup_wizard.dart';
 import 'services/app_mode.dart';
 import 'services/play_view.dart';
 import 'services/rom_tap.dart';
@@ -161,8 +160,8 @@ class MyApp extends StatelessWidget {
         // Every mode uses the one responsive shell; big picture is that shell in
         // gaming trim, shown full-window and driven by the pad (the separate
         // couch shell was retired). AppShell listens to appModeListenable itself,
-        // so a mode flip rebuilds it. Setup always runs first.
-        home: setupDone ? const AppShell() : const SetupWizard(),
+        // so a mode flip rebuilds it. First run opens setup over it.
+        home: AppShell(showSetup: !setupDone),
         );
       },
     );

@@ -15,7 +15,6 @@ import '../services/scan_settings.dart';
 import '../services/scraper/gamelist_importer.dart';
 import '../services/scraper/scraped_store.dart';
 import '../theme/ui_tokens.dart';
-import '../widgets/app_shell.dart';
 import '../widgets/pick_library_folder.dart';
 import '../widgets/ui_scale_control.dart';
 import '../widgets/ui/ui_button.dart';
@@ -45,8 +44,18 @@ Future<ImportResult> _importAndStore(String root, Set<String> romPaths) async {
   return result;
 }
 
-/// First-run setup. Shown instead of [AppShell] until [PrefKeys.setupDone] is
-/// set, and reachable again from Settings.
+/// Opens setup as a modal. Tapping outside does not close it; a half-finished
+/// setup is left by Skip, which still marks it handled.
+Future<void> showSetupWizard(BuildContext context,
+        [SetupWizard wizard = const SetupWizard()]) =>
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => wizard,
+    );
+
+/// First-run setup. Opened over [AppShell] until [PrefKeys.setupDone] is set,
+/// and reachable again from Settings.
 class SetupWizard extends StatefulWidget {
   /// Injectable for tests; defaults to a real RA profile lookup.
   final CredentialVerifier? verifyCredentials;
@@ -119,13 +128,9 @@ class _SetupWizardState extends State<SetupWizard> {
     );
   }
 
-  // Marks setup handled and drops into the app. Whatever earlier steps saved
-  // stays saved; skipping abandons the remaining steps, not the finished ones.
-  //
-  // Two ways in, so two ways out: on first run the wizard *is* the root route
-  // and has to install an AppShell, but re-running from Settings pushed it on
-  // top of a live one, and replacing that would leave two shells (two home
-  // screens, doubled listeners) stacked on each other.
+  // Marks setup handled and closes the modal onto the shell underneath.
+  // Whatever earlier steps saved stays saved; skipping abandons the remaining
+  // steps, not the finished ones.
   Future<void> _finish({bool startScan = false}) async {
     if (_finishing) return; // a second tap during the route transition
     _finishing = true;
@@ -133,89 +138,86 @@ class _SetupWizardState extends State<SetupWizard> {
     await prefs.setBool(PrefKeys.setupDone, true);
     if (!mounted) return;
     if (startScan) firstScanRequest.value = true;
-    final navigator = Navigator.of(context);
-    if (navigator.canPop()) {
-      navigator.pop();
-    } else {
-      navigator.pushReplacement(
-        MaterialPageRoute(builder: (_) => const AppShell()),
-      );
-    }
+    Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    return Scaffold(
+    final size = MediaQuery.sizeOf(context);
+    // Phones get the whole screen, like the detail modal; the folder list
+    // needs the room.
+    final full = size.width < kBreakWide;
+    return Dialog(
       backgroundColor: ui.background,
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+      insetPadding: EdgeInsets.all(full ? 8 : 24),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 720,
+          maxHeight: full ? double.infinity : size.height * 0.85,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: UiFocusZoom(
+                  child: TextButton(
+                    onPressed: _finish,
+                    child: Text('Skip setup',
+                        style: ui.labelCaps.copyWith(color: ui.muted)),
+                  ),
+                ),
+              ),
+              Text('STEP ${_step + 1} OF ${_lastStep + 1}',
+                  style: ui.labelCaps.copyWith(color: ui.muted)),
+              const SizedBox(height: 12),
+              Expanded(
+                child: PageView(
+                  controller: _pageCtrl,
+                  // Steps gate each other (credentials must verify), so
+                  // swiping past them is not allowed.
+                  physics: const NeverScrollableScrollPhysics(),
+                  onPageChanged: (i) => setState(() => _step = i),
+                  children: [
+                    const _WelcomeStep(),
+                    _CredentialsStep(
+                      verify: _verify,
+                      verified: _verifiedCredentials,
+                      onVerifiedChanged: (v) =>
+                          setState(() => _verifiedCredentials = v),
+                    ),
+                    _FolderStep(
+                      initialFolder: widget.initialFolder,
+                      importScrapedData:
+                          widget.importScrapedData ?? _importAndStore,
+                      onFolderChanged: (f) => setState(() => _folder = f),
+                    ),
+                    _FirstScanStep(
+                      onStartScan: () => _finish(startScan: true),
+                      onLater: _finish,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: UiFocusZoom(
-                      child: TextButton(
-                        onPressed: _finish,
-                        child: Text('Skip setup',
-                            style: ui.labelCaps.copyWith(color: ui.muted)),
-                      ),
-                    ),
+                  UiButton(
+                    label: 'BACK',
+                    variant: UiButtonVariant.secondary,
+                    onPressed: _step == 0 ? null : _back,
                   ),
-                  Text('STEP ${_step + 1} OF ${_lastStep + 1}',
-                      style: ui.labelCaps.copyWith(color: ui.muted)),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: PageView(
-                      controller: _pageCtrl,
-                      // Steps gate each other (credentials must verify), so
-                      // swiping past them is not allowed.
-                      physics: const NeverScrollableScrollPhysics(),
-                      onPageChanged: (i) => setState(() => _step = i),
-                      children: [
-                        const _WelcomeStep(),
-                        _CredentialsStep(
-                          verify: _verify,
-                          verified: _verifiedCredentials,
-                          onVerifiedChanged: (v) =>
-                              setState(() => _verifiedCredentials = v),
-                        ),
-                        _FolderStep(
-                          initialFolder: widget.initialFolder,
-                          importScrapedData:
-                              widget.importScrapedData ?? _importAndStore,
-                          onFolderChanged: (f) => setState(() => _folder = f),
-                        ),
-                        _FirstScanStep(
-                          onStartScan: () => _finish(startScan: true),
-                          onLater: _finish,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      UiButton(
-                        label: 'BACK',
-                        variant: UiButtonVariant.secondary,
-                        onPressed: _step == 0 ? null : _back,
-                      ),
-                      UiButton(
-                        label: 'CONTINUE',
-                        onPressed: _canContinue ? _next : null,
-                      ),
-                    ],
+                  UiButton(
+                    label: 'CONTINUE',
+                    onPressed: _canContinue ? _next : null,
                   ),
                 ],
               ),
-            ),
+            ],
           ),
         ),
       ),

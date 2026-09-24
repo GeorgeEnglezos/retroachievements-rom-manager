@@ -5,7 +5,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:rarm/screens/home_screen.dart';
-import 'package:rarm/widgets/app_shell.dart';
 import 'package:rarm/screens/setup_wizard.dart';
 import 'package:rarm/services/credentials.dart';
 import 'package:rarm/services/pref_keys.dart';
@@ -25,10 +24,22 @@ void main() {
     SecretStore.resetForTest();
   });
 
-  Widget host(Widget child) => MaterialApp(
-        theme: uiTheme(UiTokens.light),
-        home: child,
-      );
+  // The wizard is a modal, so every test opens it the way the app does: over
+  // a live route it pops back to when finished.
+  Future<void> open(WidgetTester tester,
+      [SetupWizard wizard = const SetupWizard()]) async {
+    await tester.pumpWidget(MaterialApp(
+      theme: uiTheme(UiTokens.light),
+      home: Builder(
+        builder: (context) => TextButton(
+          onPressed: () => showSetupWizard(context, wizard),
+          child: const Text('open'),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pump();
+  }
 
   // Continue is disabled by a null onPressed.
   bool continueEnabled(WidgetTester tester) =>
@@ -39,21 +50,19 @@ void main() {
 
   testWidgets('skipping marks setup done so it never shows again',
       (tester) async {
-    await tester.pumpWidget(host(const SetupWizard()));
+    await open(tester);
     await tester.pump();
 
     await tester.tap(find.text('Skip setup'));
-    // Not pumpAndSettle: skipping lands on AppShell, whose indeterminate
-    // progress indicators animate forever and would time it out.
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
 
+    expect(find.byType(SetupWizard), findsNothing);
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getBool(PrefKeys.setupDone), isTrue);
   });
 
   testWidgets('starts on the welcome step and can advance', (tester) async {
-    await tester.pumpWidget(host(const SetupWizard()));
+    await open(tester);
     await tester.pump();
 
     expect(
@@ -66,7 +75,7 @@ void main() {
   });
 
   testWidgets('back returns to the previous step', (tester) async {
-    await tester.pumpWidget(host(const SetupWizard()));
+    await open(tester);
     await tester.pump();
 
     await tester.tap(find.text('CONTINUE'));
@@ -80,9 +89,9 @@ void main() {
 
   testWidgets('a rejected key blocks the step and saves nothing',
       (tester) async {
-    await tester.pumpWidget(host(SetupWizard(
+    await open(tester, SetupWizard(
       verifyCredentials: (u, k) async => throw Exception('HTTP 401'),
-    )));
+    ));
     await tester.pump();
     await tester.tap(find.text('CONTINUE'));
     await tester.pumpAndSettle();
@@ -101,9 +110,9 @@ void main() {
 
   testWidgets('a verified key saves username, key and avatar path',
       (tester) async {
-    await tester.pumpWidget(host(SetupWizard(
+    await open(tester, SetupWizard(
       verifyCredentials: (u, k) async => '/UserPic/Player.png',
-    )));
+    ));
     await tester.pump();
     await tester.tap(find.text('CONTINUE'));
     await tester.pumpAndSettle();
@@ -127,9 +136,9 @@ void main() {
   });
 
   testWidgets('credentials entered before skipping are kept', (tester) async {
-    await tester.pumpWidget(host(SetupWizard(
+    await open(tester, SetupWizard(
       verifyCredentials: (u, k) async => '/UserPic/Player.png',
-    )));
+    ));
     await tester.pump();
     await tester.tap(find.text('CONTINUE'));
     await tester.pumpAndSettle();
@@ -149,9 +158,9 @@ void main() {
 
   testWidgets('editing a field after verifying locks Continue again',
       (tester) async {
-    await tester.pumpWidget(host(SetupWizard(
+    await open(tester, SetupWizard(
       verifyCredentials: (u, k) async => '/UserPic/Player.png',
-    )));
+    ));
     await tester.pump();
     await tester.tap(find.text('CONTINUE'));
     await tester.pumpAndSettle();
@@ -174,9 +183,9 @@ void main() {
 
   testWidgets('the re-lock survives leaving and returning to the step',
       (tester) async {
-    await tester.pumpWidget(host(SetupWizard(
+    await open(tester, SetupWizard(
       verifyCredentials: (u, k) async => '/UserPic/Player.png',
-    )));
+    ));
     await tester.pump();
     await tester.tap(find.text('CONTINUE'));
     await tester.pumpAndSettle();
@@ -216,11 +225,11 @@ void main() {
     // real event loop; outside runAsync the folder walk never finishes. Poll
     // rather than sleeping a fixed span, which races a loaded CI box.
     await tester.runAsync(() async {
-      await tester.pumpWidget(host(SetupWizard(
+      await open(tester, SetupWizard(
         verifyCredentials: (u, k) async => '/UserPic/Player.png',
         initialFolder: root.path,
         initialStep: 2,
-      )));
+      ));
       final deadline = DateTime.now().add(const Duration(seconds: 5));
       while (find.text('Mystery System').evaluate().isEmpty) {
         if (DateTime.now().isAfter(deadline)) {
@@ -250,11 +259,11 @@ void main() {
     Directory(p.join(root.path, 'BIOS')).createSync();
 
     await tester.runAsync(() async {
-      await tester.pumpWidget(host(SetupWizard(
+      await open(tester, SetupWizard(
         verifyCredentials: (u, k) async => '/UserPic/Player.png',
         initialFolder: root.path,
         initialStep: 2,
-      )));
+      ));
       final deadline = DateTime.now().add(const Duration(seconds: 5));
       while (find.text('BIOS').evaluate().isEmpty) {
         if (DateTime.now().isAfter(deadline)) fail('folder row never appeared');
@@ -293,13 +302,13 @@ void main() {
     File(p.join(system.path, 'demo.gb')).writeAsStringSync('x');
 
     await tester.runAsync(() async {
-      await tester.pumpWidget(host(SetupWizard(
+      await open(tester, SetupWizard(
         verifyCredentials: (u, k) async => '/UserPic/Player.png',
         initialFolder: root.path,
         initialStep: 2,
         importScrapedData: (r, paths) async =>
             const ImportResult([], 0, {}),
-      )));
+      ));
       final deadline = DateTime.now().add(const Duration(seconds: 5));
       while (find.text('1 ROM').evaluate().isEmpty) {
         if (DateTime.now().isAfter(deadline)) fail('initial count never landed');
@@ -353,12 +362,12 @@ void main() {
     }
 
     await tester.runAsync(() async {
-      await tester.pumpWidget(host(SetupWizard(
+      await open(tester, SetupWizard(
         verifyCredentials: (u, k) async => '/UserPic/Player.png',
         initialFolder: root.path,
         initialStep: 2,
         importScrapedData: fakeImport,
-      )));
+      ));
       final deadline = DateTime.now().add(const Duration(seconds: 5));
       while (find.textContaining('Found Skraper media').evaluate().isEmpty) {
         if (DateTime.now().isAfter(deadline)) {
@@ -383,7 +392,7 @@ void main() {
     firstScanRequest.value = false;
     addTearDown(() => firstScanRequest.value = false);
 
-    await tester.pumpWidget(host(const SetupWizard(initialStep: 3)));
+    await open(tester, const SetupWizard(initialStep: 3));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('START SCAN'));
@@ -397,7 +406,7 @@ void main() {
     firstScanRequest.value = false;
     addTearDown(() => firstScanRequest.value = false);
 
-    await tester.pumpWidget(host(const SetupWizard(initialStep: 3)));
+    await open(tester, const SetupWizard(initialStep: 3));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('LATER'));
@@ -409,31 +418,28 @@ void main() {
     expect(prefs.getBool(PrefKeys.setupDone), isTrue);
   });
 
-  testWidgets('finishing a re-run pops back instead of stacking a shell',
+  testWidgets('finishing closes the modal back onto the page under it',
       (tester) async {
     addTearDown(() => firstScanRequest.value = false);
 
-    // Mirrors Settings' "Re-run setup": the wizard is pushed on top of a live
-    // route. Finishing must return to it, not install a second AppShell.
-    await tester.pumpWidget(host(
-      Builder(
-        builder: (context) => TextButton(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const SetupWizard(initialStep: 3)),
-          ),
-          child: const Text('open'),
-        ),
-      ),
-    ));
-    await tester.tap(find.text('open'));
+    await open(tester, const SetupWizard(initialStep: 3));
     await tester.pumpAndSettle();
     expect(find.text('Ready to scan'), findsOneWidget);
 
     await tester.tap(find.text('LATER'));
     await tester.pumpAndSettle();
 
+    expect(find.byType(SetupWizard), findsNothing);
     expect(find.text('open'), findsOneWidget);
-    expect(find.byType(AppShell), findsNothing);
+  });
+
+  testWidgets('tapping outside does not dismiss it', (tester) async {
+    await open(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SetupWizard), findsOneWidget);
   });
 }

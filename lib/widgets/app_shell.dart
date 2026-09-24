@@ -11,6 +11,7 @@ import '../screens/home_screen.dart';
 import '../screens/logs_screen.dart';
 import '../screens/recommendations_screen.dart';
 import '../screens/settings_screen.dart';
+import '../screens/setup_wizard.dart';
 import '../screens/storage_screen.dart';
 import '../services/update_check.dart';
 import '../theme/ui_tokens.dart';
@@ -47,7 +48,10 @@ void Function(int destIndex)? shellNavigate;
 /// Top-level responsive navigation shell. Holds the destinations in an
 /// IndexedStack so each keeps its state across nav switches.
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  /// First run: opens the setup modal over the shell once it is on screen.
+  final bool showSetup;
+
+  const AppShell({super.key, this.showSetup = false});
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -63,6 +67,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     super.initState();
     shellNavigate = _navigateFromPushed;
     _loadVersion();
+    if (widget.showSetup) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => showSetupWizard(context));
+    }
     if (Platform.isAndroid) {
       WidgetsBinding.instance.addObserver(this);
       _drainPendingShortcut(); // cold start via a home-screen shortcut
