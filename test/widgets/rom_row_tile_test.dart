@@ -317,13 +317,23 @@ void main() {
       expect(find.text('512.0 KB'), findsNothing);
     });
 
-    testWidgets('play mode can title rows by file name instead',
+    testWidgets('kiosk hides status and error lines', (tester) async {
+      appModeListenable.value = AppMode.gaming;
+      final r = rom('cave_hopper.sfc', status: RomStatus.error)
+        ..errorMessage = 'read failed';
+      await tester.pumpWidget(hostRom(r));
+      expect(find.text('read failed'), findsNothing);
+    });
+
+    testWidgets('kiosk drops the progress bar with the achievement count',
         (tester) async {
       appModeListenable.value = AppMode.gaming;
-      playViewListenable.value = const PlayView(raTitle: false);
-      await tester.pumpWidget(hostRom(named()));
-      expect(find.text('Super Mario World'), findsNothing);
-      expect(find.text('smw.sfc'), findsOneWidget);
+      playViewListenable.value = const PlayView(achievementCount: false);
+      final r = rom('cave_hopper.sfc')
+        ..achievementCount = 10
+        ..earnedAchievements = 4;
+      await tester.pumpWidget(hostRom(r));
+      expect(find.byType(UiProgressBar), findsNothing);
     });
   });
 

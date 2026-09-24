@@ -162,13 +162,6 @@ void main() {
       expect(find.text('512.0 KB'), findsNothing);
     });
 
-    testWidgets('play mode can title cards by file name', (tester) async {
-      appModeListenable.value = AppMode.gaming;
-      playViewListenable.value = const PlayView(raTitle: false);
-      await tester.pumpWidget(host(named()));
-      expect(find.text('Super Mario World'), findsNothing);
-      expect(find.text('smw.sfc'), findsOneWidget);
-    });
   });
 
   group('home-style meta', () {
@@ -256,7 +249,6 @@ void main() {
               store: PlaylistStore(),
               lean: true,
               listingExtras: true,
-              raName: true,
             ),
           ),
         );

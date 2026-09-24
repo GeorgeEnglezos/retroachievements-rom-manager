@@ -26,17 +26,23 @@ Widget romBadge(String text, Color color, {String? tooltip}) {
 /// mode, which hides every action that could resolve a duplicate anyway.
 Widget? dupBadge(RomResult rom, UiTokens ui) =>
     rom.duplicateGroupId == null || gamingMode
-        ? null
-        : romBadge('⧉ DUP', ui.text,
-            tooltip: 'Another copy of this game is in this folder.');
+    ? null
+    : romBadge(
+        '⧉ DUP',
+        ui.text,
+        tooltip: 'Another copy of this game is in this folder.',
+      );
 
 /// "🔥 HOT": the game's RA set has a large active player base.
 Widget? hotBadge(RomResult rom) => !isHotGame(rom) || !playView.hot
     ? null
-    : romBadge('🔥 HOT', Colors.deepOrange,
-        tooltip: 'Hot on RetroAchievements: '
-            '${rom.numPlayersCasual} players have earned achievements in this set '
-            '(≥ $hotPlayerThreshold).');
+    : romBadge(
+        '🔥 HOT',
+        Colors.deepOrange,
+        tooltip:
+            'Hot on RetroAchievements: '
+            '${rom.numPlayersCasual} players have earned achievements in this set ',
+      );
 
 /// "NO ACH": the game has no achievements: either its hash matched nothing on
 /// RA, or the whole console isn't on RA (localOnly / metadataOnly).
@@ -46,18 +52,19 @@ Widget? noAchBadge(RomResult rom) {
     RomStatus.unsupported =>
       'No achievements on RetroAchievements for this game.',
     RomStatus.localOnly ||
-    RomStatus.metadataOnly =>
-      'This console is not on RetroAchievements.',
+    RomStatus.metadataOnly => 'This console is not on RetroAchievements.',
     _ => null,
   };
-  return tooltip == null ? null : romBadge('NO ACH', kDangerColor, tooltip: tooltip);
+  return tooltip == null
+      ? null
+      : romBadge('NO ACH', kDangerColor, tooltip: tooltip);
 }
 
 /// "N ACH": the game's achievement count.
 Widget? achBadge(RomResult rom, UiTokens ui) =>
     rom.achievementCount == null || !playView.achievementCount
-        ? null
-        : UiBadge(label: '${rom.achievementCount} ACH', color: ui.accentGames);
+    ? null
+    : UiBadge(label: '${rom.achievementCount} ACH', color: ui.accentGames);
 
 /// "💿 N": this listing collapses N discs of a multi-disc game. For a Switch
 /// title the N files are its base, updates and DLC, not discs, so it reads
@@ -65,9 +72,13 @@ Widget? achBadge(RomResult rom, UiTokens ui) =>
 Widget? discBadge(int? count, UiTokens ui, {String? fileName}) {
   if (count == null || count < 2) return null;
   if (fileName != null && isSwitchFile(fileName)) {
-    return romBadge('📦 $count', ui.accent,
-        tooltip: '$count files: base game, updates and DLC. '
-            'Only the base game boots.');
+    return romBadge(
+      '📦 $count',
+      ui.accent,
+      tooltip:
+          '$count files: base game, updates and DLC. '
+          'Only the base game boots.',
+    );
   }
   return romBadge('💿 $count', ui.accent, tooltip: '$count-disc game');
 }

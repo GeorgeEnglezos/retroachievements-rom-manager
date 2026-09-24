@@ -209,7 +209,6 @@ class _CoverTileState extends State<CoverTile> {
             rom: widget.rom,
             store: _store,
             lean: true,
-            raName: true,
             width: widget.size,
             height: widget.size,
             onOpen: widget.onOpen,

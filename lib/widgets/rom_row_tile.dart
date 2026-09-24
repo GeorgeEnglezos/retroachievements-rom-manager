@@ -5,6 +5,7 @@ import '../models/rom_result.dart';
 import '../models/rom_row.dart';
 import '../services/disc_formats.dart';
 import '../services/member_key.dart';
+import '../services/app_mode.dart';
 import '../services/play_view.dart';
 import '../services/playlist_store.dart';
 import '../services/rom_tap.dart';
@@ -288,6 +289,7 @@ class RomRowTile extends StatelessWidget {
     // read in the meta line already carries how far in the game is.
     if (MediaQuery.sizeOf(context).shortestSide < kBreakCompact) return null;
     if (!display.showProgress ||
+        !playView.achievementCount ||
         row.rom == null ||
         row.earnedAchievements == null) {
       return null;
@@ -349,13 +351,13 @@ class RomRowTile extends StatelessWidget {
     final rom = row.rom!;
     // Size lives in the subtitle for ROM rows only; the storage screen draws its
     // own via display.showSizeBar, which play mode never touches.
-    final sizeLabel = playView.fileSize ? row.sizeLabel : null;
+    final sizeLabel = gamingMode ? null : row.sizeLabel;
 
     // localOnly renders like a supported row minus RA data: filename title,
     // size, no achievements/progress and no "Not fetched" status text.
     if (rom.status == RomStatus.supported || rom.isLocalOnly) {
       final fileName =
-          playView.fileName && row.subtitle != null && row.subtitle != row.title
+          !gamingMode && row.subtitle != null && row.subtitle != row.title
           ? row.subtitle
           : null;
       // The same earned/total read the grid's GameMetaRow shows, inline in the
@@ -385,7 +387,8 @@ class RomRowTile extends StatelessWidget {
       RomStatus.error => rom.errorMessage ?? statusLabel(rom.status),
       final s => statusLabel(s),
     };
-    if (statusText == null) return null;
+    // Repair hints are no use in play mode, which hides every fix.
+    if (statusText == null || gamingMode) return null;
     return _metaLine(
       ui,
       [statusText, sizeLabel],

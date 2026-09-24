@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/rom_result.dart';
 import '../services/member_key.dart';
+import '../services/app_mode.dart';
 import '../services/play_view.dart';
 import '../services/playlist_store.dart';
 import '../services/rom_tap.dart';
@@ -44,9 +45,6 @@ class RomGridItem extends StatelessWidget {
   // hot / no-ach / tag chips, each gated by [playView] (all-on while cleaning,
   // the saved subset in play). Home leaves this off for its clean shelf.
   final bool listingExtras;
-  // Force the RA name over the file name, ignoring the play-mode setting. Big
-  // Picture's shelves and Library set this so they always read as game names.
-  final bool raName;
   // Fixed cell size (Home's square shelf). Null lets the art fill the grid cell.
   final double? height;
   final double? width;
@@ -68,7 +66,6 @@ class RomGridItem extends StatelessWidget {
     this.groupPaths,
     this.lean = false,
     this.listingExtras = false,
-    this.raName = false,
     this.height,
     this.width,
   });
@@ -88,10 +85,8 @@ class RomGridItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    final displayTitle = raName
-        ? gameDisplayName(rom.gameTitle, rom.fileName)
-        : listingTitle(rom.gameTitle, rom.fileName);
-    final fileName = playView.fileName && displayTitle != rom.fileName
+    final displayTitle = listingTitle(rom.gameTitle, rom.fileName);
+    final fileName = !gamingMode && displayTitle != rom.fileName
         ? rom.fileName
         : null;
 
@@ -114,7 +109,6 @@ class RomGridItem extends StatelessWidget {
             height: height,
             width: width,
             fileName: fileName,
-            raName: raName,
             artOverlays: [?discBadge(discCount, ui, fileName: rom.fileName), ?dupBadge(rom, ui)],
             corner: isSelectMode ? _selectionDot(ui) : null,
             meta: _leanMetaBlock(ui),
@@ -148,7 +142,6 @@ class RomGridItem extends StatelessWidget {
           foreground: fg,
           textPadding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
           fileName: fileName,
-          raName: raName,
           artOverlays: [?discBadge(discCount, ui, fileName: rom.fileName), ?dupBadge(rom, ui)],
           corner: isSelectMode ? _selectionDot(ui) : null,
           meta: Column(
@@ -237,14 +230,16 @@ class RomGridItem extends StatelessWidget {
     final console = rom.consoleName ?? '';
     return Row(
       children: [
-        if (total > 0)
+        if (total > 0 && playView.achievementCount)
           Text(
             '$earned/$total',
             style: ui.mono.copyWith(fontSize: 11, color: ui.accentGames),
           ),
         Expanded(
           child: Text(
-            total > 0 ? '  ·  $console' : console,
+            total > 0 && playView.achievementCount
+                ? '  ·  $console'
+                : console,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 11, color: ui.muted),
@@ -255,10 +250,10 @@ class RomGridItem extends StatelessWidget {
   }
 
   /// The muted line under the meta row: the fetch status (only where there is
-  /// one to report) then the file size, both play-mode gated the way the list
-  /// tile gates them. Null when neither applies.
+  /// one to report) then the file size. Cleaning only, like the list tile's.
   String? _subline(UiTokens ui) {
-    final size = playView.fileSize ? rom.fileSizeLabel : null;
+    if (gamingMode) return null;
+    final size = rom.fileSizeLabel;
     final status = switch (rom.status) {
       RomStatus.supported ||
       RomStatus.localOnly ||

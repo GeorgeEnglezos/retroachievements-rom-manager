@@ -47,11 +47,6 @@ class GameCover extends StatelessWidget {
   /// Inset for the text block under the art.
   final EdgeInsets textPadding;
 
-  /// Force the RetroAchievements name (falling back to the file name only when
-  /// there is none), ignoring the play-mode file-name setting. Big Picture sets
-  /// this so its shelves always read as game names.
-  final bool raName;
-
   const GameCover({
     super.key,
     required this.rom,
@@ -64,15 +59,12 @@ class GameCover extends StatelessWidget {
     this.foreground,
     this.framedArt = true,
     this.textPadding = const EdgeInsets.only(top: 8),
-    this.raName = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    final title = raName
-        ? gameDisplayName(rom.gameTitle, rom.fileName)
-        : listingTitle(rom.gameTitle, rom.fileName);
+    final title = listingTitle(rom.gameTitle, rom.fileName);
     final art = _art(ui);
 
     return SizedBox(
@@ -234,7 +226,7 @@ class GameMetaRow extends StatelessWidget {
     final total = rom.achievementCount ?? 0;
     final earned = rom.earnedAchievements ?? 0;
     final items = <Widget>[
-      if (total > 0)
+      if (total > 0 && playView.achievementCount)
         Text('$earned/$total',
             style: ui.mono
                 .copyWith(fontSize: 11, color: numberColor ?? ui.accentGames)),
