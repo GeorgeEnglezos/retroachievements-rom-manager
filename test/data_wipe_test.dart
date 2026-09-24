@@ -185,10 +185,13 @@ void main() {
       consoleId: 7,
     ));
     expect(await lib.summaries(), isNotEmpty);
+    final before = lib.clearCount;
 
     await DataWipe(baseDir: base, library: lib).clear({ClearTarget.scans});
 
     expect(await lib.summaries(), isEmpty);
+    // Screens holding their own copy of a system watch this to reload.
+    expect(lib.clearCount, before + 1);
   });
 
   test('an empty selection deletes nothing', () async {

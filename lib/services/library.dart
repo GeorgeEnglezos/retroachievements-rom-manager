@@ -32,6 +32,11 @@ class Library extends ChangeNotifier {
   Future<void>? _initFuture;
   Directory? _systemsDirCache;
 
+  /// Bumped by [clear]. Screens that keep their own copy of a system (and so
+  /// can't just reload on every save) compare this to spot a wipe.
+  int get clearCount => _clearCount;
+  int _clearCount = 0;
+
   // Serializes mutations so concurrent saves can't double-assign ids.
   Future<void> _writeLock = Future.value();
 
@@ -179,6 +184,7 @@ class Library extends ChangeNotifier {
     await init();
     return _locked(() async {
       _byId.clear();
+      _clearCount++;
       final dir = await _systemsDir();
       await for (final f in dir.list()) {
         if (f is File && f.path.endsWith('.json')) await f.delete();

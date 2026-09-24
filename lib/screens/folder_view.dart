@@ -86,6 +86,7 @@ class _FolderViewState extends State<FolderView> {
   final PlaylistStore _playlistStore = PlaylistStore();
   late final Library _lib = widget.library ?? Library.instance;
   final Map<String, SystemData> _systemData = {};
+  late int _seenClearCount = _lib.clearCount;
   List<Playlist> _playlists = [];
   Map<String, Set<String>> _membership = {};
   bool _loading = true;
@@ -193,9 +194,26 @@ class _FolderViewState extends State<FolderView> {
   @override
   void initState() {
     super.initState();
+    _lib.addListener(_onLibraryChanged);
     _loadPersisted();
     _loadPlaylists();
     _loadSortPref();
+  }
+
+  @override
+  void dispose() {
+    _lib.removeListener(_onLibraryChanged);
+    super.dispose();
+  }
+
+  // Only a wipe reloads: this view saves to the library itself mid-fetch, so
+  // reloading on every save would swap the ROM list out from under the fetch.
+  // Without it, the stale _systemData would be saved straight back after a wipe.
+  void _onLibraryChanged() {
+    if (_lib.clearCount == _seenClearCount) return;
+    _seenClearCount = _lib.clearCount;
+    _systemData.clear();
+    _loadPersisted();
   }
 
   Future<void> _loadSortPref() async {
