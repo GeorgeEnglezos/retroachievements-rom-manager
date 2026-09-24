@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:rarm/screens/home_screen.dart';
 import 'package:rarm/screens/setup_wizard.dart';
+import 'package:rarm/services/app_mode.dart';
 import 'package:rarm/services/credentials.dart';
 import 'package:rarm/services/pref_keys.dart';
 import 'package:rarm/services/secret_store.dart';
@@ -392,7 +393,7 @@ void main() {
     firstScanRequest.value = false;
     addTearDown(() => firstScanRequest.value = false);
 
-    await open(tester, const SetupWizard(initialStep: 3));
+    await open(tester, const SetupWizard(initialStep: 4));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('START SCAN'));
@@ -406,7 +407,7 @@ void main() {
     firstScanRequest.value = false;
     addTearDown(() => firstScanRequest.value = false);
 
-    await open(tester, const SetupWizard(initialStep: 3));
+    await open(tester, const SetupWizard(initialStep: 4));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('LATER'));
@@ -422,7 +423,7 @@ void main() {
       (tester) async {
     addTearDown(() => firstScanRequest.value = false);
 
-    await open(tester, const SetupWizard(initialStep: 3));
+    await open(tester, const SetupWizard(initialStep: 4));
     await tester.pumpAndSettle();
     expect(find.text('Ready to scan'), findsOneWidget);
 
@@ -431,6 +432,56 @@ void main() {
 
     expect(find.byType(SetupWizard), findsNothing);
     expect(find.text('open'), findsOneWidget);
+  });
+
+  testWidgets('the step bar names every step', (tester) async {
+    await open(tester);
+    await tester.pumpAndSettle();
+
+    for (final name in ['WELCOME', 'ACCOUNT', 'LIBRARY', 'STYLE', 'SCAN']) {
+      expect(find.text(name), findsOneWidget, reason: name);
+    }
+  });
+
+  testWidgets('picking Kiosk on the style step saves the mode',
+      (tester) async {
+    addTearDown(() => appModeListenable.value = AppMode.cleaning);
+
+    await open(tester, const SetupWizard(initialStep: 3));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Kiosk'));
+    await tester.pumpAndSettle();
+
+    expect(appModeListenable.value, AppMode.gaming);
+  });
+
+  testWidgets('the scan step swaps Continue for the scan choices',
+      (tester) async {
+    await open(tester, const SetupWizard(initialStep: 4));
+    await tester.pumpAndSettle();
+
+    // One set of actions, in the footer: no dead Continue beside them.
+    expect(find.text('CONTINUE'), findsNothing);
+    expect(find.text('START SCAN'), findsOneWidget);
+    expect(find.text('LATER'), findsOneWidget);
+    expect(find.text('BACK'), findsOneWidget);
+  });
+
+  testWidgets('restore on the welcome step asks before replacing anything',
+      (tester) async {
+    await open(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('RESTORE FROM BACKUP'));
+    await tester.pumpAndSettle();
+    expect(find.text('Restore from backup?'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Restore from backup?'), findsNothing);
+    expect(find.byType(SetupWizard), findsOneWidget);
   });
 
   testWidgets('tapping outside does not dismiss it', (tester) async {

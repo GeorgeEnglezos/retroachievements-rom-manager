@@ -40,10 +40,11 @@ class _UiCollapsibleCardState extends State<UiCollapsibleCard> {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => setState(() => _expanded = !_expanded),
-              child: Padding(
-                // Collapsed, the header owns the whole card, so it keeps the
-                // bottom padding too.
-                padding: EdgeInsets.fromLTRB(pad, pad, pad, _expanded ? 6 : pad),
+              // Tinted band marks the header as the clickable part; UiCard
+              // clips it to the rounded corners.
+              child: Container(
+                color: ui.trough,
+                padding: EdgeInsets.symmetric(horizontal: pad, vertical: 14),
                 child: Row(
                   children: [
                     Expanded(
@@ -64,7 +65,7 @@ class _UiCollapsibleCardState extends State<UiCollapsibleCard> {
           ),
           if (_expanded)
             Padding(
-              padding: EdgeInsets.fromLTRB(pad, 0, pad, pad),
+              padding: EdgeInsets.fromLTRB(pad, 16, pad, pad),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

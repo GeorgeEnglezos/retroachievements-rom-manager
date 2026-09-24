@@ -164,79 +164,92 @@ class _SystemSettingsSectionState extends State<SystemSettingsSection> {
   @override
   Widget build(BuildContext context) {
     final data = _data;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // The inventory sits above the systems it feeds: add an emulator here
-        // and it drops straight into the dropdowns below.
-        EmulatorSettingsSection(onChanged: _refresh),
-        const SizedBox(height: 24),
-        UiCollapsibleCard(
-          title: 'Systems',
-          description:
-              'The systems in your library, the same ones Home shows. The '
-              'console decides how a ROM is hashed and matched, so a wrong '
-              'guess means no achievements; disc systems (PS1, PSP, Saturn, …) '
-              'must be set, then re-scan. The emulator is what Play launches.',
-          child: Column(
+    // The inventory sits beside (or above) the systems it feeds: add an
+    // emulator here and it drops straight into their dropdowns.
+    final emulators = EmulatorSettingsSection(onChanged: _refresh);
+    final systems = UiCollapsibleCard(
+      title: 'Systems',
+      description:
+          'The systems in your library, the same ones Home shows. The '
+          'console decides how a ROM is hashed and matched, so a wrong '
+          'guess means no achievements; disc systems (PS1, PSP, Saturn, …) '
+          'must be set, then re-scan. The emulator is what Play launches.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (data == null)
+            const Padding(
+              padding: EdgeInsets.all(8),
+              child: SizedBox(
+                height: 16,
+                width: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if (data.rows.isEmpty)
+            Text(
+              'No scanned systems yet. Pick a library folder under General and '
+              'scan it from Home, then come back to map its consoles.',
+              style: Theme.of(context).textTheme.bodySmall,
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                // As many cards per row as still clear ~390px each; the
+                // dropdowns and the args field need that width to stay readable.
+                const gap = 16.0;
+                final columns = ((constraints.maxWidth + gap) ~/ 408).clamp(
+                  1,
+                  99,
+                );
+                final width =
+                    (constraints.maxWidth - gap * (columns - 1)) / columns;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [
+                    for (final row in data.rows)
+                      SizedBox(
+                        width: width,
+                        child: _SystemCard(
+                          key: ValueKey(row.folder),
+                          row: row,
+                          emulators: data.emulators,
+                          connection: row.consoleId == null
+                              ? null
+                              : data.connections[row.consoleId],
+                          shared: data.sharedConsoleIds.contains(row.consoleId),
+                          consoleItems: _consoleItems,
+                          onConsoleChanged: (v) => _setConsole(row.folder, v),
+                          onEmulatorChanged: (v) =>
+                              _setEmulator(row.consoleId!, v),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+        ],
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Side by side from 1100px; Systems keeps 2/3 for its card grid.
+        if (constraints.maxWidth >= 1100) {
+          return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (data == null)
-                const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              else if (data.rows.isEmpty)
-                Text(
-                  'No scanned systems yet. Pick a library folder under General and '
-                  'scan it from Home, then come back to map its consoles.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                )
-              else
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    // Two cards side by side once each still clears ~380px; the
-                    // dropdowns and the args field need that width to stay readable.
-                    final columns = constraints.maxWidth >= 800 ? 2 : 1;
-                    const gap = 16.0;
-                    final width =
-                        (constraints.maxWidth - gap * (columns - 1)) / columns;
-                    return Wrap(
-                      spacing: gap,
-                      runSpacing: gap,
-                      children: [
-                        for (final row in data.rows)
-                          SizedBox(
-                            width: width,
-                            child: _SystemCard(
-                              key: ValueKey(row.folder),
-                              row: row,
-                              emulators: data.emulators,
-                              connection: row.consoleId == null
-                                  ? null
-                                  : data.connections[row.consoleId],
-                              shared: data.sharedConsoleIds.contains(
-                                row.consoleId,
-                              ),
-                              consoleItems: _consoleItems,
-                              onConsoleChanged: (v) =>
-                                  _setConsole(row.folder, v),
-                              onEmulatorChanged: (v) =>
-                                  _setEmulator(row.consoleId!, v),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
-                ),
+              Expanded(child: emulators),
+              const SizedBox(width: 24),
+              Expanded(flex: 2, child: systems),
             ],
-          ),
-        ),
-      ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [emulators, const SizedBox(height: 24), systems],
+        );
+      },
     );
   }
 }
@@ -329,8 +342,10 @@ class _SystemCard extends StatelessWidget {
                           DropdownMenuItem<int?>(
                             value: e.key,
                             child: UiFocusZoom(
-                              child:
-                                  Text(e.value, overflow: TextOverflow.ellipsis),
+                              child: Text(
+                                e.value,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ),
                       ],
@@ -352,7 +367,7 @@ class _SystemCard extends StatelessWidget {
                             style: Theme.of(context).textTheme.bodySmall,
                           )
                         : UiFocusZoom(
-                          child: DropdownButton<String?>(
+                            child: DropdownButton<String?>(
                               key: Key('emulator-${row.folder}'),
                               isExpanded: true,
                               isDense: true,
@@ -376,7 +391,7 @@ class _SystemCard extends StatelessWidget {
                                   ),
                               ],
                             ),
-                        ),
+                          ),
                   ),
                   // Emulator connections are keyed by console, not by folder,
                   // so folders mapped to the same console cannot differ. Say so
