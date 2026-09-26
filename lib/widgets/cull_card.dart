@@ -16,6 +16,7 @@ import 'rom_badges.dart';
 import 'rom_thumb.dart';
 import 'ui/ui_card.dart';
 import 'ui/ui_progress_bar.dart';
+import '../strings.dart';
 
 /// One elimination-game card: art, listing thumbnail, title, file name,
 /// achievements and metadata, with the search button supplied by the deck. The
@@ -91,7 +92,7 @@ class CullCard extends StatelessWidget {
                     UiFocusZoom(
                       child: IconButton(
                         icon: const Icon(Icons.search),
-                        tooltip: 'Search Google',
+                        tooltip: CullStrings.searchGoogle,
                         onPressed: onSearch,
                       ),
                     ),
@@ -133,7 +134,7 @@ class CullCard extends StatelessWidget {
       UiFocusZoom(
         child: IconButton(
           icon: const Icon(Icons.info_outline),
-          tooltip: 'Game details',
+          tooltip: CullStrings.gameDetails,
           onPressed: () => showDialog(
             context: context,
             builder: (_) => GameDetailDialog(
@@ -276,10 +277,11 @@ class CullCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('ACHIEVEMENTS',
+          Text(CullStrings.achievementsLabel,
               style: ui.labelCaps.copyWith(color: ui.muted, fontSize: 10)),
           const SizedBox(height: 4),
-          Text('$earned/$total', style: ui.mono.copyWith(fontSize: 22)),
+          Text(CommonStrings.fraction(earned, total),
+              style: ui.mono.copyWith(fontSize: 22)),
           const SizedBox(height: 10),
           UiProgressBar(
               value: achievementFraction(earned, total),
@@ -330,9 +332,9 @@ class CullCard extends StatelessWidget {
         raOrScraped(rom.released, scraped?.releaseDate),
         raOrScraped(rom.publisher, scraped?.publisher) ??
             raOrScraped(rom.developer, scraped?.developer),
-        if ((rom.points ?? 0) > 0) '${rom.points} pts',
+        if ((rom.points ?? 0) > 0) CullStrings.points(rom.points!),
         if ((rom.numPlayersCasual ?? 0) > 0)
-          '${compactCount(rom.numPlayersCasual!)} players',
+          CullStrings.players(compactCount(rom.numPlayersCasual!)),
         rom.fileSizeLabel,
-      ].whereType<String>().join(' · ');
+      ].whereType<String>().join(CommonStrings.dotSep);
 }

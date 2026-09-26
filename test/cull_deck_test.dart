@@ -388,4 +388,22 @@ void main() {
     expect(_top(tester).memberKey, beta.memberKey);
     expect(find.text('SNES · 1 / 2'), findsOneWidget);
   });
+
+  testWidgets('the first trash explains Trash once; later ones stay quiet',
+      (tester) async {
+    final hint = find.textContaining('Trash playlist');
+    await tester.pumpWidget(_deck([_card('alpha'), _card('beta'), _card('gamma')]));
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'TRASH'));
+    await tester.pumpAndSettle();
+    expect(hint, findsOneWidget);
+
+    ScaffoldMessenger.of(tester.element(find.byType(CullDeck)))
+        .hideCurrentSnackBar();
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'TRASH'));
+    await tester.pumpAndSettle();
+    expect(hint, findsNothing);
+  });
 }

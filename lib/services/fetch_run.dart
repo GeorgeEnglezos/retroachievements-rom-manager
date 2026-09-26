@@ -23,6 +23,7 @@ import 'rom_file_lister.dart';
 import 'scan_run.dart';
 import 'scan_settings.dart';
 import 'set_update.dart';
+import '../strings.dart';
 
 /// What one folder's run produced.
 class FolderRunResult {
@@ -191,8 +192,8 @@ Future<FolderRunResult> runFolderFetch({
     onTargets?.call(0);
     return finish(
       skipReason: folderConsoleId == null
-          ? 'no console mapping'
-          : "$consoleName isn't on RetroAchievements",
+          ? RomStatusStrings.noConsoleMapping
+          : RomStatusStrings.consoleNotOnRa(consoleName),
     );
   }
 

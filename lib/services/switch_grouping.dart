@@ -1,4 +1,5 @@
 import 'package:path/path.dart' as p;
+import '../strings.dart';
 
 /// Nintendo Switch dumps ship a game as several files: the base game, each
 /// update, and every DLC, all separate .nsp/.xci carrying their own 16-hex
@@ -93,16 +94,20 @@ List<String> switchPartLabels(List<String> fileNames) {
   return [
     for (final name in fileNames)
       switch (switchPart(name)) {
-        SwitchPart.base => 'Base',
+        SwitchPart.base => RomStatusStrings.switchBase,
         SwitchPart.update => _updateLabel(name),
-        SwitchPart.dlc => numberDlc ? 'DLC ${++dlc}' : 'DLC',
+        SwitchPart.dlc => numberDlc
+            ? RomStatusStrings.switchDlcNumbered(++dlc)
+            : RomStatusStrings.switchDlc,
       },
   ];
 }
 
 String _updateLabel(String fileName) {
   final semver = _semverPattern.firstMatch(fileName)?.group(1);
-  if (semver != null) return 'Update $semver';
+  if (semver != null) return RomStatusStrings.switchUpdateVersion(semver);
   final v = switchVersion(fileName) ?? 0;
-  return v == 0 ? 'Update' : 'Update v${v ~/ 65536}';
+  return v == 0
+      ? RomStatusStrings.switchUpdate
+      : RomStatusStrings.switchUpdateVersion('v${v ~/ 65536}');
 }

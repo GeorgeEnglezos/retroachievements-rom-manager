@@ -11,6 +11,7 @@ import '../services/emulator_store.dart';
 import '../services/library.dart';
 import '../services/scan_settings.dart';
 import '../services/settings_bus.dart';
+import '../strings.dart';
 import '../theme/ui_theme.dart';
 import '../theme/ui_tokens.dart';
 import 'emulator_settings_section.dart';
@@ -168,12 +169,8 @@ class _SystemSettingsSectionState extends State<SystemSettingsSection> {
     // emulator here and it drops straight into their dropdowns.
     final emulators = EmulatorSettingsSection(onChanged: _refresh);
     final systems = UiCollapsibleCard(
-      title: 'Systems',
-      description:
-          'The systems in your library, the same ones Home shows. The '
-          'console decides how a ROM is hashed and matched, so a wrong '
-          'guess means no achievements; disc systems (PS1, PSP, Saturn, …) '
-          'must be set, then re-scan. The emulator is what Play launches.',
+      title: SettingsStrings.systems,
+      description: SettingsStrings.systemsHelp,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -188,8 +185,7 @@ class _SystemSettingsSectionState extends State<SystemSettingsSection> {
             )
           else if (data.rows.isEmpty)
             Text(
-              'No scanned systems yet. Pick a library folder under General and '
-              'scan it from Home, then come back to map its consoles.',
+              SettingsStrings.noSystems,
               style: Theme.of(context).textTheme.bodySmall,
             )
           else
@@ -275,8 +271,9 @@ class _SystemCard extends StatelessWidget {
   });
 
   String get _detectedLabel => row.detected == null
-      ? 'not recognised'
-      : ConsoleMap.nameFor(row.detected) ?? 'id ${row.detected}';
+      ? SettingsStrings.consoleNotRecognised
+      : ConsoleMap.nameFor(row.detected) ??
+          SettingsStrings.consoleId(row.detected!);
 
   @override
   Widget build(BuildContext context) {
@@ -306,17 +303,20 @@ class _SystemCard extends StatelessWidget {
                     ),
                     if (consoleId != null &&
                         !ConsoleMap.isRaSupported(consoleId))
-                      UiBadge(label: 'No RetroAchievements', color: ui.muted),
+                      UiBadge(label: SettingsStrings.noRetroAchievements, color: ui.muted),
                   ],
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${s.totalGames} games · ${formatBytes(s.totalSizeBytes)}',
+                  SettingsStrings.systemStats(
+                    s.totalGames,
+                    formatBytes(s.totalSizeBytes),
+                  ),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),
                 _LabelledField(
-                  label: 'Console',
+                  label: SettingsStrings.consoleLabel,
                   child: UiFocusZoom(
                     child: DropdownButton<int?>(
                       key: Key('console-${row.folder}'),
@@ -324,7 +324,7 @@ class _SystemCard extends StatelessWidget {
                       isDense: true,
                       value: row.override,
                       hint: Text(
-                        'Auto ($_detectedLabel)',
+                        SettingsStrings.consoleAuto(_detectedLabel),
                         overflow: TextOverflow.ellipsis,
                       ),
                       onChanged: onConsoleChanged,
@@ -333,7 +333,7 @@ class _SystemCard extends StatelessWidget {
                           value: null,
                           child: UiFocusZoom(
                             child: Text(
-                              'Auto-detect ($_detectedLabel)',
+                              SettingsStrings.consoleAutoDetect(_detectedLabel),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -355,15 +355,15 @@ class _SystemCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 if (consoleId == null)
                   Text(
-                    'Pick a console above before connecting an emulator.',
+                    SettingsStrings.pickConsoleFirst,
                     style: Theme.of(context).textTheme.bodySmall,
                   )
                 else ...[
                   _LabelledField(
-                    label: 'Emulator',
+                    label: SettingsStrings.emulatorLabel,
                     child: emulators.isEmpty
                         ? Text(
-                            'None added yet — see the Emulators tab.',
+                            SettingsStrings.noEmulatorsAdded,
                             style: Theme.of(context).textTheme.bodySmall,
                           )
                         : UiFocusZoom(
@@ -377,12 +377,12 @@ class _SystemCard extends StatelessWidget {
                                   )
                                   ? connection!.emulatorId
                                   : null,
-                              hint: const Text('Not set'),
+                              hint: const Text(SettingsStrings.emulatorNotSet),
                               onChanged: onEmulatorChanged,
                               items: [
                                 const DropdownMenuItem<String?>(
                                   value: null,
-                                  child: UiFocusZoom(child: Text('Not set')),
+                                  child: UiFocusZoom(child: Text(SettingsStrings.emulatorNotSet)),
                                 ),
                                 for (final e in emulators)
                                   DropdownMenuItem<String?>(
@@ -400,7 +400,7 @@ class _SystemCard extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
-                        'Shared with the other folders on this console.',
+                        SettingsStrings.sharedConsole,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
@@ -411,7 +411,7 @@ class _SystemCard extends StatelessWidget {
                       child: AutoSaveTextField(
                         key: ValueKey('sysargs-$consoleId'),
                         value: connection!.args,
-                        label: 'Arguments ({file.path} is the ROM)',
+                        label: SettingsStrings.argumentsLabel,
                         onSave: (v) => EmulatorStore.setConnection(
                           consoleId,
                           connection!.emulatorId,

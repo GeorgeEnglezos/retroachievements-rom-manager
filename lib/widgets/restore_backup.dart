@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/backup_service.dart';
 import '../services/log_service.dart';
 import 'ui/ui_focusable.dart';
+import '../strings.dart';
 
 /// Confirms, asks for a backup zip and restores it, then blocks the UI until
 /// the app is restarted. Used by Settings and the setup wizard. Lives in
@@ -11,25 +12,20 @@ Future<void> restoreBackup(BuildContext context) async {
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Restore from backup?'),
-      content: const Text(
-        'This replaces everything you have now: scan results, imported '
-        'metadata, cached artwork and settings. Your RetroAchievements API '
-        'key is not in a backup, so the one you have now is kept. Restart '
-        'the app afterwards.',
-      ),
+      title: const Text(WizardStrings.restoreConfirmTitle),
+      content: const Text(WizardStrings.restoreConfirmBody),
       actions: [
         UiFocusZoom(
           child: TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: const Text(ShellStrings.cancel),
           ),
         ),
         UiFocusZoom(
           child: TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Restore'),
+            child: const Text(WizardStrings.restoreButton),
           ),
         ),
       ],
@@ -46,7 +42,7 @@ Future<void> restoreBackup(BuildContext context) async {
 
   try {
     final res = await FilePicker.platform.pickFiles(
-      dialogTitle: 'Choose a backup zip',
+      dialogTitle: WizardStrings.chooseBackupZip,
       type: FileType.custom,
       allowedExtensions: ['zip'],
     );
@@ -61,17 +57,14 @@ Future<void> restoreBackup(BuildContext context) async {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => const AlertDialog(
-        title: Text('Restored'),
-        content: Text(
-          'Close and reopen the app to load the backup. Using '
-          'it before then can overwrite what was just restored.',
-        ),
+        title: Text(WizardStrings.restoredTitle),
+        content: Text(WizardStrings.restoredBody),
       ),
     );
   } on FormatException {
-    toast('That zip is not a RARM backup.');
+    toast(WizardStrings.notABackup);
   } catch (e) {
     LogService.error('Settings/restore', 'restore failed', err: e);
-    toast('Restore failed, see the log for details.');
+    toast(WizardStrings.restoreFailed);
   }
 }

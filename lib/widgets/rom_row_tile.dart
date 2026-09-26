@@ -17,6 +17,7 @@ import 'rom_badges.dart';
 import 'rom_progress.dart';
 import 'rom_thumb.dart';
 import 'row_display.dart';
+import '../strings.dart';
 
 /// A single list-row tile that renders any [RomRow], gating each visual element
 /// on the [RowDisplay] flag set. Decoupled from [RomResult] (it reads a
@@ -324,7 +325,7 @@ class RomRowTile extends StatelessWidget {
       child: Row(
         children: [
           for (var i = 0; i < shown.length; i++) ...[
-            if (i > 0) Text('  ·  ', style: style),
+            if (i > 0) Text(CommonStrings.dotSepWide, style: style),
             Flexible(
               child: Text(
                 shown[i],
@@ -364,7 +365,7 @@ class RomRowTile extends StatelessWidget {
       // meta line alongside any progress bar below.
       final total = rom.achievementCount ?? 0;
       final achLabel = playView.achievementCount && total > 0
-          ? '${rom.earnedAchievements ?? 0}/$total'
+          ? CommonStrings.fraction(rom.earnedAchievements ?? 0, total)
           : null;
       final meta = _metaLine(ui, [fileName, sizeLabel, achLabel], fg: fg);
       final progress = _buildProgress(context, fg);
@@ -382,8 +383,8 @@ class RomRowTile extends StatelessWidget {
         null,
       // The row has the width for the fix, not just the diagnosis.
       RomStatus.unsupportedFormat => DiscFormats.isNkit(rom.filePath)
-          ? 'NKit format not supported'
-          : 'Compressed disc. Add Dolphin in Settings → Emulators to hash it',
+          ? FolderStrings.nkitUnsupported
+          : FolderStrings.compressedDiscNeedsDolphin,
       RomStatus.error => rom.errorMessage ?? statusLabel(rom.status),
       final s => statusLabel(s),
     };

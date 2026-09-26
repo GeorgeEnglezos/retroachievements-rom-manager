@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/app_mode.dart';
+import '../strings.dart';
 import 'ui/ui_focusable.dart';
-
-/// What the two modes mean, shown next to [AppModeToggle] in Settings and the
-/// setup wizard.
-const kAppModeHelp =
-    'Kiosk hides the maintenance tabs, scans, multi-select and every delete '
-    'button, so the app is safe to hand over. A controller drives either mode.';
 
 /// Cleaning / Kiosk switch bound to [appModeListenable].
 class AppModeToggle extends StatelessWidget {
@@ -19,8 +14,8 @@ class AppModeToggle extends StatelessWidget {
       builder: (context, mode, _) => UiFocusZoom(
         child: SegmentedButton<AppMode>(
           segments: const [
-            ButtonSegment(value: AppMode.cleaning, label: Text('Cleaning')),
-            ButtonSegment(value: AppMode.gaming, label: Text('Kiosk')),
+            ButtonSegment(value: AppMode.cleaning, label: Text(AppearanceStrings.modeCleaning)),
+            ButtonSegment(value: AppMode.gaming, label: Text(AppearanceStrings.modeKiosk)),
           ],
           selected: {mode},
           showSelectedIcon: false,

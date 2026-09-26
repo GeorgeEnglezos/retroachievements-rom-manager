@@ -11,6 +11,7 @@ import '../services/library_pdf_export.dart';
 import '../services/log_service.dart';
 import '../services/scan_health.dart';
 import '../widgets/ui/ui_focusable.dart';
+import '../strings.dart';
 
 /// Read-only summary of the scanned library, plus report export. Turns the raw
 /// scan results ([Library]) into decision-oriented counts, and lets the user
@@ -46,7 +47,7 @@ class _ScanHealthScreenState extends State<ScanHealthScreen> {
   }
 
   Future<void> _export(String ext, String Function() build) =>
-      _saveTo('library-report.$ext', (f) => f.writeAsString(build()));
+      _saveTo(ScanHealthStrings.reportFileName(ext), (f) => f.writeAsString(build()));
 
   /// Prompts for a path then runs [write] against the chosen file, with the
   /// shared success/failure snackbars.
@@ -55,16 +56,16 @@ class _ScanHealthScreenState extends State<ScanHealthScreen> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final path = await FilePicker.platform.saveFile(
-        dialogTitle: 'Export library report',
+        dialogTitle: ScanHealthStrings.exportDialogTitle,
         fileName: fileName,
       );
       if (path == null) return; // cancelled
       await write(File(path));
-      messenger.showSnackBar(SnackBar(content: Text('Saved to $path')));
+      messenger.showSnackBar(SnackBar(content: Text(ScanHealthStrings.savedTo(path))));
     } catch (e) {
       LogService.error('ScanHealthScreen/export', 'Failed', err: e);
       messenger
-          .showSnackBar(const SnackBar(content: Text('Export failed')));
+          .showSnackBar(const SnackBar(content: Text(ScanHealthStrings.exportFailed)));
     }
   }
 
@@ -78,7 +79,7 @@ class _ScanHealthScreenState extends State<ScanHealthScreen> {
     final rows =
         _rows.where((r) => r.systemPath == cfg.systemPath).toList();
     final opts = SystemReportOptions(fields: cfg.fields, limit: cfg.limit);
-    final base = '${cfg.systemName}-library';
+    final base = ScanHealthStrings.systemReportBase(cfg.systemName);
     switch (cfg.format) {
       case 'csv':
         await _saveTo('$base.csv',
@@ -100,33 +101,32 @@ class _ScanHealthScreenState extends State<ScanHealthScreen> {
   Widget build(BuildContext context) {
     final h = _health;
     return Scaffold(
-      appBar: AppBar(title: const Text('Scan health')),
+      appBar: AppBar(title: const Text(ScanHealthStrings.title)),
       body: h == null
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                _statCard('Total ROMs', h.totalRoms, Icons.videogame_asset),
-                _statCard('Supported', h.supported, Icons.check_circle,
+                _statCard(ScanHealthStrings.totalRoms, h.totalRoms, Icons.videogame_asset),
+                _statCard(ScanHealthStrings.supported, h.supported, Icons.check_circle,
                     color: Colors.green),
-                _statCard('Unsupported', h.unsupported, Icons.cancel,
+                _statCard(ScanHealthStrings.unsupported, h.unsupported, Icons.cancel,
                     color: Colors.red),
-                _statCard('Not fetched', h.notFetched,
+                _statCard(ScanHealthStrings.notFetched, h.notFetched,
                     Icons.cloud_download_outlined),
-                _statCard('With progress', h.withProgress, Icons.emoji_events,
+                _statCard(ScanHealthStrings.withProgress, h.withProgress, Icons.emoji_events,
                     color: Colors.amber),
-                _statCard('Systems', h.systems, Icons.dns),
+                _statCard(LibraryStrings.systems, h.systems, Icons.dns),
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(
-                    'Total size: ${formatBytes(h.totalSizeBytes)}'
-                    '   ·   Supported ${(h.supportedRatio * 100).round()}% '
-                    'of looked-up games',
+                    ScanHealthStrings.summary(formatBytes(h.totalSizeBytes),
+                        (h.supportedRatio * 100).round()),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
                 const Divider(height: 32),
-                Text('Export report',
+                Text(ScanHealthStrings.exportReport,
                     style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
                 Wrap(
@@ -136,7 +136,7 @@ class _ScanHealthScreenState extends State<ScanHealthScreen> {
                     UiFocusZoom(
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.table_chart_outlined),
-                        label: const Text('CSV'),
+                        label: const Text(ScanHealthStrings.csv),
                         onPressed: () =>
                             _export('csv', () => LibraryExport.toCsv(_rows)),
                       ),
@@ -144,7 +144,7 @@ class _ScanHealthScreenState extends State<ScanHealthScreen> {
                     UiFocusZoom(
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.data_object),
-                        label: const Text('JSON'),
+                        label: const Text(ScanHealthStrings.json),
                         onPressed: () => _export(
                             'json', () => LibraryExport.toJson(_systems, _rows)),
                       ),
@@ -152,7 +152,7 @@ class _ScanHealthScreenState extends State<ScanHealthScreen> {
                     UiFocusZoom(
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.description_outlined),
-                        label: const Text('Markdown'),
+                        label: const Text(ScanHealthStrings.markdown),
                         onPressed: () => _export('md',
                             () => LibraryExport.toMarkdown(_systems, _rows)),
                       ),
@@ -160,12 +160,11 @@ class _ScanHealthScreenState extends State<ScanHealthScreen> {
                   ],
                 ),
                 const Divider(height: 32),
-                Text('Export one system',
+                Text(ScanHealthStrings.exportOneSystem,
                     style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 4),
                 Text(
-                  'A game list for a single system, with the fields and order '
-                  'you pick.',
+                  ScanHealthStrings.exportOneSystemHint,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 8),
@@ -174,7 +173,7 @@ class _ScanHealthScreenState extends State<ScanHealthScreen> {
                   child: UiFocusZoom(
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.list_alt),
-                      label: const Text('Export system…'),
+                      label: const Text(ScanHealthStrings.exportSystemButton),
                       onPressed: _systems.isEmpty ? null : _exportSystem,
                     ),
                   ),
@@ -237,9 +236,9 @@ class _SystemExportDialogState extends State<_SystemExportDialog> {
   int? _limit; // null = All
 
   static const _fieldLabels = {
-    GameField.hasAchievements: 'Has achievements',
-    GameField.progress: 'Progress',
-    GameField.size: 'Size',
+    GameField.hasAchievements: ScanHealthStrings.hasAchievements,
+    GameField.progress: ScanHealthStrings.progress,
+    GameField.size: ScanHealthStrings.size,
   };
 
   _SystemExportConfig _config(String format) => _SystemExportConfig(
@@ -253,7 +252,7 @@ class _SystemExportDialogState extends State<_SystemExportDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Export system'),
+      title: const Text(ScanHealthStrings.exportSystemTitle),
       content: SizedBox(
         width: 360,
         child: SingleChildScrollView(
@@ -264,7 +263,7 @@ class _SystemExportDialogState extends State<_SystemExportDialog> {
               UiFocusZoom(
                 child: DropdownButtonFormField<SystemSummary>(
                   initialValue: _system,
-                  decoration: const InputDecoration(labelText: 'System'),
+                  decoration: const InputDecoration(labelText: ScanHealthStrings.systemLabel),
                   items: [
                     for (final s in widget.systems)
                       DropdownMenuItem(
@@ -276,7 +275,7 @@ class _SystemExportDialogState extends State<_SystemExportDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-              const Text('Fields'),
+              const Text(ScanHealthStrings.fieldsLabel),
               Wrap(
                 spacing: 8,
                 children: [
@@ -292,13 +291,13 @@ class _SystemExportDialogState extends State<_SystemExportDialog> {
                 ],
               ),
               const SizedBox(height: 16),
-              const Text('How many'),
+              const Text(ScanHealthStrings.howMany),
               UiFocusZoom(
                 child: SegmentedButton<int?>(
                   segments: const [
                     ButtonSegment(value: 10, label: Text('10')),
                     ButtonSegment(value: 50, label: Text('50')),
-                    ButtonSegment(value: null, label: Text('All')),
+                    ButtonSegment(value: null, label: Text(ScanHealthStrings.all)),
                   ],
                   selected: {_limit},
                   onSelectionChanged: (s) => setState(() => _limit = s.first),
@@ -312,25 +311,25 @@ class _SystemExportDialogState extends State<_SystemExportDialog> {
         UiFocusZoom(
           child: TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text(LibraryStrings.cancelButton),
           ),
         ),
         UiFocusZoom(
           child: TextButton(
             onPressed: () => Navigator.pop(context, _config('csv')),
-            child: const Text('CSV'),
+            child: const Text(ScanHealthStrings.csv),
           ),
         ),
         UiFocusZoom(
           child: TextButton(
             onPressed: () => Navigator.pop(context, _config('md')),
-            child: const Text('Markdown'),
+            child: const Text(ScanHealthStrings.markdown),
           ),
         ),
         UiFocusZoom(
           child: TextButton(
             onPressed: () => Navigator.pop(context, _config('pdf')),
-            child: const Text('PDF'),
+            child: const Text(ScanHealthStrings.pdf),
           ),
         ),
       ],

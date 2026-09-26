@@ -14,6 +14,7 @@ import '../theme/ui_tokens.dart';
 import '../widgets/bigpicture/couch_home.dart';
 import '../widgets/game_detail_dialog.dart';
 import '../widgets/ui/ui_focusable.dart';
+import '../strings.dart';
 
 /// The Home tab for Cleaning and Play modes. It loads the dashboard and opens a
 /// game's detail dialog on tap, then hands the layout to [CouchHome], the single
@@ -85,9 +86,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (mounted) {
       final title = gameDisplayName(rom.gameTitle, rom.fileName);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Won\'t suggest "$title" here again'),
+        content: Text(HomeStrings.wontSuggest(title)),
         action: SnackBarAction(
-          label: 'Undo',
+          label: HomeStrings.undo,
           onPressed: () async {
             await IgnoredCandidates.instance.unignore(key);
             _load();
@@ -132,14 +133,13 @@ class _EmptyDashboard extends StatelessWidget {
             Icon(Icons.auto_awesome, size: 56, color: ui.muted),
             const SizedBox(height: 16),
             Text(
-              'Your dashboard fills up as you play',
+              HomeStrings.emptyTitle,
               textAlign: TextAlign.center,
               style: ui.display.copyWith(fontSize: 20),
             ),
             const SizedBox(height: 8),
             Text(
-              'Pick your ROM folder and run a scan on the Library tab. Games you '
-              'have progress on show up here, closest to mastery first.',
+              HomeStrings.emptyBody,
               textAlign: TextAlign.center,
               style: TextStyle(color: ui.muted),
             ),
@@ -149,7 +149,7 @@ class _EmptyDashboard extends StatelessWidget {
                 child: FilledButton.icon(
                   onPressed: onOpenLibrary,
                   icon: const Icon(Icons.grid_view, size: 18),
-                  label: const Text('Go to Library'),
+                  label: const Text(HomeStrings.goToLibrary),
                 ),
               ),
             ],

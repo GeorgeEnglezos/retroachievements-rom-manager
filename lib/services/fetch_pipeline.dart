@@ -9,6 +9,7 @@ import 'hash_service.dart';
 import 'log_service.dart';
 import 'ra_cache.dart';
 import 'ra_service.dart';
+import '../strings.dart';
 
 /// The callbacks and guards around the [FetchEngine] loop, shared by the
 /// home-screen sweep and the folder view so both fetch the same way.
@@ -109,7 +110,7 @@ Future<void> applyFetchResultToRom({
         applyProgress(rom, progress);
       } else {
         rom.status = RomStatus.supported;
-        rom.gameTitle ??= 'Game #${res.gameId}';
+        rom.gameTitle ??= RomStatusStrings.gamePlaceholder(res.gameId);
       }
     });
   } else if (res.noMatch) {
@@ -117,7 +118,7 @@ Future<void> applyFetchResultToRom({
   } else {
     mutate(() {
       rom.status = RomStatus.error;
-      rom.errorMessage = 'Could not hash file for console $consoleId';
+      rom.errorMessage = RomStatusStrings.hashFailed(consoleId);
     });
   }
 }
@@ -142,7 +143,7 @@ Future<CompletionSweep> fetchCompletionSweep(
     LogService.error(logContext, 'completion sweep: $e');
     return (
       byGameId: null,
-      userMessage: 'Progress sync failed. No changes made.',
+      userMessage: RomStatusStrings.syncFailed,
     );
   }
   if (completed.isEmpty) {
@@ -150,7 +151,7 @@ Future<CompletionSweep> fetchCompletionSweep(
         'completion sweep returned empty; skipping to avoid zeroing progress');
     return (
       byGameId: null,
-      userMessage: 'No progress data returned. No changes made.',
+      userMessage: RomStatusStrings.syncEmpty,
     );
   }
   return (

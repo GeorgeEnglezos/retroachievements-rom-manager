@@ -1,4 +1,5 @@
 import '../models/rom_result.dart';
+import '../strings.dart';
 
 /// One labelled shelf of games for a big-picture content tab.
 typedef CouchRow = ({String title, List<RomResult> games});
@@ -11,7 +12,7 @@ typedef CouchRow = ({String title, List<RomResult> games});
   final byName = <String, List<RomResult>>{};
   for (final g in games) {
     final name = (g.consoleName == null || g.consoleName!.isEmpty)
-        ? 'Other'
+        ? PlayNextRowStrings.other
         : g.consoleName!;
     (byName[name] ??= []).add(g);
   }
@@ -23,7 +24,7 @@ typedef CouchRow = ({String title, List<RomResult> games});
   final overall = [...games]..sort(_hottest);
   return (
     consoles: [for (final n in names) (title: n, games: byName[n]!)],
-    overall: (title: 'All Consoles', games: overall),
+    overall: (title: PlayNextRowStrings.allConsoles, games: overall),
   );
 }
 

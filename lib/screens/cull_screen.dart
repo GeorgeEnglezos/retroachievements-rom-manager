@@ -12,6 +12,7 @@ import '../theme/ui_tokens.dart';
 import '../widgets/ui/ui_card.dart';
 import '../widgets/ui/ui_progress_bar.dart';
 import 'cull_deck.dart';
+import '../strings.dart';
 
 /// Elimination-game entry point: pick a console, see decided/total progress,
 /// tap to swipe through its deck.
@@ -146,7 +147,7 @@ class _CullScreenState extends State<CullScreen> {
         body: Center(
           child: Padding(
             padding: EdgeInsets.all(32),
-            child: Text('No scanned systems yet. Scan your library first.',
+            child: Text(CullStrings.noScannedSystems,
                 textAlign: TextAlign.center),
           ),
         ),
@@ -208,7 +209,7 @@ class _CullConsoleRow extends StatelessWidget {
                     Text(row.name,
                         style: ui.display.copyWith(fontSize: 15)),
                     const SizedBox(height: 4),
-                    Text('${row.done} / $total decided',
+                    Text(CullStrings.decidedCount(row.done, total),
                         style: ui.body.copyWith(fontSize: 12, color: ui.muted)),
                     const SizedBox(height: 4),
                     UiProgressBar(

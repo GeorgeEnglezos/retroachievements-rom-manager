@@ -5,6 +5,7 @@ import '../theme/ui_tokens.dart';
 import 'ui/ui_chip.dart';
 import 'ui/ui_dropdown.dart';
 import 'filter_helpers.dart';
+import '../strings.dart';
 
 /// The expandable GB filter panel: Status / Progress / Genre / Playlists chip
 /// sections. Stateless, driven by [filter] + [onChanged]. Shared by the folder
@@ -48,7 +49,7 @@ class FilterPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _section(context, 'Status', [
+          _section(context, FilterStrings.statusSection, [
             for (final s in const [
               RomStatus.supported,
               RomStatus.unsupported,
@@ -62,7 +63,7 @@ class FilterPanel extends StatelessWidget {
                     onChanged(f.copyWith(statuses: toggleSet(f.statuses, s))),
               ),
             UiChip(
-              label: 'No achievements',
+              label: FilterStrings.noAchievements,
               selected: f.onlyNoAchievements,
               onTap: () => onChanged(
                   f.copyWith(onlyNoAchievements: !f.onlyNoAchievements)),
@@ -70,7 +71,7 @@ class FilterPanel extends StatelessWidget {
           ]),
           if (showProgress) ...[
             const SizedBox(height: 8),
-            _section(context, 'Progress', [
+            _section(context, FilterStrings.progressSection, [
               for (final ps in ProgressState.values)
                 UiChip(
                   label: progressLabel(ps),
@@ -82,7 +83,7 @@ class FilterPanel extends StatelessWidget {
           ],
           if (availableGenres.isNotEmpty) ...[
             const SizedBox(height: 8),
-            _section(context, 'Genre', [
+            _section(context, FilterStrings.genreSection, [
               for (final g in availableGenres)
                 UiChip(
                   label: g,
@@ -94,7 +95,7 @@ class FilterPanel extends StatelessWidget {
           ],
           if (availableTags.isNotEmpty) ...[
             const SizedBox(height: 8),
-            _section(context, 'Tags', [
+            _section(context, FilterStrings.tagsSection, [
               for (final t in availableTags)
                 UiChip(
                   label: t,
@@ -106,14 +107,14 @@ class FilterPanel extends StatelessWidget {
           ],
           if (playlists.isNotEmpty) ...[
             const SizedBox(height: 8),
-            _section(context, 'Playlists', [
+            _section(context, FilterStrings.playlistsSection, [
               for (final pl in playlists)
                 UiDropdown<String>(
                   value: _playlistMode(pl.id),
                   items: [
-                    (value: 'all', label: '${pl.name}: show all'),
-                    (value: 'only', label: '${pl.name}: only'),
-                    (value: 'exclude', label: '${pl.name}: exclude'),
+                    (value: 'all', label: FilterStrings.playlistShowAll(pl.name)),
+                    (value: 'only', label: FilterStrings.playlistOnly(pl.name)),
+                    (value: 'exclude', label: FilterStrings.playlistExclude(pl.name)),
                   ],
                   onChanged: (mode) {
                     final inc = {...f.includePlaylistIds}..remove(pl.id);

@@ -1,3 +1,5 @@
+import '../strings.dart';
+
 /// Parses `(...)`/`[...]` filename markers into tag chips. Pure and
 /// Flutter-free; colours live in the widget layer.
 enum RomTagKind {
@@ -54,24 +56,24 @@ const _detectors = <(RomTagKind, String)>[
 ];
 
 const _labels = {
-  RomTagKind.verified: 'GOOD',
-  RomTagKind.hack: 'HACK',
-  RomTagKind.homebrew: 'HOMEBREW',
-  RomTagKind.subset: 'SUBSET',
-  RomTagKind.bonus: 'BONUS',
-  RomTagKind.prototype: 'PROTO',
-  RomTagKind.beta: 'BETA',
-  RomTagKind.demo: 'DEMO',
-  RomTagKind.badDump: 'BAD DUMP',
-  RomTagKind.overdump: 'OVERDUMP',
-  RomTagKind.checksum: 'CHECKSUM',
-  RomTagKind.fixed: 'FIXED',
-  RomTagKind.pirate: 'PIRATE',
-  RomTagKind.trainer: 'TRAINER',
-  RomTagKind.badChecksum: 'BAD SUM',
-  RomTagKind.alternate: 'ALT',
-  RomTagKind.sram: 'SRAM',
-  RomTagKind.unlicensed: 'UNL',
+  RomTagKind.verified: RomTagStrings.good,
+  RomTagKind.hack: RomTagStrings.hack,
+  RomTagKind.homebrew: RomTagStrings.homebrew,
+  RomTagKind.subset: RomTagStrings.subset,
+  RomTagKind.bonus: RomTagStrings.bonus,
+  RomTagKind.prototype: RomTagStrings.proto,
+  RomTagKind.beta: RomTagStrings.beta,
+  RomTagKind.demo: RomTagStrings.demo,
+  RomTagKind.badDump: RomTagStrings.badDump,
+  RomTagKind.overdump: RomTagStrings.overdump,
+  RomTagKind.checksum: RomTagStrings.checksum,
+  RomTagKind.fixed: RomTagStrings.fixed,
+  RomTagKind.pirate: RomTagStrings.pirate,
+  RomTagKind.trainer: RomTagStrings.trainer,
+  RomTagKind.badChecksum: RomTagStrings.badChecksum,
+  RomTagKind.alternate: RomTagStrings.alternate,
+  RomTagKind.sram: RomTagStrings.sram,
+  RomTagKind.unlicensed: RomTagStrings.unlicensed,
 };
 
 List<RomTag> romTags(String fileName) {

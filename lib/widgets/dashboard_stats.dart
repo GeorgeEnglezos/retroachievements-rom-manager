@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/folder_stats.dart' show compactCount, formatBytes;
 import '../services/home_dashboard.dart';
 import '../theme/ui_tokens.dart';
+import '../strings.dart';
 
 /// The Home dashboard's at-a-glance counts. On a wide window the tiles size to
 /// their content and wrap; on a phone ([narrow]) they lock to two equal columns
@@ -28,19 +29,19 @@ class DashboardStatStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final ui = context.ui;
     final tiles = <({String value, String label, Color? color})>[
-      (value: '${stats.totalGames}', label: 'Games', color: null),
-      (value: '${stats.mastered}', label: 'Mastered', color: ui.accentGames),
+      (value: '${stats.totalGames}', label: HomeStrings.statGames, color: null),
+      (value: '${stats.mastered}', label: HomeStrings.statMastered, color: ui.accentGames),
       (
         value: compactCount(stats.achievementsEarned),
-        label: 'Achievements earned',
+        label: HomeStrings.statAchievements,
         color: null
       ),
       (
         value: formatBytes(stats.totalSizeBytes),
-        label: 'Library size',
+        label: HomeStrings.statLibrarySize,
         color: null
       ),
-      (value: '${stats.systems}', label: 'Systems', color: null),
+      (value: '${stats.systems}', label: HomeStrings.statSystems, color: null),
     ];
 
     if (landscape) {

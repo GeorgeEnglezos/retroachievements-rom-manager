@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/scan_progress.dart';
 import '../theme/ui_tokens.dart';
 import 'ui/ui_focusable.dart';
+import '../strings.dart';
 
 /// Persistent bottom bar showing the current sweep's progress + a cancel
 /// button. Renders nothing when no scan is running. Mounted once above the
@@ -53,7 +54,7 @@ class ScanProgressBar extends StatelessWidget {
                 UiFocusZoom(
                   child: TextButton.icon(
                     icon: const Icon(Icons.stop),
-                    label: Text(p.cancelling ? 'Cancelling…' : 'Cancel'),
+                    label: Text(p.cancelling ? ShellStrings.cancelling : ShellStrings.cancel),
                     onPressed: p.cancelling ? null : p.requestCancel,
                   ),
                 ),

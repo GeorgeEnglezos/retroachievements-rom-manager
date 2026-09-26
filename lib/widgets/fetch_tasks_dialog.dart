@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/fetch_plan.dart';
 import '../services/ra_cache.dart';
 import 'ui/ui_focusable.dart';
+import '../strings.dart';
 
 /// The fetch modal: one primary action, with the rare choices folded away.
 ///
@@ -27,9 +28,9 @@ Future<FetchPlan?> showFetchTasksDialog(
   var pruneMissing = false;
 
   String scopeLabel(FetchScope s) => switch (s) {
-        FetchScope.changedFolders => 'Only changed folders',
-        FetchScope.unfetchedFolders => 'Only unfetched folders',
-        FetchScope.all => 'All folders',
+        FetchScope.changedFolders => FetchStrings.scopeChanged,
+        FetchScope.unfetchedFolders => FetchStrings.scopeUnfetched,
+        FetchScope.all => FetchStrings.scopeAll,
       };
 
   return showDialog<FetchPlan>(
@@ -40,7 +41,7 @@ Future<FetchPlan?> showFetchTasksDialog(
 
       return StatefulBuilder(
         builder: (ctx, setDlgState) => AlertDialog(
-          title: const Text('Update library'),
+          title: const Text(FetchStrings.dialogTitle),
           content: SizedBox(
             width: 400,
             child: SingleChildScrollView(
@@ -50,12 +51,8 @@ Future<FetchPlan?> showFetchTasksDialog(
                 children: [
                   Text(
                     global
-                        ? 'Re-reads your folders for added and removed files, '
-                            'hashes anything new, matches it on '
-                            'RetroAchievements and syncs your progress.'
-                        : 'Re-reads this folder for added and removed files, '
-                            'hashes anything new, matches it on '
-                            'RetroAchievements and syncs your progress.',
+                        ? FetchStrings.globalDescription
+                        : FetchStrings.folderDescription,
                     style: muted,
                   ),
                   // Collapsed by default: the whole point is that the button
@@ -65,13 +62,13 @@ Future<FetchPlan?> showFetchTasksDialog(
                     // rest of this dialog doesn't have.
                     data: theme.copyWith(dividerColor: Colors.transparent),
                     child: ExpansionTile(
-                      title: const Text('Advanced'),
+                      title: const Text(FetchStrings.advanced),
                       tilePadding: EdgeInsets.zero,
                       childrenPadding: EdgeInsets.zero,
                       expandedCrossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (global) ...[
-                          Text('Folders', style: muted),
+                          Text(FetchStrings.foldersLabel, style: muted),
                           RadioGroup<FetchScope>(
                             groupValue: scope,
                             onChanged: (v) => setDlgState(() => scope = v!),
@@ -92,11 +89,8 @@ Future<FetchPlan?> showFetchTasksDialog(
                           const SizedBox(height: 8),
                           UiFocusZoom(
                             child: CheckboxListTile(
-                              title: const Text('Remove missing systems'),
-                              subtitle: const Text(
-                                'Deletes scan results for folders that are no '
-                                'longer on disk. Asks before deleting.',
-                              ),
+                              title: const Text(FetchStrings.removeMissingTitle),
+                              subtitle: const Text(FetchStrings.removeMissingSubtitle),
                               value: pruneMissing,
                               onChanged: (v) =>
                                   setDlgState(() => pruneMissing = v ?? false),
@@ -107,11 +101,8 @@ Future<FetchPlan?> showFetchTasksDialog(
                         ],
                         UiFocusZoom(
                           child: CheckboxListTile(
-                            title: const Text('Re-hash every ROM'),
-                            subtitle: const Text(
-                              'Slow: reads every file again, including ones '
-                              'already identified.',
-                            ),
+                            title: const Text(FetchStrings.reHashTitle),
+                            subtitle: const Text(FetchStrings.reHashSubtitle),
                             value: reHashAll,
                             onChanged: (v) =>
                                 setDlgState(() => reHashAll = v ?? false),
@@ -121,10 +112,10 @@ Future<FetchPlan?> showFetchTasksDialog(
                         ),
                         UiFocusZoom(
                           child: CheckboxListTile(
-                            title: const Text('Force refresh RA game lists'),
+                            title: const Text(FetchStrings.refreshListsTitle),
                             subtitle: Text(
-                              'Normally re-pulled on their own every '
-                              '${RaCache.listTtl.inDays} days.',
+                              FetchStrings.refreshListsSubtitle(
+                                  RaCache.listTtl.inDays),
                             ),
                             value: refreshLists,
                             onChanged: (v) =>
@@ -144,7 +135,7 @@ Future<FetchPlan?> showFetchTasksDialog(
             UiFocusZoom(
               child: TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
+                child: const Text(LibraryStrings.cancelButton),
               ),
             ),
             UiFocusZoom(
@@ -161,7 +152,7 @@ Future<FetchPlan?> showFetchTasksDialog(
                     pruneMissing: pruneMissing,
                   ),
                 ),
-                child: const Text('Update'),
+                child: const Text(FetchStrings.updateButton),
               ),
             ),
           ],

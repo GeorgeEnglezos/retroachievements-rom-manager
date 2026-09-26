@@ -7,6 +7,7 @@ import '../theme/ui_tokens.dart';
 import 'ui/console_card.dart';
 import 'ui/ui_card.dart';
 import 'ui/ui_progress_bar.dart';
+import '../strings.dart';
 
 // The console logos are full-color on transparency and don't tint to the theme,
 // so cards render their contents through the light palette (dark ink, see
@@ -284,12 +285,12 @@ class ConsoleLogo extends StatelessWidget {
 List<Widget> _folderStatLines(FolderStats? s) => [
       _StatLine(
         icon: Icons.videogame_asset,
-        text: s == null ? '…' : '${s.totalGames} games',
+        text: s == null ? CommonStrings.loading : LibraryStrings.gameCount(s.totalGames),
       ),
       const SizedBox(height: 4),
       _StatLine(
         icon: Icons.sd_storage,
-        text: s == null ? '…' : formatBytes(s.totalSizeBytes),
+        text: s == null ? CommonStrings.loading : formatBytes(s.totalSizeBytes),
       ),
     ];
 
@@ -328,8 +329,8 @@ class _Achievements extends StatelessWidget {
     if (pct == null) {
       return Text(
         ConsoleMap.isRaSupported(consoleId)
-            ? 'Not scanned yet'
-            : 'No RetroAchievements',
+            ? LibraryStrings.notScannedYet
+            : LibraryStrings.noRetroAchievements,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: context.ui.muted,
               fontStyle: FontStyle.italic,
@@ -343,11 +344,11 @@ class _Achievements extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Flexible(
-              child: Text('With achievements',
+              child: Text(LibraryStrings.withAchievements,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall),
             ),
-            Text('${pct.round()}%',
+            Text(CommonStrings.percent(pct),
                 style: Theme.of(context)
                     .textTheme
                     .bodySmall

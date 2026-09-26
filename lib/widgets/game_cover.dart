@@ -5,6 +5,7 @@ import '../services/play_view.dart';
 import '../theme/ui_tokens.dart';
 import 'rom_thumb.dart';
 import 'ui/marquee_text.dart';
+import '../strings.dart';
 
 /// The shared game tile: full-bleed art with a mastery trophy or in-progress
 /// strip over it, then the title and a caller-built [meta] line. Home and the
@@ -192,7 +193,7 @@ class GameCover extends StatelessWidget {
               children: [
                 Expanded(child: bar),
                 const SizedBox(width: 8),
-                Text('${(frac * 100).round()}%',
+                Text(FolderStrings.progressPercent(frac),
                     style: ui.mono.copyWith(fontSize: 10, color: kOnScrim)),
               ],
             );
@@ -226,7 +227,7 @@ class GameMetaRow extends StatelessWidget {
     final earned = rom.earnedAchievements ?? 0;
     final items = <Widget>[
       if (total > 0 && playView.achievementCount)
-        Text('$earned/$total',
+        Text(CommonStrings.fraction(earned, total),
             style: ui.mono
                 .copyWith(fontSize: 11, color: numberColor ?? ui.accentGames)),
       ...trailing,

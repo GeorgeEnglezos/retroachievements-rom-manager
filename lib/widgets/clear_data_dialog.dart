@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/data_wipe.dart';
+import '../strings.dart';
 import '../theme/ui_tokens.dart';
 import 'ui/ui_focusable.dart';
 
@@ -12,38 +13,33 @@ typedef _Row = ({ClearTarget target, String label, String cost});
 const _rows = <_Row>[
   (
     target: ClearTarget.scans,
-    label: 'Scan results',
-    cost: 'Every hash, match and achievement count. Your whole library has '
-        'to be re-scanned.',
+    label: SettingsStrings.clearScans,
+    cost: SettingsStrings.clearScansCost,
   ),
   (
     target: ClearTarget.playlists,
-    label: 'Playlists and favorite systems',
-    cost: 'Favorites, Played, Trash and anything you made yourself. Cull '
-        'verdicts go with them, because that is where the deck files them.',
+    label: SettingsStrings.clearPlaylists,
+    cost: SettingsStrings.clearPlaylistsCost,
   ),
   (
     target: ClearTarget.cullVerdicts,
-    label: 'Cull verdicts',
-    cost: 'Which games the elimination game has judged. They come back into '
-        'the deck; playlists keep whatever the verdicts put there.',
+    label: SettingsStrings.clearCullVerdicts,
+    cost: SettingsStrings.clearCullVerdictsCost,
   ),
   (
     target: ClearTarget.scrapedData,
-    label: 'Imported scraped data',
-    cost: 'Box art and descriptions from gamelist.xml. Re-importable from '
-        'the same folder.',
+    label: SettingsStrings.clearScrapedData,
+    cost: SettingsStrings.clearScrapedDataCost,
   ),
   (
     target: ClearTarget.raData,
-    label: 'Downloaded RetroAchievements data',
-    cost: 'Cached game lists. Re-downloaded on the next fetch, so clear this '
-        'if matches look wrong.',
+    label: SettingsStrings.clearRaData,
+    cost: SettingsStrings.clearRaDataCost,
   ),
   (
     target: ClearTarget.artwork,
-    label: 'Cached artwork',
-    cost: 'Covers and achievement icons. Re-downloaded on demand;',
+    label: SettingsStrings.clearArtwork,
+    cost: SettingsStrings.clearArtworkCost,
   ),
 ];
 
@@ -95,7 +91,7 @@ class _ClearDataDialogState extends State<_ClearDataDialog> {
     final ui = context.ui;
     final all = _chosen.length == ClearTarget.values.length;
     return AlertDialog(
-      title: const Text('Clear data'),
+      title: const Text(SettingsStrings.clearDataTitle),
       // Wide enough to read the cost lines without stretching to the window:
       // maxFinite alone would run a desktop dialog the full screen width, and
       // a fixed width would overflow a phone. The cap holds the text to a
@@ -112,8 +108,7 @@ class _ClearDataDialogState extends State<_ClearDataDialog> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Pick what to delete. Your ROM files, your settings and your '
-                  'RetroAchievements login are never touched.',
+                  SettingsStrings.clearDataHelp,
                   style: TextStyle(fontSize: 13, height: 1.45, color: ui.muted),
                 ),
                 const SizedBox(height: 8),
@@ -122,7 +117,7 @@ class _ClearDataDialogState extends State<_ClearDataDialog> {
                     value: all,
                     tristate: true,
                     onChanged: _toggleAll,
-                    title: const Text('Everything'),
+                    title: const Text(SettingsStrings.clearEverything),
                     controlAffinity: ListTileControlAffinity.leading,
                     dense: true,
                   ),
@@ -152,7 +147,7 @@ class _ClearDataDialogState extends State<_ClearDataDialog> {
         UiFocusZoom(
           child: TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text(SettingsStrings.cancel),
           ),
         ),
         UiFocusZoom(
@@ -161,7 +156,7 @@ class _ClearDataDialogState extends State<_ClearDataDialog> {
                 ? null
                 : () => Navigator.pop(context, expandTargets(_chosen)),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: const Text(SettingsStrings.clearDataConfirm),
           ),
         ),
       ],

@@ -8,6 +8,7 @@ import '../ra_image.dart';
 import '../ui/ui_eyebrow.dart';
 import '../ui/ui_progress_bar.dart';
 import '../ui/ui_focusable.dart';
+import '../../strings.dart';
 
 /// The big-picture home's featured banner: full-bleed box art under a scrim,
 /// with the game's title, a mastery readout and a Play affordance. Focusable, so
@@ -31,7 +32,7 @@ class CouchHero extends StatefulWidget {
     required this.onOpen,
     required this.onIgnore,
     this.autofocus = false,
-    this.eyebrow = 'CONTINUE PLAYING',
+    this.eyebrow = HomeStrings.continuePlaying,
     this.height,
   });
 
@@ -68,7 +69,7 @@ class _CouchHeroState extends State<CouchHero> {
     final choice = await showPositionedMenu<String>(context, position, const [
       PopupMenuItem(
         value: 'ignore',
-        child: UiFocusZoom(child: Text('Not interested, show next')),
+        child: UiFocusZoom(child: Text(HomeStrings.notInterested)),
       ),
     ]);
     if (choice != 'ignore' || !context.mounted) return;
@@ -88,10 +89,10 @@ class _CouchHeroState extends State<CouchHero> {
     final art = rom.heroArt;
     final meta = [
       rom.consoleName,
-      if (total > 0) '$earned/$total achievements',
+      if (total > 0) HomeStrings.achievementProgress(earned, total),
       if ((rom.numPlayersCasual ?? 0) > 0)
-        '${compactCount(rom.numPlayersCasual!)} players',
-    ].whereType<String>().join('   ·   ');
+        HomeStrings.players(compactCount(rom.numPlayersCasual!)),
+    ].whereType<String>().join(CommonStrings.dotSepWider);
     // FittedBox below scales the readout down to whatever height lands here.
     final h = widget.height ??
         (MediaQuery.sizeOf(context).height * 0.24).clamp(180.0, 240.0);

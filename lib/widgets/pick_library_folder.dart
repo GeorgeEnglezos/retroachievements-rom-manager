@@ -6,6 +6,7 @@ import '../services/library_folder.dart';
 import '../services/log_service.dart';
 import '../services/pref_keys.dart';
 import '../services/storage_permission.dart';
+import '../strings.dart';
 
 /// Prompts for a ROM folder, persists it, and publishes it to
 /// [libraryFolderListenable]. Returns the picked path, or null if cancelled or
@@ -19,13 +20,13 @@ Future<String?> pickLibraryFolder(BuildContext context) async {
     if (!context.mounted) return null;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Grant "All files access", then tap Pick folder again.'),
+        content: Text(WizardStrings.grantFilesAccess),
       ),
     );
     return null;
   }
   final result = await FilePicker.platform.getDirectoryPath(
-    dialogTitle: 'Select ROM folder',
+    dialogTitle: WizardStrings.selectRomFolder,
   );
   if (result == null) return null;
   LogService.info('LibraryFolder/pick', 'Selected root folder: $result');

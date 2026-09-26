@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../services/android_emulators.dart';
 import '../services/emulator_finder.dart';
 import '../services/emulator_store.dart';
+import '../strings.dart';
 import 'pick_emulator.dart';
 import 'ui/auto_save_field.dart';
 import 'ui/ui_collapsible_card.dart';
@@ -60,7 +61,7 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
     if (emu == null) return;
     await EmulatorStore.addEmulator(emu);
     await _refresh();
-    _toast('Added ${emu.name}. Connected its default systems below.');
+    _toast(SettingsStrings.emulatorAdded(emu.name));
   }
 
   // Adds every installed app we recognise as an emulator, skipping kinds the
@@ -83,9 +84,8 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
       await _refresh();
       _toast(
         found.isEmpty
-            ? 'No new emulator apps found.'
-            : 'Added ${found.map((e) => e.name).join(', ')}. '
-                  'Connected their default systems below.',
+            ? SettingsStrings.noNewEmulatorApps
+            : SettingsStrings.emulatorsAdded(found.map((e) => e.name)),
       );
     } finally {
       if (mounted) setState(() => _scanning = false);
@@ -109,9 +109,8 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
       await _refresh();
       _toast(
         found.isEmpty
-            ? 'No new emulators found in that folder.'
-            : 'Added ${found.map((e) => e.name).join(', ')}. '
-                  'Connected their default systems below.',
+            ? SettingsStrings.noNewEmulatorsInFolder
+            : SettingsStrings.emulatorsAdded(found.map((e) => e.name)),
       );
     } finally {
       if (mounted) setState(() => _scanning = false);
@@ -121,12 +120,12 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
   Future<void> _editEmulatorExe(Emulator emu) async {
     final picked = await pickNewEmulator(
       context,
-      dialogTitle: 'Choose the emulator executable for ${emu.name}',
+      dialogTitle: SettingsStrings.emulatorExeDialogFor(emu.name),
     );
     if (picked == null) return;
     await EmulatorStore.updateEmulatorExe(emu.id, picked.exePath);
     await _refresh();
-    _toast('Updated ${emu.name}.');
+    _toast(SettingsStrings.emulatorUpdated(emu.name));
   }
 
   void _toast(String msg) {
@@ -138,14 +137,10 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
   Widget build(BuildContext context) {
     final data = _data;
     return UiCollapsibleCard(
-      title: 'Emulators',
+      title: SettingsStrings.emulatorsTitle,
       description: Platform.isAndroid
-          ? 'The emulator apps you have. Each system below picks one '
-                'of them; Play then sends the ROM straight to that app.'
-          : 'The emulators you have. Each system below picks one of '
-                'them. Adding RetroArch auto-fills the right core for '
-                'most systems; standalone emulators (Dolphin, PCSX2, '
-                'DuckStation, PPSSPP) connect their own.',
+          ? SettingsStrings.emulatorsHelpAndroid
+          : SettingsStrings.emulatorsHelpDesktop,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -166,7 +161,7 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
                   contentPadding: EdgeInsets.zero,
                   dense: true,
                   controlAffinity: ListTileControlAffinity.leading,
-                  title: const Text('Launch games in fullscreen'),
+                  title: const Text(SettingsStrings.launchFullscreen),
                   value: data.launchFullscreen,
                   onChanged: (v) async {
                     await EmulatorStore.setLaunchFullscreen(v ?? false);
@@ -176,7 +171,7 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
               ),
             if (data.emulators.isEmpty)
               const Text(
-                'None yet, add one below.',
+                SettingsStrings.noEmulators,
                 style: TextStyle(fontStyle: FontStyle.italic),
               )
             else
@@ -200,13 +195,13 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
                           children: [
                             IconButton(
                               tooltip: Platform.isAndroid
-                                  ? 'Change app'
-                                  : 'Change exe',
+                                  ? SettingsStrings.changeAppTooltip
+                                  : SettingsStrings.changeExeTooltip,
                               icon: const Icon(Icons.edit_outlined),
                               onPressed: () => _editEmulatorExe(emu),
                             ),
                             IconButton(
-                              tooltip: 'Remove',
+                              tooltip: SettingsStrings.removeTooltip,
                               icon: const Icon(Icons.delete_outline),
                               onPressed: () async {
                                 await EmulatorStore.removeEmulator(emu.id);
@@ -224,9 +219,7 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
                         child: AutoSaveTextField(
                           key: ValueKey('args-${emu.id}'),
                           value: emu.extraArgs,
-                          label:
-                              'Extra arguments (applied to all this '
-                              "emulator's systems)",
+                          label: SettingsStrings.extraArgsLabel,
                           onSave: (v) => EmulatorStore.setExtraArgs(emu.id, v),
                         ),
                       ),
@@ -243,8 +236,8 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
                     icon: const Icon(Icons.add),
                     label: Text(
                       Platform.isAndroid
-                          ? 'Add emulator (pick app)'
-                          : 'Add emulator (browse exe)',
+                          ? SettingsStrings.addEmulatorApp
+                          : SettingsStrings.addEmulatorExe,
                     ),
                   ),
                 ),
@@ -266,10 +259,10 @@ class _EmulatorSettingsSectionState extends State<EmulatorSettingsSection> {
                         : const Icon(Icons.travel_explore),
                     label: Text(
                       _scanning
-                          ? 'Scanning…'
+                          ? SettingsStrings.scanning
                           : Platform.isAndroid
-                          ? 'Detect installed emulators'
-                          : 'Scan a folder for emulators',
+                          ? SettingsStrings.detectEmulatorApps
+                          : SettingsStrings.scanEmulatorFolder,
                     ),
                   ),
                 ),

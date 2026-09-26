@@ -11,6 +11,7 @@ import '../services/scraper/scraped_store.dart';
 import '../services/settings_bus.dart';
 import '../widgets/bigpicture/couch_shelves.dart';
 import '../widgets/game_detail_dialog.dart';
+import '../strings.dart';
 
 /// "What should I play next?": a grid of consoles (plus "All Consoles"), each
 /// listing its top games, most-played first. Tapping a cover opens its detail
@@ -73,8 +74,7 @@ class _RecommendationsScreenState extends State<RecommendationsScreen> {
         rows: rows.consoles,
         overall: rows.overall,
         onOpen: _open,
-        emptyMessage: 'No supported games with achievement data yet. '
-            'Fetch some systems first.',
+        emptyMessage: PlayNextStrings.emptyMessage,
       ),
     );
   }

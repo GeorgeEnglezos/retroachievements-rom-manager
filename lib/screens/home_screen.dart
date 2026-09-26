@@ -50,6 +50,7 @@ import '../widgets/require_credentials.dart';
 import 'playlist_view.dart';
 import 'scan_health_screen.dart';
 import '../widgets/ui/ui_focusable.dart';
+import '../strings.dart';
 
 /// Set by the setup wizard to ask for a full first sweep, and cleared by
 /// whichever [HomeScreen] takes it.
@@ -165,11 +166,13 @@ class _HomeScreenState extends State<HomeScreen> {
   ScanRun? _run;
 
   String _scanAllLabel() {
-    final name = _currentFolder ?? '';
-    final totalPart = _scanAllTotal == 0
-        ? '$_checked'
-        : '$_checked/$_scanAllTotal';
-    return 'System $_folderIndex/$_folderCount: $name  •  $totalPart';
+    return LibraryStrings.scanAllProgress(
+      _folderIndex,
+      _folderCount,
+      _currentFolder ?? '',
+      _checked,
+      _scanAllTotal,
+    );
   }
 
   // Folder card numbers, derived from what the run just saved.
@@ -339,12 +342,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final n = diff.newUnmatched;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          '$n new file${n == 1 ? '' : 's'} found since the last scan.',
-        ),
+        content: Text(LibraryStrings.newFilesFound(n)),
         action: _isRunning
             ? null
-            : SnackBarAction(label: 'Fetch', onPressed: _scanAllSystems),
+            : SnackBarAction(
+                label: LibraryStrings.fetchAction,
+                onPressed: _scanAllSystems,
+              ),
         duration: const Duration(seconds: 6),
       ),
     );
@@ -517,9 +521,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Folder no longer exists. Pick a new one.'),
-          ),
+          const SnackBar(content: Text(LibraryStrings.folderMissing)),
         );
       }
       return;
@@ -536,14 +538,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final parts = <String>[];
     if (foldersAdded > 0 || foldersRemoved > 0) {
-      parts.add('folders +$foldersAdded / −$foldersRemoved');
+      parts.add(LibraryStrings.refreshedFolders(foldersAdded, foldersRemoved));
     }
-    parts.add('files +${diff.added} / −${diff.removed}');
+    parts.add(LibraryStrings.refreshedFiles(diff.added, diff.removed));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Refreshed: ${parts.join('  ·  ')}'),
+        content: Text(LibraryStrings.refreshed(parts)),
         action: diff.newUnmatched > 0 && !_isRunning
-            ? SnackBarAction(label: 'Fetch', onPressed: _scanAllSystems)
+            ? SnackBarAction(
+                label: LibraryStrings.fetchAction,
+                onPressed: _scanAllSystems,
+              )
             : null,
         duration: const Duration(seconds: 5),
       ),
@@ -635,7 +640,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(width: 8),
                 Flexible(
-                  child: Text(favorite ? 'Remove from favorites' : 'Favorite'),
+                  child: Text(
+                    favorite
+                        ? LibraryStrings.removeFromFavorites
+                        : LibraryStrings.favorite,
+                  ),
                 ),
               ],
             ),
@@ -649,7 +658,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   const Icon(Icons.visibility_off, size: 18),
                   const SizedBox(width: 8),
-                  Flexible(child: Text('Ignore "$name"')),
+                  Flexible(child: Text(LibraryStrings.ignoreFolder(name))),
                 ],
               ),
             ),
@@ -678,9 +687,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Ignoring "$name". Manage the list in Settings.'),
+          content: Text(LibraryStrings.ignoringFolder(name)),
           action: SnackBarAction(
-            label: 'Undo',
+            label: LibraryStrings.undo,
             onPressed: () => _unignoreFolder(name),
           ),
         ),
@@ -703,7 +712,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final missing = await _lib.missingSystemNames();
     if (!mounted) return;
     if (missing.isEmpty) {
-      _notify('No missing systems to remove.');
+      _notify(LibraryStrings.noMissingSystems);
       return;
     }
     // Naming them matters: an unplugged drive looks exactly like a deleted
@@ -711,28 +720,20 @@ class _HomeScreenState extends State<HomeScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(
-          'Remove ${missing.length} missing '
-          'system${missing.length == 1 ? '' : 's'}?',
-        ),
-        content: Text(
-          'These folders are not on disk right now:\n\n'
-          '${missing.join('\n')}\n\n'
-          'Their scan results will be deleted. If one of these is on a drive '
-          'that is currently unplugged, cancel and plug it back in first.',
-        ),
+        title: Text(LibraryStrings.removeMissingTitle(missing.length)),
+        content: Text(LibraryStrings.removeMissingBody(missing)),
         actions: [
           UiFocusZoom(
             child: TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
+              child: const Text(LibraryStrings.cancelButton),
             ),
           ),
           UiFocusZoom(
             child: TextButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Remove'),
+              child: const Text(LibraryStrings.removeButton),
             ),
           ),
         ],
@@ -740,7 +741,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (ok != true) return;
     final removed = await _lib.pruneMissingSystems();
-    _notify('Removed $removed missing system${removed == 1 ? '' : 's'}.');
+    _notify(LibraryStrings.removedMissing(removed));
   }
 
   Future<void> _scanAllSystems({FetchPlan? plan}) async {
@@ -766,9 +767,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final dirs = List<Directory>.from(_subfolders);
     if (dirs.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('No subfolders to scan.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(LibraryStrings.noSubfolders)),
+      );
       return;
     }
 
@@ -783,7 +784,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (plan.refreshLists && credentials != null) {
       await _refreshRaLists(credentials);
       if (!plan.match && !plan.progress) {
-        _notify('RA lists refreshed');
+        _notify(LibraryStrings.raListsRefreshed);
         return;
       }
     }
@@ -831,7 +832,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (targets.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No folders match that scope.')),
+        const SnackBar(content: Text(LibraryStrings.noFoldersMatchScope)),
       );
       return;
     }
@@ -933,7 +934,12 @@ class _HomeScreenState extends State<HomeScreen> {
         );
         _setUpdates.addAll(result.setUpdates);
         if (result.skipReason != null) {
-          skipped.add('${p.basename(dir.path)} (${result.skipReason})');
+          skipped.add(
+            LibraryStrings.skippedEntry(
+              p.basename(dir.path),
+              result.skipReason!,
+            ),
+          );
         }
         if (mounted) {
           setState(() => _stats[dir.path] = _statsFrom(result));
@@ -956,25 +962,17 @@ class _HomeScreenState extends State<HomeScreen> {
       if (skipped.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Skipped ${skipped.length} '
-              'system${skipped.length == 1 ? '' : 's'}: '
-              '${skipped.take(3).join(', ')}'
-              '${skipped.length > 3 ? '…' : ''}',
-            ),
+            content: Text(LibraryStrings.skippedSystems(skipped)),
             duration: const Duration(seconds: 8),
           ),
         );
       }
       if (_setUpdates.isNotEmpty) {
         final n = _setUpdates.length;
-        final sample = _setUpdates.take(3).join(', ');
+        final sample = _setUpdates.take(3).join(CommonStrings.listSep);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              '$n game${n == 1 ? '' : 's'} gained new achievements on RA: '
-              '$sample${n > 3 ? '…' : ''}',
-            ),
+            content: Text(LibraryStrings.setUpdates(n, sample)),
             duration: const Duration(seconds: 6),
           ),
         );
@@ -1013,22 +1011,19 @@ class _HomeScreenState extends State<HomeScreen> {
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Scraped data found'),
-          content: Text(
-            'Found gamelist.xml for $found '
-            'folder(s). Import artwork & details to fill gaps?',
-          ),
+          title: const Text(LibraryStrings.scrapedDataTitle),
+          content: Text(LibraryStrings.scrapedDataBody(found)),
           actions: [
             UiFocusZoom(
               child: TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Skip'),
+                child: const Text(LibraryStrings.skipButton),
               ),
             ),
             UiFocusZoom(
               child: FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Import'),
+                child: const Text(LibraryStrings.importButton),
               ),
             ),
           ],
@@ -1167,7 +1162,7 @@ class _HomeScreenState extends State<HomeScreen> {
             style: style,
             icon: const Icon(Icons.health_and_safety_outlined),
             // Deliberately stays enabled during a scan; it's read-only.
-            tooltip: 'Scan health & export',
+            tooltip: LibraryStrings.scanHealthTooltip,
             onPressed: () => Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const ScanHealthScreen())),
@@ -1180,7 +1175,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_subfolders.isNotEmpty)
       _shortcutButton(
         Icons.apps,
-        'All games',
+        LibraryStrings.allGames,
         _isRunning ? null : _openAllGames,
       ),
     for (final pl in _playlists)
@@ -1204,7 +1199,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSortButton() {
     return UiFocusZoom(
       child: PopupMenuButton<HomeSort>(
-        tooltip: 'Sort folders',
+        tooltip: LibraryStrings.sortFoldersTooltip,
         child: Container(
           height: 40,
           alignment: Alignment.center,
@@ -1257,7 +1252,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: UiFocusZoom(
           child: FilledButton.icon(
             icon: const Icon(Icons.folder_open),
-            label: const Text('Pick folder'),
+            label: const Text(LibraryStrings.pickFolderButton),
             onPressed: _pickFolder,
           ),
         ),
@@ -1286,13 +1281,15 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     ];
     final blocks = <({String title, List<Widget> tiles})>[
-      if (shortcuts.isNotEmpty) (title: 'Shortcuts', tiles: shortcuts),
-      if (favorites.isNotEmpty) (title: 'Favorites', tiles: favorites),
-      if (systems.isNotEmpty) (title: 'Systems', tiles: systems),
+      if (shortcuts.isNotEmpty)
+        (title: LibraryStrings.shortcutsSection, tiles: shortcuts),
+      if (favorites.isNotEmpty)
+        (title: LibraryStrings.favoritesSection, tiles: favorites),
+      if (systems.isNotEmpty) (title: LibraryStrings.systems, tiles: systems),
       // Systems RA can't validate (Switch, PS3…, or an unidentified folder)
       // sit in their own block instead of wearing a badge each.
       if (unsupported.isNotEmpty)
-        (title: 'No RetroAchievements', tiles: unsupported),
+        (title: LibraryStrings.noRetroAchievements, tiles: unsupported),
     ];
     return CustomScrollView(
       slivers: [
@@ -1302,7 +1299,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _rowBlock(block.tiles)
           // The shortcuts aren't systems, so they get short wide tiles rather
           // than the console cards' picture-sized squares.
-          else if (block.title == 'Shortcuts')
+          else if (block.title == LibraryStrings.shortcutsSection)
             _gridBlock(block.tiles, extent: 200, aspectRatio: 3.2, spacing: 8)
           else
             _gridBlock(
@@ -1456,7 +1453,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _openAllGames() => _openFolderView(
     FolderView(
       folderPaths: _subfolders.map((d) => d.path).toList(),
-      title: 'All games',
+      title: LibraryStrings.allGames,
       enabledExtensions: _enabledExtensions,
       showActions: false,
     ),
@@ -1464,7 +1461,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildAllGamesCard(bool narrow) => _shortcut(
     icon: Icons.apps,
-    label: 'All games',
+    label: LibraryStrings.allGames,
     onTap: _isRunning ? null : _openAllGames,
     narrow: narrow,
   );
@@ -1477,7 +1474,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Icon(Icons.folder_open, size: 64, color: context.ui.muted),
             const SizedBox(height: 16),
-            const Text('Pick a folder to browse subfolders.'),
+            const Text(LibraryStrings.pickFolderPrompt),
           ],
         ),
       );
@@ -1538,7 +1535,7 @@ class _HomeScreenState extends State<HomeScreen> {
         stats: entry.agg,
         consoleId: g.consoleId,
         subtitle: g.folderPaths.length > 1
-            ? '${g.folderPaths.length} folders'
+            ? LibraryStrings.folderCount(g.folderPaths.length)
             : null,
         favorite: favorite,
         narrow: narrow,
@@ -1626,7 +1623,7 @@ class _HomeScreenState extends State<HomeScreen> {
         narrow: narrow,
         icon: _playlistIcon(pl),
         label: pl.name,
-        sub: '${visibleMemberCount(pl, _liveMemberKeys)} games',
+        sub: LibraryStrings.gameCount(visibleMemberCount(pl, _liveMemberKeys)),
         onTap: () => _openPlaylist(pl),
       ),
     );
@@ -1660,8 +1657,8 @@ class _HomeScreenState extends State<HomeScreen> {
         Offset.zero & overlay.size,
       ),
       items: [
-        _menuRow('rename', Icons.edit, 'Rename'),
-        _menuRow('delete', Icons.delete_outline, 'Delete'),
+        _menuRow('rename', Icons.edit, LibraryStrings.rename),
+        _menuRow('delete', Icons.delete_outline, LibraryStrings.delete),
       ],
     );
     if (!mounted) return;
@@ -1670,7 +1667,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final name = await showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Rename playlist'),
+          title: const Text(LibraryStrings.renamePlaylistTitle),
           content: UiFocusZoom(
             child: TextField(controller: controller, autofocus: true),
           ),
@@ -1678,13 +1675,13 @@ class _HomeScreenState extends State<HomeScreen> {
             UiFocusZoom(
               child: TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
+                child: const Text(LibraryStrings.cancelButton),
               ),
             ),
             UiFocusZoom(
               child: TextButton(
                 onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-                child: const Text('Save'),
+                child: const Text(LibraryStrings.saveButton),
               ),
             ),
           ],

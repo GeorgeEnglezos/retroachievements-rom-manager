@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/ui_tokens.dart';
 import 'ui/ui_focusable.dart';
+import '../strings.dart';
 
 /// GB-styled bulk selection bar. Shows either delete progress or the selection
 /// count + bulk actions (favorites / playlist / delete / exclude / close).
@@ -49,7 +50,7 @@ class BulkActionBar extends StatelessWidget {
 
   Widget _deletingRow(UiTokens ui) => Row(
         children: [
-          Text('Deleting $deleteDone of $deleteTotal…',
+          Text(FolderStrings.deletingProgress(deleteDone, deleteTotal),
               style: ui.mono.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(width: 12),
           Expanded(
@@ -64,21 +65,21 @@ class BulkActionBar extends StatelessWidget {
 
   Widget _actionsRow(UiTokens ui) => Row(
         children: [
-          Text('$selectedCount selected',
+          Text(FolderStrings.selectedCount(selectedCount),
               style: ui.mono.copyWith(fontWeight: FontWeight.w900)),
           const Spacer(),
           if (onFavorites != null)
-            _btn(ui, Icons.favorite, 'Favorites', onFavorites,
+            _btn(ui, Icons.favorite, FolderStrings.favoritesAction, onFavorites,
                 fill: kFavoriteColor),
           if (onPlaylist != null)
-            _btn(ui, Icons.playlist_add, 'Playlist', onPlaylist),
-          _btn(ui, Icons.delete_outline, 'Delete', onDelete, fill: kDangerColor),
-          if (onExclude != null) _btn(ui, Icons.block, 'Exclude', onExclude),
+            _btn(ui, Icons.playlist_add, FolderStrings.playlistAction, onPlaylist),
+          _btn(ui, Icons.delete_outline, FolderStrings.deleteAction, onDelete, fill: kDangerColor),
+          if (onExclude != null) _btn(ui, Icons.block, FolderStrings.excludeAction, onExclude),
           UiFocusZoom(
             child: IconButton(
               icon: Icon(Icons.close, size: 18, color: ui.text),
               // The only bare icon on the bar; the rest carry visible text.
-              tooltip: 'Clear selection',
+              tooltip: FolderStrings.clearSelection,
               visualDensity: VisualDensity.compact,
               onPressed: onClose,
             ),

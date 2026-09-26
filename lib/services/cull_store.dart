@@ -4,6 +4,7 @@ import 'playlist_store.dart';
 import 'pref_keys.dart';
 
 const _prefKey = PrefKeys.cullDecided;
+const _trashHintKey = 'cull_trash_hint_shown';
 
 enum CullVerdict { keep, trash, favorite }
 
@@ -103,6 +104,15 @@ class CullStore {
     await _ensureLoaded();
     _decided.removeAll(memberKeys);
     await _persist();
+  }
+
+  /// True exactly once per install: the deck then tells the user a trashed
+  /// game only moves to the Trash playlist, nothing is deleted.
+  Future<bool> takeTrashHint() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_trashHintKey) ?? false) return false;
+    await prefs.setBool(_trashHintKey, true);
+    return true;
   }
 
   Future<void> _persist() async {

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'pref_keys.dart';
+import '../strings.dart';
 
 const _prefKey = PrefKeys.playlists;
 const favoritesId = 'favorites';
@@ -45,10 +46,10 @@ class Playlist {
 /// games, so every screen phrases it the same way.
 String favoritesSnack(int added, int removed) {
   final parts = <String>[
-    if (added > 0) 'added $added to Favorites',
-    if (removed > 0) 'removed $removed from Favorites',
+    if (added > 0) BuiltinPlaylistStrings.addedToFavorites(added),
+    if (removed > 0) BuiltinPlaylistStrings.removedFromFavorites(removed),
   ];
-  return parts.isEmpty ? 'No changes' : parts.join(', ').capitalizeFirst();
+  return parts.isEmpty ? BuiltinPlaylistStrings.noChanges : parts.join(', ').capitalizeFirst();
 }
 
 extension on String {
@@ -120,22 +121,22 @@ class PlaylistStore extends ChangeNotifier {
     if (!_mem.containsKey(favoritesId)) {
       _mem[favoritesId] = Playlist(
         id: favoritesId,
-        name: 'Favorites',
+        name: BuiltinPlaylistStrings.favorites,
         builtin: true,
       );
     }
     if (!_mem.containsKey(playedId)) {
-      _mem[playedId] = Playlist(id: playedId, name: 'Played', builtin: true);
+      _mem[playedId] = Playlist(id: playedId, name: BuiltinPlaylistStrings.played, builtin: true);
     }
     if (!_mem.containsKey(wantToPlayId)) {
       _mem[wantToPlayId] = Playlist(
         id: wantToPlayId,
-        name: 'Want to Play',
+        name: BuiltinPlaylistStrings.wantToPlay,
         builtin: true,
       );
     }
     if (!_mem.containsKey(trashId)) {
-      _mem[trashId] = Playlist(id: trashId, name: 'Trash', builtin: true);
+      _mem[trashId] = Playlist(id: trashId, name: BuiltinPlaylistStrings.trash, builtin: true);
     }
     _loaded = true;
   }

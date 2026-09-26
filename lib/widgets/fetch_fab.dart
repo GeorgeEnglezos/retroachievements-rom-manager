@@ -5,6 +5,7 @@ import '../services/pref_keys.dart';
 import '../services/scan_progress.dart';
 import 'ra_image.dart';
 import 'ui/ui_focusable.dart';
+import '../strings.dart';
 
 /// The one entry point for a fetch run, shared by the home screen and the
 /// folder view so both look and behave the same. Shows the user's RA avatar
@@ -59,7 +60,7 @@ class _FetchFabState extends State<FetchFab> {
         return UiFocusZoom(
           child: FloatingActionButton(
             heroTag: 'updateLibrary',
-            tooltip: 'Update library (rescan & sync progress)',
+            tooltip: FetchStrings.fabTooltip,
             onPressed: busy ? null : widget.onPressed,
             // Fill the whole FAB with the avatar, clipped to the FAB's shape.
             // ponytail: 56/16 are the M3 default regular-FAB size and corner

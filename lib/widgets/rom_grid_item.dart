@@ -13,6 +13,7 @@ import 'ui/ui_card.dart';
 import 'ui/ui_focusable.dart';
 import 'rom_actions.dart';
 import 'rom_badges.dart';
+import '../strings.dart';
 
 /// The one game tile, shared by Home and the library grid.
 ///
@@ -232,13 +233,13 @@ class RomGridItem extends StatelessWidget {
       children: [
         if (total > 0 && playView.achievementCount)
           Text(
-            '$earned/$total',
+            CommonStrings.fraction(earned, total),
             style: ui.mono.copyWith(fontSize: 11, color: ui.accentGames),
           ),
         Expanded(
           child: Text(
             total > 0 && playView.achievementCount
-                ? '  ·  $console'
+                ? FolderStrings.consoleAfterCount(console)
                 : console,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -263,7 +264,7 @@ class RomGridItem extends StatelessWidget {
       final s => statusLabel(s),
     };
     final parts = [?status, ?size];
-    return parts.isEmpty ? null : parts.join('  ·  ');
+    return parts.isEmpty ? null : parts.join(CommonStrings.dotSepWide);
   }
 
   Color _sublineColor(UiTokens ui) =>

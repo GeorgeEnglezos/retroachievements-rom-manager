@@ -13,6 +13,7 @@ import '../services/library.dart';
 import '../services/log_service.dart';
 import '../services/pref_keys.dart';
 import '../services/library_folder.dart';
+import '../strings.dart';
 import '../widgets/clear_data_dialog.dart';
 import '../widgets/app_mode_toggle.dart';
 import '../widgets/pick_library_folder.dart';
@@ -63,7 +64,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final info = await PackageInfo.fromPlatform();
       if (mounted) {
-        setState(() => _version = 'v${info.version}+${info.buildNumber}');
+        setState(() => _version = SettingsStrings.version(info.version, info.buildNumber));
       }
     } catch (_) {
       // No platform plugin under tests, leave the label blank.
@@ -118,29 +119,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await DataWipe(library: widget.library).clear(targets);
       _toast(
-        'Deleted ${targets.length} of '
-        '${ClearTarget.values.length} kinds of data.',
+        SettingsStrings.dataDeleted(
+          targets.length,
+          ClearTarget.values.length,
+        ),
       );
     } catch (e) {
       LogService.error('Settings/clearData', 'wipe failed', err: e);
-      _toast('Could not delete everything, see the log for details.');
+      _toast(SettingsStrings.deleteDataFailed);
     }
   }
 
   Future<void> _backup() async {
     try {
       final path = await FilePicker.platform.saveFile(
-        dialogTitle: 'Back up library',
-        fileName:
-            'rarm-backup-${DateTime.now().toIso8601String().split('T').first}.zip',
+        dialogTitle: SettingsStrings.backupDialogTitle,
+        fileName: SettingsStrings.backupFileName(DateTime.now()),
       );
       if (path == null) return; // cancelled
-      _toast('Backing up, this can take a while on a large library.');
+      _toast(SettingsStrings.backupStarted);
       await const BackupService().create(path);
-      _toast('Backup saved to $path');
+      _toast(SettingsStrings.backupSaved(path));
     } catch (e) {
       LogService.error('Settings/backup', 'backup failed', err: e);
-      _toast('Backup failed, see the log for details.');
+      _toast(SettingsStrings.backupFailed);
     }
   }
 
@@ -184,14 +186,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _heading(
-          'Account',
-          'Web API key from retroachievements.org → Settings → Keys.',
+          SettingsStrings.accountTitle,
+          SettingsStrings.accountHelp,
         ),
         UiFocusZoom(
           child: TextField(
             controller: _usernameCtrl,
             decoration: const InputDecoration(
-              labelText: 'Username',
+              labelText: SettingsStrings.usernameLabel,
               isDense: true,
             ),
             onChanged: (v) => _setStringPref(PrefKeys.raUsername, v.trim()),
@@ -204,7 +206,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             controller: _apiKeyCtrl,
             focusNode: _apiKeyFocus,
             decoration: const InputDecoration(
-              labelText: 'Web API key',
+              labelText: SettingsStrings.apiKeyLabel,
               isDense: true,
             ),
             obscureText: true,
@@ -222,16 +224,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _heading(
-          'Scan filters',
-          'Comma-separated. Unlisted extensions are skipped; ignored folders '
-              'are hidden and never scanned.',
+          SettingsStrings.scanFiltersTitle,
+          SettingsStrings.scanFiltersHelp,
         ),
         UiFocusZoom(
           child: TextField(
             controller: _extensionsCtrl,
             decoration: const InputDecoration(
-              labelText: 'Extensions',
-              hintText: 'chd, nds, gb, gba, ...',
+              labelText: SettingsStrings.extensionsLabel,
+              hintText: SettingsStrings.extensionsHint,
               isDense: true,
             ),
             minLines: 1,
@@ -242,13 +243,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Align(
           alignment: Alignment.centerRight,
           child: Tooltip(
-            message:
-                'Replaces the list above with the extensions the app '
-                'ships with, discarding your edits.',
+            message: SettingsStrings.resetExtensionsTooltip,
             child: UiFocusZoom(
               child: TextButton(
                 onPressed: _resetExtensions,
-                child: const Text('Reset to defaults'),
+                child: const Text(SettingsStrings.resetExtensionsButton),
               ),
             ),
           ),
@@ -257,8 +256,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: TextField(
             controller: _ignoredCtrl,
             decoration: const InputDecoration(
-              labelText: 'Ignored folders',
-              hintText: 'BIOS, Saves, Cheats',
+              labelText: SettingsStrings.ignoredFoldersLabel,
+              hintText: SettingsStrings.ignoredFoldersHint,
               isDense: true,
             ),
             minLines: 1,
@@ -271,11 +270,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: TextField(
             controller: _excludedCtrl,
             decoration: const InputDecoration(
-              labelText: 'Excluded files',
-              hintText: r'C:\roms\snes\bad-dump.sfc',
-              helperText:
-                  'Full paths, one per line. Excluded files are hidden and '
-                  'skipped, but not deleted.',
+              labelText: SettingsStrings.excludedFilesLabel,
+              hintText: SettingsStrings.excludedFilesHint,
+              helperText: SettingsStrings.excludedFilesHelp,
               helperMaxLines: 2,
               isDense: true,
             ),
@@ -293,9 +290,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _heading(
-          'Display',
-          'Show the full system name ("Super Nintendo") or the original '
-              'folder name ("SNES") on cards and titles.',
+          SettingsStrings.displayTitle,
+          SettingsStrings.displayHelp,
         ),
         ValueListenableBuilder<NameMode>(
           valueListenable: nameModeListenable,
@@ -303,7 +299,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: SwitchListTile(
               contentPadding: EdgeInsets.zero,
               dense: true,
-              title: const Text('Show full system names'),
+              title: const Text(SettingsStrings.fullSystemNamesSwitch),
               value: mode == NameMode.systemName,
               onChanged: (on) => nameModeListenable.save(
                 on ? NameMode.systemName : NameMode.folderName,
@@ -317,21 +313,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: SwitchListTile(
               contentPadding: EdgeInsets.zero,
               dense: true,
-              title: const Text('Combine systems'),
-              subtitle: const Text(
-                'Merge folders that map to the same console into one card '
-                'on Home.',
-              ),
+              title: const Text(SettingsStrings.combineSystemsSwitch),
+              subtitle: const Text(SettingsStrings.combineSystemsHelp),
               value: on,
               onChanged: saveCombineSystems,
             ),
           ),
         ),
         const SizedBox(height: 12),
-        Text('UI scale', style: Theme.of(context).textTheme.labelLarge),
+        Text(SettingsStrings.uiScaleTitle, style: Theme.of(context).textTheme.labelLarge),
         const SizedBox(height: 2),
         Text(
-          'Zoom the whole app in or out. Applies immediately.',
+          SettingsStrings.uiScaleHelp,
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
@@ -344,7 +337,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _heading('Mode', kAppModeHelp),
+        _heading(SettingsStrings.modeTitle, AppearanceStrings.modeHelp),
         ValueListenableBuilder<AppMode>(
           valueListenable: appModeListenable,
           builder: (context, mode, _) => Column(
@@ -367,9 +360,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _heading(
-          'Clicking a game',
-          'What a plain click on a game does. Ctrl/shift-click still '
-              'multi-selects, and Play stays on the right-click menu either way.',
+          SettingsStrings.romTapTitle,
+          SettingsStrings.romTapHelp,
         ),
         ValueListenableBuilder<RomTapAction>(
           valueListenable: romTapListenable,
@@ -378,9 +370,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               segments: const [
                 ButtonSegment(
                   value: RomTapAction.detail,
-                  label: Text('Open details'),
+                  label: Text(SettingsStrings.romTapDetail),
                 ),
-                ButtonSegment(value: RomTapAction.play, label: Text('Play')),
+                ButtonSegment(value: RomTapAction.play, label: Text(SettingsStrings.romTapPlay)),
               ],
               selected: {action},
               showSelectedIcon: false,
@@ -418,40 +410,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _heading(
-            'Kiosk listings',
-            'What ROM lists show in Kiosk mode. Cleaning always shows '
-                'everything.',
+            SettingsStrings.kioskListingsTitle,
+            SettingsStrings.kioskListingsHelp,
           ),
           _playSwitch(
-            'Achievement count',
+            SettingsStrings.achievementCountSwitch,
             v.achievementCount,
             (on) => v.copyWith(achievementCount: on),
-            subtitle: 'The ACH badge, earned/total and the progress bar.',
+            subtitle: SettingsStrings.achievementCountHelp,
           ),
-          _playSwitch('Hot badge', v.hot, (on) => v.copyWith(hot: on)),
+          _playSwitch(SettingsStrings.hotBadgeSwitch, v.hot, (on) => v.copyWith(hot: on)),
           _playSwitch(
-            'No-achievements badge',
+            SettingsStrings.noAchievementsBadgeSwitch,
             v.noAchievements,
             (on) => v.copyWith(noAchievements: on),
           ),
           _playSwitch(
-            'File name tags',
+            SettingsStrings.fileTagsSwitch,
             v.fileTags,
             (on) => v.copyWith(fileTags: on),
-            subtitle: 'Region, HACK, ENG and friends, read off the file name.',
+            subtitle: SettingsStrings.fileTagsHelp,
           ),
           const SizedBox(height: 8),
-          Text('Layout', style: Theme.of(context).textTheme.labelLarge),
+          Text(SettingsStrings.layoutLabel, style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 4),
           UiFocusZoom(
             child: SegmentedButton<PlayLayout>(
               segments: const [
                 ButtonSegment(
                   value: PlayLayout.follow,
-                  label: Text('My choice'),
+                  label: Text(SettingsStrings.layoutFollow),
                 ),
-                ButtonSegment(value: PlayLayout.list, label: Text('List')),
-                ButtonSegment(value: PlayLayout.grid, label: Text('Grid')),
+                ButtonSegment(value: PlayLayout.list, label: Text(SettingsStrings.layoutList)),
+                ButtonSegment(value: PlayLayout.grid, label: Text(SettingsStrings.layoutGrid)),
               ],
               selected: {v.layout},
               showSelectedIcon: false,
@@ -468,7 +459,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _heading('Theme', 'Pick a colour palette. Applies immediately.'),
+        _heading(SettingsStrings.themeTitle, SettingsStrings.themeHelp),
         const ThemePicker(),
       ],
     );
@@ -481,8 +472,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _heading(
-            'Library folder',
-            'The root folder holding your per-system ROM subfolders.',
+            SettingsStrings.libraryFolderTitle,
+            SettingsStrings.libraryFolderHelp,
           ),
           if (folder != null)
             Text(folder, style: Theme.of(context).textTheme.bodySmall),
@@ -490,7 +481,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           UiFocusZoom(
             child: OutlinedButton.icon(
               icon: const Icon(Icons.folder_open),
-              label: Text(folder == null ? 'Pick folder' : 'Change folder'),
+              label: Text(
+                folder == null
+                    ? SettingsStrings.pickFolderButton
+                    : SettingsStrings.changeFolderButton,
+              ),
               onPressed: () => pickLibraryFolder(context),
             ),
           ),
@@ -504,49 +499,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _heading(
-          'Data',
-          'Back up or restore everything the app has saved. Delete it to '
-              'start over from a fresh scan.',
+          SettingsStrings.dataTitle,
+          SettingsStrings.dataHelp,
         ),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
             Tooltip(
-              message:
-                  'Writes a zip holding your scan results, imported '
-                  'metadata, cached artwork, playlists and settings. ROM '
-                  'files and your API key are not included.',
+              message: SettingsStrings.backupTooltip,
               child: UiFocusZoom(
                 child: OutlinedButton.icon(
                   onPressed: _backup,
                   icon: const Icon(Icons.save_alt),
-                  label: const Text('Create Data Backup'),
+                  label: const Text(SettingsStrings.backupButton),
                 ),
               ),
             ),
             Tooltip(
-              message:
-                  'Loads a backup zip, replacing everything you have '
-                  'now except your API key. Needs an app restart afterwards.',
+              message: SettingsStrings.restoreTooltip,
               child: UiFocusZoom(
                 child: OutlinedButton.icon(
                   onPressed: () => restoreBackup(context),
                   icon: const Icon(Icons.restore),
-                  label: const Text('Restore Data Backup'),
+                  label: const Text(SettingsStrings.restoreButton),
                 ),
               ),
             ),
             Tooltip(
-              message:
-                  'Choose what to delete: scan results, playlists, '
-                  'imported metadata, cached artwork. Your ROM files, '
-                  'settings and login are never touched.',
+              message: SettingsStrings.deleteDataTooltip,
               child: UiFocusZoom(
                 child: OutlinedButton.icon(
                   onPressed: _clearData,
                   icon: const Icon(Icons.delete_outline),
-                  label: const Text('Delete Data'),
+                  label: const Text(SettingsStrings.deleteDataButton),
                 ),
               ),
             ),
@@ -554,15 +540,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 24),
         _heading(
-          'Setup',
-          'Opens the first-run wizard again (RetroAchievements account, '
-              'library folder, mode, theme).',
+          SettingsStrings.setupTitle,
+          SettingsStrings.setupHelp,
         ),
         UiFocusZoom(
           child: OutlinedButton.icon(
             onPressed: () => showSetupWizard(context),
             icon: const Icon(Icons.restart_alt),
-            label: const Text('Setup Wizard'),
+            label: const Text(SettingsStrings.setupWizardButton),
           ),
         ),
       ],
@@ -576,7 +561,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _heading('About', 'Retroachievements Rom Manager by George Englezos.'),
+        _heading(SettingsStrings.aboutTitle, SettingsStrings.aboutHelp),
         if (_version.isNotEmpty) Text(_version, style: style),
       ],
     );
@@ -670,7 +655,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (wide) ...[
-                    Text('Settings', style: ui.display.copyWith(fontSize: 26)),
+                    Text(SettingsStrings.title, style: ui.display.copyWith(fontSize: 26)),
                     const SizedBox(height: 16),
                   ],
                   const Align(
@@ -680,8 +665,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       tabAlignment: TabAlignment.start,
                       dividerHeight: 0,
                       tabs: [
-                        UiFocusZoom(child: Tab(text: 'General')),
-                        UiFocusZoom(child: Tab(text: 'Systems')),
+                        UiFocusZoom(child: Tab(text: SettingsStrings.generalTab)),
+                        UiFocusZoom(child: Tab(text: SettingsStrings.systems)),
                       ],
                     ),
                   ),

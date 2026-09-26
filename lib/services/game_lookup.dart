@@ -7,6 +7,7 @@ import 'console_map.dart';
 import 'library.dart';
 import 'ra_service.dart';
 import 'rom_name.dart';
+import '../strings.dart';
 
 /// Maps a RetroAchievements [GameInfo] onto a [RomResult]. A null [info] means
 /// the hash was looked up but unsupported. Shared by the folder view and the
@@ -142,7 +143,7 @@ RomResult romFromEntry(GameEntry entry, {int? consoleId, String? consoleName}) {
     // Still a supported game; showing it as unscanned would invite a pointless
     // re-hash of a file we already identified.
     rom.status = RomStatus.supported;
-    rom.gameTitle = 'Game #${entry.gameId}';
+    rom.gameTitle = RomStatusStrings.gamePlaceholder(entry.gameId);
     rom.consoleName ??= ConsoleMap.nameFor(consoleId) ?? consoleName;
   } else if (entry.metadata != null &&
       !kRemovedMetadataProviders.contains(entry.metadata!.providerId)) {

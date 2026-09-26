@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+
+import '../strings.dart';
 import 'package:flutter/services.dart';
 import '../services/ra_image_cache.dart';
 import 'package:path/path.dart' as p;
@@ -92,41 +94,47 @@ class RomActions {
     if (!context.mounted) return;
     final choice = await showPositionedMenu<String>(context, position, [
         // The only way into the dialog once a click is set to launch.
-        if (canOpenDetail(rom)) _item('detail', Icons.info_outline, 'Game details'),
+        if (canOpenDetail(rom))
+          _item('detail', Icons.info_outline, GameActionStrings.gameDetails),
         // Beta: only a handful of emulators have been tested end to end.
-        _item('play', Icons.play_arrow, 'Play (beta)'),
+        _item('play', Icons.play_arrow, GameActionStrings.play),
         if (alternatives.length > 1)
-          _item('play_with', Icons.playlist_play, 'Play with…'),
+          _item('play_with', Icons.playlist_play,
+              GameActionStrings.playWithMenu),
         if (Platform.isWindows)
-          _item('shortcut', Icons.add_link, 'Create desktop shortcut (beta)'),
+          _item('shortcut', Icons.add_link, GameActionStrings.desktopShortcut),
         if (Platform.isAndroid)
           _item('shortcut', Icons.add_to_home_screen,
-              'Add to home screen (beta)'),
+              GameActionStrings.homeScreenShortcut),
         if (!gamingMode) ...[
-          _item('reveal', Icons.folder_open, 'Reveal in Explorer'),
-          _item('copy', Icons.copy, 'Copy path'),
+          _item('reveal', Icons.folder_open, GameActionStrings.reveal),
+          _item('copy', Icons.copy, GameActionStrings.copyPath),
         ],
-        _item('google', Icons.search, 'Search Google'),
-        if (canOpenRa) _item('ra', Icons.open_in_new, 'Open RA page'),
+        _item('google', Icons.search, GameActionStrings.searchGoogle),
+        if (canOpenRa)
+          _item('ra', Icons.open_in_new, GameActionStrings.openRaPage),
         if (rom.status == RomStatus.unsupported)
-          _item('why_unsupported', Icons.help_outline, 'Why unsupported?'),
+          _item('why_unsupported', Icons.help_outline,
+              GameActionStrings.whyUnsupported),
         // Everything below curates or edits the library, which gaming mode
         // exists not to do.
         if (!gamingMode) ...[
           if (rom.duplicateGroupId != null && onDismissDuplicate != null)
             _item('dismiss_dup', Icons.do_not_disturb_on_outlined,
-                'Not a duplicate'),
+                GameActionStrings.notDuplicate),
           if (rom.status != RomStatus.checking &&
               !rom.isLocalOnly &&
               onFetch != null)
             rom.status == RomStatus.supported
-                ? _item('fetch', Icons.sync, 'Sync progress')
-                : _item('fetch', Icons.cloud_download_outlined, 'Fetch'),
+                ? _item('fetch', Icons.sync, GameActionStrings.syncProgress)
+                : _item('fetch', Icons.cloud_download_outlined,
+                    GameActionStrings.fetch),
         ],
-        _item('playlist', Icons.playlist_add, 'Add to playlist…'),
+        _item('playlist', Icons.playlist_add, GameActionStrings.addToPlaylist),
         if (!gamingMode) ...[
-          _item('delete', Icons.delete_outline, 'Delete', color: Colors.red),
-          _item('exclude', Icons.block, 'Exclude from scans'),
+          _item('delete', Icons.delete_outline, GameActionStrings.delete,
+              color: Colors.red),
+          _item('exclude', Icons.block, GameActionStrings.exclude),
         ],
       ],
     );
@@ -188,22 +196,22 @@ class RomActions {
         }
       case 'reveal':
         if (!await FileActions.revealInExplorer(rom.filePath)) {
-          snack("Couldn't reveal file");
+          snack(GameActionStrings.revealFailed);
         }
       case 'copy':
         await Clipboard.setData(ClipboardData(text: rom.filePath));
-        snack('Path copied');
+        snack(GameActionStrings.pathCopied);
       case 'fetch':
         onFetch?.call();
       case 'google':
         if (!await FileActions.openUrl(
             FileActions.googleSearchUrl(rom.filePath))) {
-          snack("Couldn't open browser");
+          snack(GameActionStrings.browserFailed);
         }
       case 'ra':
         if (rom.gameId != null &&
             !await FileActions.openUrl(FileActions.raGameUrl(rom.gameId!))) {
-          snack("Couldn't open browser");
+          snack(GameActionStrings.browserFailed);
         }
       case 'why_unsupported':
         await _showWhyUnsupported(context);
@@ -218,7 +226,7 @@ class RomActions {
       case 'exclude':
         await ScanSettings.addExcludedFiles(_paths);
         onExcluded?.call();
-        snack('Excluded "${rom.fileName}"');
+        snack(GameActionStrings.excluded(rom.fileName));
     }
   }
 
@@ -230,7 +238,7 @@ class RomActions {
       LogService.info('RomActions/launch',
           'Launch ${rom.fileName}: unknown console, using OS default app');
       if (!await FileActions.launchWithDefaultApp(rom.filePath)) {
-        snack("Couldn't launch ROM");
+        snack(GameActionStrings.launchFailed);
       }
       return;
     }
@@ -263,7 +271,7 @@ class RomActions {
       subject: '${rom.fileName} in ${emu.name}',
       logContext: 'RomActions/launch',
     );
-    if (err != null) snack("Couldn't open in ${emu.name}: $err");
+    if (err != null) snack(GameActionStrings.openInFailed(emu.name, err));
   }
 
   // The console's connected emulator, offering to set one when it has none.
@@ -282,13 +290,15 @@ class RomActions {
       BuildContext context, void Function(String) snack) async {
     final consoleId = await _consoleId();
     if (consoleId == null) {
-      snack('Unknown console for this ROM. Set its folder system in Settings.');
+      snack(GameActionStrings.unknownConsole);
       return;
     }
     final choices = await EmulatorStore.emulatorsForConsole(consoleId);
     if (!context.mounted) return;
     final emu = await showPlayWithDialog(
-        context, choices, ConsoleMap.nameFor(consoleId) ?? 'this system');
+        context,
+        choices,
+        ConsoleMap.nameFor(consoleId) ?? GameActionStrings.thisSystem);
     if (emu == null) return;
     if (Platform.isAndroid) {
       await _launchAndroid(emu, consoleId, snack);
@@ -296,7 +306,7 @@ class RomActions {
     }
     final command = await EmulatorStore.commandForEmulator(emu, consoleId);
     if (command == null) {
-      snack("${emu.name} has no launch command for this system.");
+      snack(GameActionStrings.noLaunchCommand(emu.name));
       return;
     }
     await _launchDesktop(command, consoleId, snack, emulatorName: emu.name);
@@ -313,7 +323,7 @@ class RomActions {
     if (!await FileActions.launchWithTemplate(command, rom.filePath)) {
       LogService.error('RomActions/launch',
           'Launch failed for ${rom.fileName}$inEmu via: $command');
-      snack("Couldn't launch ROM");
+      snack(GameActionStrings.launchFailed);
     }
   }
 
@@ -338,7 +348,7 @@ class RomActions {
       BuildContext context, void Function(String) snack) async {
     final consoleId = await _consoleId();
     if (consoleId == null) {
-      snack('Unknown console for this ROM. Set its folder system in Settings.');
+      snack(GameActionStrings.unknownConsole);
       return;
     }
     if (!context.mounted) return;
@@ -353,20 +363,20 @@ class RomActions {
       iconPath: await _boxArtPng(),
     );
     snack(err == null
-        ? 'Shortcut added to your home screen.'
-        : "Couldn't create shortcut: $err");
+        ? GameActionStrings.homeShortcutAdded
+        : GameActionStrings.shortcutFailed(err));
   }
 
   // Windows-only: Desktop .lnk that opens this ROM in its console's emulator.
   Future<void> _createShortcut(
       BuildContext context, void Function(String) snack) async {
     if (!Platform.isWindows) {
-      snack('Desktop shortcuts are only available on Windows.');
+      snack(GameActionStrings.desktopShortcutsWindowsOnly);
       return;
     }
     final consoleId = await _consoleId();
     if (consoleId == null) {
-      snack('Unknown console for this ROM. Set its folder system in Settings.');
+      snack(GameActionStrings.unknownConsole);
       return;
     }
     if (!context.mounted) return;
@@ -379,7 +389,7 @@ class RomActions {
         .replaceAll('{file.dir}', p.dirname(rom.filePath));
     final tokens = FileActions.tokenizeCommand(filled);
     if (tokens.isEmpty) {
-      snack("Couldn't build the launch command.");
+      snack(GameActionStrings.launchCommandFailed);
       return;
     }
     final args = tokens
@@ -393,8 +403,8 @@ class RomActions {
       iconPath: await _thumbnailIcon(),
     );
     snack(lnk == null
-        ? "Couldn't create the shortcut."
-        : 'Shortcut created on your Desktop.');
+        ? GameActionStrings.desktopShortcutFailed
+        : GameActionStrings.desktopShortcutCreated);
   }
 
   // Box-art PNG for the Android shortcut icon; null falls back to the app
@@ -443,27 +453,19 @@ class RomActions {
     final open = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Why unsupported?'),
-        content: const Text(
-          "RetroAchievements didn't recognise this file's hash. Common causes:\n\n"
-          "• Wrong region or revision (e.g. an EU ROM where RA expects USA).\n"
-          "• A bad dump or hacked/translated ROM; RA needs a known-good redump.\n"
-          "• The game has no achievement set yet.\n"
-          "• A patch (IPS/BPS) needs applying first.\n\n"
-          "Open this console's supported list on RetroAchievements to compare "
-          "the exact titles and hashes RA accepts.",
-        ),
+        title: const Text(GameActionStrings.whyUnsupported),
+        content: const Text(GameActionStrings.whyUnsupportedBody),
         actions: [
           UiFocusZoom(
             child: TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Close'),
+              child: const Text(GameActionStrings.close),
             ),
           ),
           UiFocusZoom(
             child: TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Open RA supported list'),
+              child: const Text(GameActionStrings.openSupportedList),
             ),
           ),
         ],
@@ -473,7 +475,7 @@ class RomActions {
     if (!await FileActions.openUrl(
         FileActions.raSupportedListUrl(rom.consoleId))) {
       messenger.showSnackBar(
-          const SnackBar(content: Text("Couldn't open browser")));
+          const SnackBar(content: Text(GameActionStrings.browserFailed)));
     }
   }
 
@@ -494,7 +496,8 @@ class RomActions {
           .showSnackBar(SnackBar(content: Text(deletedConfirmation)));
     } else {
       messenger
-          .showSnackBar(const SnackBar(content: Text("Couldn't delete file")));
+          .showSnackBar(
+              const SnackBar(content: Text(GameActionStrings.deleteFailed)));
     }
   }
 }

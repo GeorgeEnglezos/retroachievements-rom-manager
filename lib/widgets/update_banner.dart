@@ -6,6 +6,7 @@ import '../theme/ui_tokens.dart';
 import 'ui/ui_badge.dart';
 import 'ui/ui_button.dart';
 import 'ui/ui_focusable.dart';
+import '../strings.dart';
 
 /// Strip above the app body announcing a newer release. Dismissing it is the
 /// caller's job (see [onDismiss]); this widget only reports the tap.
@@ -27,8 +28,7 @@ class UpdateBanner extends StatelessWidget {
     await Clipboard.setData(ClipboardData(text: update.url));
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text("Couldn't open your browser. The link is on your "
-          'clipboard: ${update.url}'),
+      content: Text(ShellStrings.browserOpenFailed(update.url)),
       duration: const Duration(seconds: 8),
     ));
   }
@@ -57,25 +57,25 @@ class UpdateBanner extends StatelessWidget {
                   children: [
                     if (!compact) ...[
                       Flexible(
-                        child: Text('UPDATE AVAILABLE',
+                        child: Text(ShellStrings.updateAvailable,
                             style: ui.labelCaps,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis),
                       ),
                       const SizedBox(width: 8),
                     ],
-                    UiBadge(label: 'v${update.version}', color: ui.accent),
+                    UiBadge(label: CommonStrings.version(update.version), color: ui.accent),
                   ],
                 ),
               ),
-              UiButton(label: 'GET IT', onPressed: () => _open(context)),
+              UiButton(label: ShellStrings.getUpdateButton, onPressed: () => _open(context)),
               const SizedBox(width: 4),
               UiFocusZoom(
                 child: IconButton(
                   onPressed: onDismiss,
                   icon: const Icon(Icons.close, size: 18),
                   color: ui.muted,
-                  tooltip: 'Hide until the next release',
+                  tooltip: ShellStrings.hideUpdateTooltip,
                 ),
               ),
             ],

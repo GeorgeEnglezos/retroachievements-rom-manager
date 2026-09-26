@@ -8,6 +8,7 @@ import 'package:gamepads/gamepads.dart';
 import '../services/gamepad.dart';
 import '../services/log_service.dart';
 import '../theme/ui_tokens.dart';
+import '../strings.dart';
 
 // Flip to true, rebuild, and press every button to read what your controller
 // actually sends into the Logs tab — the way to check a pad the SDL mapping
@@ -200,11 +201,17 @@ class _GamepadFooter extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: const [
-              _Hint(glyph: '↕↔', label: 'Navigate'),
+              _Hint(
+                  glyph: ShellStrings.navigateGlyph,
+                  label: ShellStrings.navigateHint),
               SizedBox(width: 20),
-              _Hint(glyph: 'A', label: 'Select'),
+              _Hint(
+                  glyph: ShellStrings.selectGlyph,
+                  label: ShellStrings.selectHint),
               SizedBox(width: 20),
-              _Hint(glyph: 'B', label: 'Back'),
+              _Hint(
+                  glyph: ShellStrings.backGlyph,
+                  label: ShellStrings.backHint),
             ],
           ),
         ),

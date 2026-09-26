@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../services/emulator_catalog.dart';
 import '../services/emulator_store.dart';
+import '../strings.dart';
 import 'app_picker_dialog.dart';
 
 /// Picks a new emulator: Android chooses an installed app, desktop browses for
@@ -26,12 +27,12 @@ Future<Emulator?> pickNewEmulator(BuildContext context,
   String? exe;
   try {
     final res = await FilePicker.platform.pickFiles(
-        dialogTitle: dialogTitle ?? 'Choose the emulator executable');
+        dialogTitle: dialogTitle ?? SettingsStrings.emulatorExeDialog);
     exe = (res != null && res.files.isNotEmpty) ? res.files.first.path : null;
   } catch (_) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Couldn't open file picker")));
+          const SnackBar(content: Text(SettingsStrings.filePickerFailed)));
     }
     return null;
   }
@@ -51,11 +52,11 @@ Future<Emulator?> pickNewEmulator(BuildContext context,
 Future<String?> pickEmulatorFolder(BuildContext context) async {
   try {
     return await FilePicker.platform.getDirectoryPath(
-        dialogTitle: 'Select the folder your emulators live in');
+        dialogTitle: SettingsStrings.emulatorFolderDialog);
   } catch (_) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Couldn't open folder picker")));
+          const SnackBar(content: Text(SettingsStrings.folderPickerFailed)));
     }
     return null;
   }

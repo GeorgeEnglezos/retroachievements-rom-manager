@@ -120,4 +120,12 @@ void main() {
     // Trashed games stay in Trash after a reset.
     expect(await PlaylistStore().playlistsContaining('ra:1'), {trashId});
   });
+
+  test('trash hint is due once, and stays shown across restarts', () async {
+    expect(await CullStore().takeTrashHint(), isTrue);
+    expect(await CullStore().takeTrashHint(), isFalse);
+    // A fresh load (app restart) reads the persisted flag.
+    CullStore().clear();
+    expect(await CullStore().takeTrashHint(), isFalse);
+  });
 }
