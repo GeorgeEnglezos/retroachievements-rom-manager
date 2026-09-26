@@ -12,6 +12,7 @@ import 'playlist_store.dart';
 import 'pref_keys.dart';
 import 'ra_image_cache.dart';
 import 'scraper/scraped_store.dart';
+import 'want_to_play_store.dart';
 
 /// One thing the user can choose to delete. Settings and the API key are not
 /// on this list: nothing here ever touches configuration.
@@ -31,8 +32,8 @@ enum ClearTarget {
   /// Cached cover and achievement images. Pure cache, re-downloaded on demand.
   artwork,
 
-  /// Playlists (including Favorites, Played and Trash) and favorite systems.
-  /// Implies [cullVerdicts], see [expandTargets].
+  /// Playlists (including Favorites, Played, Want to Play and Trash) and
+  /// favorite systems. Implies [cullVerdicts], see [expandTargets].
   playlists,
 
   /// Which games the elimination game has judged.
@@ -46,8 +47,8 @@ enum ClearTarget {
 /// the deck's per-run undo, which is gone by then.
 Set<ClearTarget> expandTargets(Set<ClearTarget> targets) =>
     targets.contains(ClearTarget.playlists)
-        ? {...targets, ClearTarget.cullVerdicts}
-        : targets;
+    ? {...targets, ClearTarget.cullVerdicts}
+    : targets;
 
 /// Deletes chosen parts of what the app has written. Nothing outside the
 /// chosen targets is touched: ROM files, logs, settings and the API key are
@@ -83,6 +84,7 @@ class DataWipe {
     if (chosen.contains(ClearTarget.raData)) {
       await _delete(base, p.join('data', 'ra_cache'));
       await _delete(base, p.join('data', 'metadata_cache'));
+      await WantToPlayStore.clear();
     }
     if (chosen.contains(ClearTarget.artwork)) {
       await _clearArtwork(base);
@@ -106,8 +108,11 @@ class DataWipe {
     try {
       await raCacheManager.emptyCache();
     } catch (e) {
-      LogService.error('DataWipe/artwork', 'Cannot empty the image cache',
-          err: e);
+      LogService.error(
+        'DataWipe/artwork',
+        'Cannot empty the image cache',
+        err: e,
+      );
     }
     if (!await base.exists()) return;
     await for (final entity in base.list(followLinks: false)) {
@@ -116,10 +121,11 @@ class DataWipe {
     }
   }
 
-  Future<void> _delete(Directory base, String relative) =>
-      _deletePath(FileSystemEntity.isDirectorySync(p.join(base.path, relative))
-          ? Directory(p.join(base.path, relative))
-          : File(p.join(base.path, relative)));
+  Future<void> _delete(Directory base, String relative) => _deletePath(
+    FileSystemEntity.isDirectorySync(p.join(base.path, relative))
+        ? Directory(p.join(base.path, relative))
+        : File(p.join(base.path, relative)),
+  );
 
   /// A delete that can't abort the rest of the wipe. A file held open by
   /// another process (an artwork read in flight, a virus scanner) is logged

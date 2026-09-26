@@ -29,7 +29,10 @@ void main() {
     await store.addMember('favorites', 'ra:42');
     expect(await store.playlistsContaining('ra:42'), contains('favorites'));
     await store.removeMember('favorites', 'ra:42');
-    expect(await store.playlistsContaining('ra:42'), isNot(contains('favorites')));
+    expect(
+      await store.playlistsContaining('ra:42'),
+      isNot(contains('favorites')),
+    );
   });
 
   test('rename a custom playlist', () async {
@@ -108,25 +111,35 @@ void main() {
     expect(pl.members, isEmpty);
   });
 
-  test('Trash is seeded, builtin, and listed after Played', () async {
+  test('Want to Play builtin is seeded and listed after Played', () async {
     final all = await PlaylistStore().all();
     expect(all[1].id, playedId);
-    expect(all[2].id, trashId);
+    expect(all[2].id, wantToPlayId);
     expect(all[2].builtin, isTrue);
+    expect(all[2].name, 'Want to Play');
   });
 
-  test('visibleMemberCount ignores members the library can no longer show',
-      () async {
-    final store = PlaylistStore();
-    await store.addMember(trashId, 'ra:1');
-    await store.addMember(trashId, 'path:/roms/deleted.sfc');
-    final pl = (await store.all()).firstWhere((p) => p.id == trashId);
-
-    expect(visibleMemberCount(pl, {'ra:1'}), 1);
-    // The membership itself is kept: the game comes back if the ROM does.
-    expect(pl.members, hasLength(2));
-    expect(visibleMemberCount(pl, {'ra:1', 'path:/roms/deleted.sfc'}), 2);
+  test('Trash is seeded, builtin, and listed after Want to Play', () async {
+    final all = await PlaylistStore().all();
+    expect(all[2].id, wantToPlayId);
+    expect(all[3].id, trashId);
+    expect(all[3].builtin, isTrue);
   });
+
+  test(
+    'visibleMemberCount ignores members the library can no longer show',
+    () async {
+      final store = PlaylistStore();
+      await store.addMember(trashId, 'ra:1');
+      await store.addMember(trashId, 'path:/roms/deleted.sfc');
+      final pl = (await store.all()).firstWhere((p) => p.id == trashId);
+
+      expect(visibleMemberCount(pl, {'ra:1'}), 1);
+      // The membership itself is kept: the game comes back if the ROM does.
+      expect(pl.members, hasLength(2));
+      expect(visibleMemberCount(pl, {'ra:1', 'path:/roms/deleted.sfc'}), 2);
+    },
+  );
 
   test('addMember reports whether the key was new', () async {
     final store = PlaylistStore();
@@ -153,27 +166,38 @@ void main() {
     expect(notifications, 4);
   });
 
-  test('setMembers with unchanged members writes nothing and stays quiet',
-      () async {
-    final store = PlaylistStore();
-    await store.setMembers(playedId, {'ra:1'});
-    var notifications = 0;
-    void count() => notifications++;
-    store.addListener(count);
-    addTearDown(() => store.removeListener(count));
+  test(
+    'setMembers with unchanged members writes nothing and stays quiet',
+    () async {
+      final store = PlaylistStore();
+      await store.setMembers(playedId, {'ra:1'});
+      var notifications = 0;
+      void count() => notifications++;
+      store.addListener(count);
+      addTearDown(() => store.removeListener(count));
 
-    await store.setMembers(playedId, {'ra:1'});
-    expect(notifications, 0, reason: 'a re-derived Played must not loop');
-    await store.setMembers(playedId, {'ra:1', 'ra:2'});
-    expect(notifications, 1);
-  });
+      await store.setMembers(playedId, {'ra:1'});
+      expect(notifications, 0, reason: 'a re-derived Played must not loop');
+      await store.setMembers(playedId, {'ra:1', 'ra:2'});
+      expect(notifications, 1);
+    },
+  );
 
   test('Trash cannot be renamed or deleted', () async {
     final store = PlaylistStore();
     await store.rename(trashId, 'Nope');
     await store.delete(trashId);
     final all = await store.all();
-    expect(all[2].id, trashId);
-    expect(all[2].name, 'Trash');
+    expect(all[3].id, trashId);
+    expect(all[3].name, 'Trash');
+  });
+
+  test('Want to Play cannot be renamed or deleted', () async {
+    final store = PlaylistStore();
+    await store.rename(wantToPlayId, 'Nope');
+    await store.delete(wantToPlayId);
+    final all = await store.all();
+    expect(all.any((p) => p.id == wantToPlayId), isTrue);
+    expect(all.firstWhere((p) => p.id == wantToPlayId).name, 'Want to Play');
   });
 }

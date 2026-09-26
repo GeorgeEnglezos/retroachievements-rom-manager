@@ -24,7 +24,9 @@ void main() {
   }
 
   bool exists(String relative) =>
-      FileSystemEntity.typeSync(p.join(base.path, p.joinAll(relative.split('/')))) !=
+      FileSystemEntity.typeSync(
+        p.join(base.path, p.joinAll(relative.split('/'))),
+      ) !=
       FileSystemEntityType.notFound;
 
   /// Seeds one of everything a wipe can reach, on disk and in prefs.
@@ -46,10 +48,14 @@ void main() {
       PrefKeys.favoriteSystems: '["nes"]',
       PrefKeys.cullDecided: '["ra:1"]',
       PrefKeys.homeIgnoredSpotlights: ['ra:2'],
+      PrefKeys.raWantToPlayIds: '[5,9]',
     });
   }
 
-  DataWipe wipe() => DataWipe(baseDir: base, library: Library(baseDir: base));
+  DataWipe wipe() => DataWipe(
+    baseDir: base,
+    library: Library(baseDir: base),
+  );
 
   setUp(() {
     base = Directory.systemTemp.createTempSync('rav_wipe');
@@ -59,39 +65,42 @@ void main() {
     addTearDown(() => base.deleteSync(recursive: true));
   });
 
-  test('every target together leaves only logs, settings and the API key',
-      () async {
-    seedEverything();
+  test(
+    'every target together leaves only logs, settings and the API key',
+    () async {
+      seedEverything();
 
-    await wipe().clear(ClearTarget.values.toSet());
+      await wipe().clear(ClearTarget.values.toSet());
 
-    for (final gone in [
-      'data/systems/a.json',
-      'data/scraped.json',
-      'data/ra_cache',
-      'data/metadata_cache',
-      'raImageCache',
-      'raImageCache.json',
-    ]) {
-      expect(exists(gone), isFalse, reason: '$gone should be deleted');
-    }
-    // Shortcut icons are not on the menu: nothing regenerates them, and a
-    // shortcut already on the desktop would silently lose its picture.
-    expect(exists('icons'), isTrue);
-    // Logs are diagnostics, not user data, and someone wiping is usually
-    // troubleshooting.
-    expect(exists('logs/session.log'), isTrue);
+      for (final gone in [
+        'data/systems/a.json',
+        'data/scraped.json',
+        'data/ra_cache',
+        'data/metadata_cache',
+        'raImageCache',
+        'raImageCache.json',
+      ]) {
+        expect(exists(gone), isFalse, reason: '$gone should be deleted');
+      }
+      // Shortcut icons are not on the menu: nothing regenerates them, and a
+      // shortcut already on the desktop would silently lose its picture.
+      expect(exists('icons'), isTrue);
+      // Logs are diagnostics, not user data, and someone wiping is usually
+      // troubleshooting.
+      expect(exists('logs/session.log'), isTrue);
 
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString(PrefKeys.raApiKey), 'SECRET');
-    expect(prefs.getString(PrefKeys.raUsername), 'bob');
-    expect(prefs.getString('enabled_extensions'), 'nes');
-    expect(prefs.getString('emulators'), '[]');
-    expect(prefs.getString(PrefKeys.playlists), isNull);
-    expect(prefs.getString(PrefKeys.favoriteSystems), isNull);
-    expect(prefs.getString(PrefKeys.cullDecided), isNull);
-    expect(prefs.getStringList(PrefKeys.homeIgnoredSpotlights), isNull);
-  });
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(PrefKeys.raApiKey), 'SECRET');
+      expect(prefs.getString(PrefKeys.raUsername), 'bob');
+      expect(prefs.getString('enabled_extensions'), 'nes');
+      expect(prefs.getString('emulators'), '[]');
+      expect(prefs.getString(PrefKeys.playlists), isNull);
+      expect(prefs.getString(PrefKeys.favoriteSystems), isNull);
+      expect(prefs.getString(PrefKeys.cullDecided), isNull);
+      expect(prefs.getStringList(PrefKeys.homeIgnoredSpotlights), isNull);
+      expect(prefs.getString(PrefKeys.raWantToPlayIds), isNull);
+    },
+  );
 
   // The whole point of the picker: one tick must not take the others with it.
   test('each target deletes only its own files', () async {
@@ -107,6 +116,12 @@ void main() {
     expect(exists('data/metadata_cache'), isFalse);
     expect(exists('data/scraped.json'), isTrue);
     expect(exists('data/systems/a.json'), isTrue);
+    expect(
+      (await SharedPreferences.getInstance()).getString(
+        PrefKeys.raWantToPlayIds,
+      ),
+      isNull,
+    );
 
     seedEverything();
     await wipe().clear({ClearTarget.scrapedData});
@@ -134,8 +149,10 @@ void main() {
   test('clearing playlists takes cull verdicts with it', () async {
     seedEverything();
 
-    expect(expandTargets({ClearTarget.playlists}),
-        containsAll([ClearTarget.playlists, ClearTarget.cullVerdicts]));
+    expect(
+      expandTargets({ClearTarget.playlists}),
+      containsAll([ClearTarget.playlists, ClearTarget.cullVerdicts]),
+    );
 
     await wipe().clear({ClearTarget.playlists});
 
@@ -177,13 +194,15 @@ void main() {
     final systemPath = p.join(base.path, 'nes');
     Directory(systemPath).createSync();
     final lib = Library(baseDir: base);
-    await lib.save(SystemData(
-      systemId: '',
-      systemPath: systemPath,
-      games: [GameEntry.unscanned(p.join(systemPath, 'blue-hedgehog.nes'))],
-      dismissedDuplicatePairs: <String>{},
-      consoleId: 7,
-    ));
+    await lib.save(
+      SystemData(
+        systemId: '',
+        systemPath: systemPath,
+        games: [GameEntry.unscanned(p.join(systemPath, 'blue-hedgehog.nes'))],
+        dismissedDuplicatePairs: <String>{},
+        consoleId: 7,
+      ),
+    );
     expect(await lib.summaries(), isNotEmpty);
     final before = lib.clearCount;
 

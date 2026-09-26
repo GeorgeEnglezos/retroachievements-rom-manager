@@ -7,6 +7,7 @@ import 'pref_keys.dart';
 const _prefKey = PrefKeys.playlists;
 const favoritesId = 'favorites';
 const playedId = 'played';
+const wantToPlayId = 'want_to_play';
 const trashId = 'trash';
 
 /// A named collection of games. Membership is by member key (see member_key.dart).
@@ -24,20 +25,20 @@ class Playlist {
   }) : members = members ?? {};
 
   factory Playlist.fromJson(Map<String, dynamic> j) => Playlist(
-        id: j['id'] as String,
-        name: j['name'] as String,
-        builtin: j['builtin'] as bool? ?? false,
-        members: ((j['members'] as List?) ?? const [])
-            .map((e) => e as String)
-            .toSet(),
-      );
+    id: j['id'] as String,
+    name: j['name'] as String,
+    builtin: j['builtin'] as bool? ?? false,
+    members: ((j['members'] as List?) ?? const [])
+        .map((e) => e as String)
+        .toSet(),
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'builtin': builtin,
-        'members': members.toList(),
-      };
+    'id': id,
+    'name': name,
+    'builtin': builtin,
+    'members': members.toList(),
+  };
 }
 
 /// Message for a bulk favorites toggle that added [added] and removed [removed]
@@ -117,11 +118,21 @@ class PlaylistStore extends ChangeNotifier {
       }
     }
     if (!_mem.containsKey(favoritesId)) {
-      _mem[favoritesId] =
-          Playlist(id: favoritesId, name: 'Favorites', builtin: true);
+      _mem[favoritesId] = Playlist(
+        id: favoritesId,
+        name: 'Favorites',
+        builtin: true,
+      );
     }
     if (!_mem.containsKey(playedId)) {
       _mem[playedId] = Playlist(id: playedId, name: 'Played', builtin: true);
+    }
+    if (!_mem.containsKey(wantToPlayId)) {
+      _mem[wantToPlayId] = Playlist(
+        id: wantToPlayId,
+        name: 'Want to Play',
+        builtin: true,
+      );
     }
     if (!_mem.containsKey(trashId)) {
       _mem[trashId] = Playlist(id: trashId, name: 'Trash', builtin: true);
@@ -129,12 +140,19 @@ class PlaylistStore extends ChangeNotifier {
     _loaded = true;
   }
 
-  // Favorites first, then Played, then Trash, then custom playlists by name.
+  // Favorites first, then Played, then Want to Play, then Trash, then custom
+  // playlists by name.
   Future<List<Playlist>> all() async {
     await _ensureLoaded();
     final custom = _mem.values.where((p) => !p.builtin).toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    return [_mem[favoritesId]!, _mem[playedId]!, _mem[trashId]!, ...custom];
+    return [
+      _mem[favoritesId]!,
+      _mem[playedId]!,
+      _mem[wantToPlayId]!,
+      _mem[trashId]!,
+      ...custom,
+    ];
   }
 
   Future<Playlist> create(String name) async {

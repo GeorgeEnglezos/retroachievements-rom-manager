@@ -12,12 +12,12 @@ enum RaAward { none, beatenSoftcore, beatenHardcore, completed, mastered }
 
 /// Maps RA's `HighestAwardKind` string to [RaAward]; unknown/absent -> none.
 RaAward raAwardFromKind(String? kind) => switch (kind) {
-      'beaten-softcore' => RaAward.beatenSoftcore,
-      'beaten-hardcore' => RaAward.beatenHardcore,
-      'completed' => RaAward.completed,
-      'mastered' => RaAward.mastered,
-      _ => RaAward.none,
-    };
+  'beaten-softcore' => RaAward.beatenSoftcore,
+  'beaten-hardcore' => RaAward.beatenHardcore,
+  'completed' => RaAward.completed,
+  'mastered' => RaAward.mastered,
+  _ => RaAward.none,
+};
 
 /// Resolves a persisted [RaAward] name; unknown/absent -> none. Kept beside the
 /// enum so persistence stays robust to future tiers.
@@ -27,8 +27,10 @@ RaAward raAwardFromKind(String? kind) => switch (kind) {
 DateTime? raDate(Object? raw) =>
     raw is String && raw.trim().isNotEmpty ? DateTime.tryParse(raw) : null;
 
-RaAward raAwardByName(String? name) =>
-    RaAward.values.firstWhere((a) => a.name == name, orElse: () => RaAward.none);
+RaAward raAwardByName(String? name) => RaAward.values.firstWhere(
+  (a) => a.name == name,
+  orElse: () => RaAward.none,
+);
 
 /// Recovers a "beaten" tier from typed achievements when RA's own award field is
 /// empty. RA's per-game endpoint (GetGameInfoAndUserProgress) sometimes omits a
@@ -47,7 +49,8 @@ RaAward deriveBeatenAward(List<Achievement> achievements, RaAward fromApi) {
   if (winConditions.isEmpty) return fromApi; // Untyped set: nothing to derive.
   if (!progression.every((a) => a.dateEarned != null)) return fromApi;
   if (!winConditions.any((a) => a.dateEarned != null)) return fromApi;
-  final allHardcore = progression.every((a) => a.dateEarnedHardcore != null) &&
+  final allHardcore =
+      progression.every((a) => a.dateEarnedHardcore != null) &&
       winConditions.any((a) => a.dateEarnedHardcore != null);
   return allHardcore ? RaAward.beatenHardcore : RaAward.beatenSoftcore;
 }
@@ -85,32 +88,32 @@ class Achievement {
   bool get isEarned => dateEarned != null;
 
   factory Achievement.fromJson(Map<String, dynamic> j) => Achievement(
-        id: (j['ID'] as num?)?.toInt() ?? 0,
-        title: j['Title'] as String? ?? '',
-        description: j['Description'] as String? ?? '',
-        points: (j['Points'] as num?)?.toInt() ?? 0,
-        trueRatio: (j['TrueRatio'] as num?)?.toInt() ?? 0,
-        badgeName: j['BadgeName'] as String? ?? '',
-        displayOrder: (j['DisplayOrder'] as num?)?.toInt() ?? 0,
-        numAwarded: (j['NumAwarded'] as num?)?.toInt() ?? 0,
-        dateEarned: raDate(j['DateEarned']),
-        dateEarnedHardcore: raDate(j['DateEarnedHardcore']),
-        type: (j['Type'] as String?)?.isEmpty ?? true ? null : j['Type'] as String?,
-      );
+    id: (j['ID'] as num?)?.toInt() ?? 0,
+    title: j['Title'] as String? ?? '',
+    description: j['Description'] as String? ?? '',
+    points: (j['Points'] as num?)?.toInt() ?? 0,
+    trueRatio: (j['TrueRatio'] as num?)?.toInt() ?? 0,
+    badgeName: j['BadgeName'] as String? ?? '',
+    displayOrder: (j['DisplayOrder'] as num?)?.toInt() ?? 0,
+    numAwarded: (j['NumAwarded'] as num?)?.toInt() ?? 0,
+    dateEarned: raDate(j['DateEarned']),
+    dateEarnedHardcore: raDate(j['DateEarnedHardcore']),
+    type: (j['Type'] as String?)?.isEmpty ?? true ? null : j['Type'] as String?,
+  );
 
   Map<String, dynamic> toJson() => {
-        'ID': id,
-        'Title': title,
-        'Description': description,
-        'Points': points,
-        'TrueRatio': trueRatio,
-        'BadgeName': badgeName,
-        'DisplayOrder': displayOrder,
-        'NumAwarded': numAwarded,
-        'DateEarned': dateEarned?.toIso8601String(),
-        'DateEarnedHardcore': dateEarnedHardcore?.toIso8601String(),
-        'Type': type,
-      };
+    'ID': id,
+    'Title': title,
+    'Description': description,
+    'Points': points,
+    'TrueRatio': trueRatio,
+    'BadgeName': badgeName,
+    'DisplayOrder': displayOrder,
+    'NumAwarded': numAwarded,
+    'DateEarned': dateEarned?.toIso8601String(),
+    'DateEarnedHardcore': dateEarnedHardcore?.toIso8601String(),
+    'Type': type,
+  };
 }
 
 class GameInfo {
@@ -158,48 +161,48 @@ class GameInfo {
   });
 
   factory GameInfo.fromJson(Map<String, dynamic> j) => GameInfo(
-        gameId: (j['gameId'] as num?)?.toInt() ?? 0,
-        title: j['title'] as String? ?? '',
-        consoleName: j['consoleName'] as String? ?? '',
-        consoleId: (j['consoleId'] as num?)?.toInt(),
-        achievementCount: (j['achievementCount'] as num?)?.toInt() ?? 0,
-        imageIcon: j['imageIcon'] as String?,
-        imageBoxArt: j['imageBoxArt'] as String?,
-        imageTitle: j['imageTitle'] as String?,
-        imageIngame: j['imageIngame'] as String?,
-        publisher: j['publisher'] as String?,
-        developer: j['developer'] as String?,
-        genre: j['genre'] as String?,
-        released: j['released'] as String?,
-        setCreated: j['setCreated'] != null
-            ? DateTime.tryParse(j['setCreated'] as String)
-            : null,
-        setUpdated: j['setUpdated'] != null
-            ? DateTime.tryParse(j['setUpdated'] as String)
-            : null,
-        points: (j['points'] as num?)?.toInt(),
-        numPlayersCasual: (j['numPlayersCasual'] as num?)?.toInt() ?? 0,
-      );
+    gameId: (j['gameId'] as num?)?.toInt() ?? 0,
+    title: j['title'] as String? ?? '',
+    consoleName: j['consoleName'] as String? ?? '',
+    consoleId: (j['consoleId'] as num?)?.toInt(),
+    achievementCount: (j['achievementCount'] as num?)?.toInt() ?? 0,
+    imageIcon: j['imageIcon'] as String?,
+    imageBoxArt: j['imageBoxArt'] as String?,
+    imageTitle: j['imageTitle'] as String?,
+    imageIngame: j['imageIngame'] as String?,
+    publisher: j['publisher'] as String?,
+    developer: j['developer'] as String?,
+    genre: j['genre'] as String?,
+    released: j['released'] as String?,
+    setCreated: j['setCreated'] != null
+        ? DateTime.tryParse(j['setCreated'] as String)
+        : null,
+    setUpdated: j['setUpdated'] != null
+        ? DateTime.tryParse(j['setUpdated'] as String)
+        : null,
+    points: (j['points'] as num?)?.toInt(),
+    numPlayersCasual: (j['numPlayersCasual'] as num?)?.toInt() ?? 0,
+  );
 
   Map<String, dynamic> toJson() => {
-        'gameId': gameId,
-        'title': title,
-        'consoleName': consoleName,
-        'consoleId': consoleId,
-        'achievementCount': achievementCount,
-        'imageIcon': imageIcon,
-        'imageBoxArt': imageBoxArt,
-        'imageTitle': imageTitle,
-        'imageIngame': imageIngame,
-        'publisher': publisher,
-        'developer': developer,
-        'genre': genre,
-        'released': released,
-        'setCreated': setCreated?.toIso8601String(),
-        'setUpdated': setUpdated?.toIso8601String(),
-        'points': points,
-        'numPlayersCasual': numPlayersCasual,
-      };
+    'gameId': gameId,
+    'title': title,
+    'consoleName': consoleName,
+    'consoleId': consoleId,
+    'achievementCount': achievementCount,
+    'imageIcon': imageIcon,
+    'imageBoxArt': imageBoxArt,
+    'imageTitle': imageTitle,
+    'imageIngame': imageIngame,
+    'publisher': publisher,
+    'developer': developer,
+    'genre': genre,
+    'released': released,
+    'setCreated': setCreated?.toIso8601String(),
+    'setUpdated': setUpdated?.toIso8601String(),
+    'points': points,
+    'numPlayersCasual': numPlayersCasual,
+  };
 }
 
 /// One game from the RA completion-progress endpoint.
@@ -231,19 +234,19 @@ class CompletedGame {
   });
 
   factory CompletedGame.fromJson(Map<String, dynamic> j) => CompletedGame(
-        gameId: (j['GameID'] as num?)?.toInt() ?? 0,
-        title: j['Title'] as String? ?? 'Unknown',
-        consoleName: j['ConsoleName'] as String? ?? 'Unknown',
-        numAwarded: (j['NumAwarded'] as num?)?.toInt() ?? 0,
-        maxPossible: (j['MaxPossible'] as num?)?.toInt() ?? 0,
-        imageIcon: (j['ImageIcon'] as String?)?.isEmpty ?? true
-            ? null
-            : j['ImageIcon'] as String?,
-        numAwardedHardcore: (j['NumAwardedHardcore'] as num?)?.toInt() ?? 0,
-        lastPlayed: raDate(j['MostRecentAwardedDate']),
-        highestAward: raAwardFromKind(j['HighestAwardKind'] as String?),
-        highestAwardDate: raDate(j['HighestAwardDate']),
-      );
+    gameId: (j['GameID'] as num?)?.toInt() ?? 0,
+    title: j['Title'] as String? ?? 'Unknown',
+    consoleName: j['ConsoleName'] as String? ?? 'Unknown',
+    numAwarded: (j['NumAwarded'] as num?)?.toInt() ?? 0,
+    maxPossible: (j['MaxPossible'] as num?)?.toInt() ?? 0,
+    imageIcon: (j['ImageIcon'] as String?)?.isEmpty ?? true
+        ? null
+        : j['ImageIcon'] as String?,
+    numAwardedHardcore: (j['NumAwardedHardcore'] as num?)?.toInt() ?? 0,
+    lastPlayed: raDate(j['MostRecentAwardedDate']),
+    highestAward: raAwardFromKind(j['HighestAwardKind'] as String?),
+    highestAwardDate: raDate(j['HighestAwardDate']),
+  );
 }
 
 /// One recently earned achievement from `API_GetUserRecentAchievements`, newest
@@ -272,25 +275,25 @@ class RecentUnlock {
       'https://media.retroachievements.org/Badge/$badgeName.png';
 
   factory RecentUnlock.fromJson(Map<String, dynamic> j) => RecentUnlock(
-        title: j['Title'] as String? ?? '',
-        description: j['Description'] as String? ?? '',
-        gameTitle: j['GameTitle'] as String? ?? '',
-        badgeName: j['BadgeName'] as String? ?? '',
-        points: (j['Points'] as num?)?.toInt() ?? 0,
-        hardcore: ((j['HardcoreMode'] as num?)?.toInt() ?? 0) == 1,
-        date: raDate(j['Date']),
-      );
+    title: j['Title'] as String? ?? '',
+    description: j['Description'] as String? ?? '',
+    gameTitle: j['GameTitle'] as String? ?? '',
+    badgeName: j['BadgeName'] as String? ?? '',
+    points: (j['Points'] as num?)?.toInt() ?? 0,
+    hardcore: ((j['HardcoreMode'] as num?)?.toInt() ?? 0) == 1,
+    date: raDate(j['Date']),
+  );
 
   /// RA's field names, so a cached blob round-trips back through [fromJson].
   Map<String, dynamic> toJson() => {
-        'Title': title,
-        'Description': description,
-        'GameTitle': gameTitle,
-        'BadgeName': badgeName,
-        'Points': points,
-        'HardcoreMode': hardcore ? 1 : 0,
-        'Date': date?.toIso8601String() ?? '',
-      };
+    'Title': title,
+    'Description': description,
+    'GameTitle': gameTitle,
+    'BadgeName': badgeName,
+    'Points': points,
+    'HardcoreMode': hardcore ? 1 : 0,
+    'Date': date?.toIso8601String() ?? '',
+  };
 }
 
 /// One game from `API_GetGameList`: enough for offline matching + basic rows.
@@ -316,40 +319,40 @@ class RaGameListEntry {
   });
 
   RaGameListEntry copyWith({List<String>? hashes}) => RaGameListEntry(
-        gameId: gameId,
-        title: title,
-        consoleId: consoleId,
-        imageIcon: imageIcon,
-        achievementCount: achievementCount,
-        points: points,
-        dateModified: dateModified,
-        hashes: hashes ?? this.hashes,
-      );
+    gameId: gameId,
+    title: title,
+    consoleId: consoleId,
+    imageIcon: imageIcon,
+    achievementCount: achievementCount,
+    points: points,
+    dateModified: dateModified,
+    hashes: hashes ?? this.hashes,
+  );
 
   factory RaGameListEntry.fromJson(Map<String, dynamic> j) => RaGameListEntry(
-        gameId: (j['ID'] as num?)?.toInt() ?? 0,
-        title: j['Title'] as String? ?? '',
-        consoleId: (j['ConsoleID'] as num?)?.toInt(),
-        imageIcon: j['ImageIcon'] as String?,
-        achievementCount: (j['NumAchievements'] as num?)?.toInt() ?? 0,
-        points: (j['Points'] as num?)?.toInt(),
-        dateModified: raDate(j['DateModified']),
-        hashes: [
-          for (final h in (j['Hashes'] ?? const []) as List)
-            (h as String).toLowerCase(),
-        ],
-      );
+    gameId: (j['ID'] as num?)?.toInt() ?? 0,
+    title: j['Title'] as String? ?? '',
+    consoleId: (j['ConsoleID'] as num?)?.toInt(),
+    imageIcon: j['ImageIcon'] as String?,
+    achievementCount: (j['NumAchievements'] as num?)?.toInt() ?? 0,
+    points: (j['Points'] as num?)?.toInt(),
+    dateModified: raDate(j['DateModified']),
+    hashes: [
+      for (final h in (j['Hashes'] ?? const []) as List)
+        (h as String).toLowerCase(),
+    ],
+  );
 
   Map<String, dynamic> toJson() => {
-        'ID': gameId,
-        'Title': title,
-        'ConsoleID': consoleId,
-        'ImageIcon': imageIcon,
-        'NumAchievements': achievementCount,
-        'Points': points,
-        'DateModified': dateModified?.toIso8601String(),
-        'Hashes': hashes,
-      };
+    'ID': gameId,
+    'Title': title,
+    'ConsoleID': consoleId,
+    'ImageIcon': imageIcon,
+    'NumAchievements': achievementCount,
+    'Points': points,
+    'DateModified': dateModified?.toIso8601String(),
+    'Hashes': hashes,
+  };
 }
 
 class RaService {
@@ -364,8 +367,9 @@ class RaService {
     required this.username,
     required this.apiKey,
     HttpThrottle? throttle,
-  }) : _throttle = throttle ??
-            HttpThrottle(headers: const {'User-Agent': 'RAROMManager/1.0'});
+  }) : _throttle =
+           throttle ??
+           HttpThrottle(headers: const {'User-Agent': 'RAROMManager/1.0'});
 
   Future<http.Response> _get(Uri uri, {Duration? timeout}) =>
       _throttle.get(uri, timeout: timeout);
@@ -382,12 +386,11 @@ class RaService {
     // 'y' is the API key, and it is in the URI of every request below. Never
     // log a request URI from here or from http_throttle.dart without redacting
     // it first; error paths deliberately log response bodies instead.
-    final uri =
-        Uri.https('retroachievements.org', '/API/API_GetUserProfile.php', {
-      'z': username,
-      'y': apiKey,
-      'u': username,
-    });
+    final uri = Uri.https(
+      'retroachievements.org',
+      '/API/API_GetUserProfile.php',
+      {'z': username, 'y': apiKey, 'u': username},
+    );
     final response = await _get(uri);
     if (response.statusCode != 200) {
       throw Exception('HTTP ${response.statusCode}');
@@ -469,6 +472,48 @@ class RaService {
     return all;
   }
 
+  /// Game ids on the user's RA "Want to Play" list; paginated 500 at a time.
+  /// RA has no write endpoint for this list (adding/removing is website-only),
+  /// so this is read-only.
+  Future<Set<int>> getUserWantToPlayList() async {
+    final ids = <int>{};
+    const pageSize = 500;
+    var offset = 0;
+    while (true) {
+      final uri = Uri.https(
+        'retroachievements.org',
+        '/API/API_GetUserWantToPlayList.php',
+        {
+          'z': username,
+          'y': apiKey,
+          'u': username,
+          'c': '$pageSize',
+          'o': '$offset',
+        },
+      );
+      final response = await _get(uri, timeout: _listTimeout);
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final page = parseWantToPlayIds(data);
+      ids.addAll(page);
+      final total = (data['Total'] as num?)?.toInt() ?? ids.length;
+      offset += pageSize;
+      if (page.isEmpty || ids.length >= total) break;
+    }
+    return ids;
+  }
+
+  static Set<int> parseWantToPlayIds(Map<String, dynamic> data) {
+    final results = data['Results'];
+    if (results is! List) return const {};
+    return {
+      for (final r in results)
+        if (r is Map && r['ID'] is num) (r['ID'] as num).toInt(),
+    };
+  }
+
   /// Every achievement the user earned between [from] and [to], as RA returns
   /// them (oldest first). Unlike the recent-minutes feed, this reaches back
   /// years, so it can surface a player's latest unlocks even when they last
@@ -493,13 +538,17 @@ class RaService {
       final body = response.body.length > 300
           ? response.body.substring(0, 300)
           : response.body;
-      LogService.error('RaService/getAchievementsEarnedBetween',
-          'HTTP ${response.statusCode}: $body');
+      LogService.error(
+        'RaService/getAchievementsEarnedBetween',
+        'HTTP ${response.statusCode}: $body',
+      );
       throw Exception('HTTP ${response.statusCode}');
     }
     final unlocks = parseRecentAchievements(jsonDecode(response.body));
-    LogService.debug('RaService/getAchievementsEarnedBetween',
-        'returned ${unlocks.length} unlocks (${response.body.length}B)');
+    LogService.debug(
+      'RaService/getAchievementsEarnedBetween',
+      'returned ${unlocks.length} unlocks (${response.body.length}B)',
+    );
     return unlocks;
   }
 
@@ -512,7 +561,8 @@ class RaService {
   }
 
   static List<CompletedGame> parseCompletionProgress(
-      Map<String, dynamic> data) {
+    Map<String, dynamic> data,
+  ) {
     final results = data['Results'];
     if (results is! List) return const [];
     return [
@@ -529,29 +579,38 @@ class RaService {
     ];
   }
 
-  Future<(GameInfo, UserProgress)> getGameInfoAndUserProgress(int gameId) async {
+  Future<(GameInfo, UserProgress)> getGameInfoAndUserProgress(
+    int gameId,
+  ) async {
     final uri = Uri.https(
-        'retroachievements.org',
-        '/API/API_GetGameInfoAndUserProgress.php',
-        {'z': username, 'y': apiKey, 'u': username, 'g': gameId.toString()});
+      'retroachievements.org',
+      '/API/API_GetGameInfoAndUserProgress.php',
+      {'z': username, 'y': apiKey, 'u': username, 'g': gameId.toString()},
+    );
     final response = await _get(uri);
     if (response.statusCode != 200) {
       final body = response.body.length > 300
           ? response.body.substring(0, 300)
           : response.body;
-      LogService.error('RaService/getGameInfoAndUserProgress',
-          'HTTP ${response.statusCode} for game $gameId: $body');
+      LogService.error(
+        'RaService/getGameInfoAndUserProgress',
+        'HTTP ${response.statusCode} for game $gameId: $body',
+      );
       throw Exception('HTTP ${response.statusCode}');
     }
     final decoded = jsonDecode(response.body);
     if (decoded is! Map<String, dynamic>) {
-      throw Exception('Unexpected API response (game $gameId returned ${decoded.runtimeType})');
+      throw Exception(
+        'Unexpected API response (game $gameId returned ${decoded.runtimeType})',
+      );
     }
     return parseGameInfoAndProgress(gameId, decoded);
   }
 
   static (GameInfo, UserProgress) parseGameInfoAndProgress(
-      int gameId, Map<String, dynamic> data) {
+    int gameId,
+    Map<String, dynamic> data,
+  ) {
     int count = data['NumAchievements'] as int? ?? 0;
     if (count == 0) {
       final ach = data['Achievements'];
@@ -598,8 +657,9 @@ class RaService {
             }
           }
           try {
-            achievementsList
-                .add(Achievement.fromJson(Map<String, dynamic>.from(ach)));
+            achievementsList.add(
+              Achievement.fromJson(Map<String, dynamic>.from(ach)),
+            );
           } catch (_) {}
         }
       }
@@ -642,7 +702,9 @@ class RaService {
       // Fall back to a derived beaten tier when RA's field is empty; this
       // endpoint under-reports beaten awards the completion sweep records.
       highestAward: deriveBeatenAward(
-          achievementsList, raAwardFromKind(data['HighestAwardKind'] as String?)),
+        achievementsList,
+        raAwardFromKind(data['HighestAwardKind'] as String?),
+      ),
       highestAwardDate: raDate(data['HighestAwardDate']),
       achievements: achievementsList,
     );
