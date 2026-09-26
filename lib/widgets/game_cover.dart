@@ -4,6 +4,7 @@ import '../models/rom_result.dart';
 import '../services/play_view.dart';
 import '../theme/ui_tokens.dart';
 import 'rom_thumb.dart';
+import 'ui/marquee_text.dart';
 
 /// The shared game tile: full-bleed art with a mastery trophy or in-progress
 /// strip over it, then the title and a caller-built [meta] line. Home and the
@@ -20,8 +21,8 @@ class GameCover extends StatelessWidget {
   /// the achievement numbers + chips and a status/size line.
   final Widget meta;
 
-  /// Art box height. Null makes the art fill the available height (Expanded),
-  /// for a fixed-height grid cell; Home passes a square height.
+  /// Art box height. Null makes the art a square of the available width (a grid
+  /// cell), so the cell's text budget can't stretch or squash it.
   final double? height;
 
   /// Outer width. Null fills the parent (grid cell); Home passes a square.
@@ -76,16 +77,14 @@ class GameCover extends StatelessWidget {
           if (height != null)
             SizedBox(height: height, child: art)
           else
-            Expanded(child: art),
+            AspectRatio(aspectRatio: 1, child: art),
           Padding(
             padding: textPadding,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                MarqueeText(title,
                     style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
