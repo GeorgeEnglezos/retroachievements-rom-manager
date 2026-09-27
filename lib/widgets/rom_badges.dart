@@ -87,6 +87,7 @@ Widget? discBadge(int? count, UiTokens ui, {String? fileName}) {
     GameStrings.discsBadge(count),
     ui.accent,
     tooltip: GameStrings.discsTooltip(count),
+    icon: Icons.album,
   );
 }
 
