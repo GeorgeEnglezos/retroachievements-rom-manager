@@ -9,7 +9,7 @@
 RARM helps you manage and clean up your ROM library. It scans your local ROMs, identifies each game and matches it against the RetroAchievements database to retrieve all the available metadata for it. In a way it acts like a retroachievements desktop and mobile client that points to your local files. You can see which games have achievements, how popular they are, and what you have already played. RetroAchievements turns out to be the most useful resource for pruning a collection. Built with Flutter, it runs natively on Windows and Android. Linux, macOS and iOS builds exist but are untested. Testers are needed for these platforms. See [Platform Support](#-platform-support).
 
 <p align="center">
-  <img width="70%" alt="Retroachievements Rom Manager in action" src="docs/screenshots/v001/gifs/browse-a-system.gif" />
+  <img width="70%" alt="Retroachievements Rom Manager in action" src="docs/screenshots/v004/gifs/browse-a-system.gif" />
 </p>
 
 ---
@@ -63,11 +63,11 @@ That's it. Your collection is mapped to RetroAchievements and ready to prune.
 
 ## ✨ Key Features
 
-- **🃏 Cull** - keep-or-bin deck, one game at a time, with RetroAchievements data on every card
-- **🧹 Filters & Cleanup** - filter by system, achievement status, duplicates, region, and bad dumps; flags duplicates and misfiled ROMs
-- **📤 Export** - export any system to Markdown, CSV, or PDF, plus a library health report
+- **🃏 Cull** - parse through your games, one game at a time, with all the available metadata on every card
+- **🧹 Filters & Cleanup** - filter by system, achievement status, duplicates, region, etc. Flags duplicates and misfiled ROMs
+
 - **💾 Storage View** - treemap of disk usage by folder and system
-- **🔍 Scanning & Hashing** - scans and identifies ROMs the way RetroArch does (zipped and disc-based included), then matches them against RetroAchievements
+- **🔍 Scanning & Hashing** - scans and identifies ROMs, then matches them against RetroAchievements
 - **🏆 Achievement Data** - per-game achievements and your progress (casual/hardcore, points, last-played)
 - **🎮 Extras** - RA-ranked "play next" picks, favorites, custom playlists, and launch ROMs into your emulator
 
@@ -76,39 +76,44 @@ That's it. Your collection is mapped to RetroAchievements and ready to prune.
 ## 🖼️ Screenshots
 
 <div align="center">
-  <img width="49%" alt="Home - your systems at a glance" src="docs/screenshots/v001/01-home.png" />
-  <img width="49%" alt="Library - box art, achievement counts, bad-dump flags" src="docs/screenshots/v001/07b-folder-grid.png" />
+  <img width="49%" alt="Home - jump back in, closest to mastery, recent unlocks" src="docs/screenshots/v004/01-home.png" />
+  <img width="49%" alt="Library - your systems, favorites, and playlists" src="docs/screenshots/v004/02-library.png" />
 </div>
 
 <div align="center">
-  <img width="49%" alt="Game detail - badges, stats, and your progress" src="docs/screenshots/v001/08-game-detail.png" />
-  <img width="49%" alt="Play Next - ranked from your own progress" src="docs/screenshots/v001/02-play-next.png" />
+  <img width="49%" alt="System view - box art, achievement counts, region tags" src="docs/screenshots/v004/03d-folder-grid.png" />
+  <img width="49%" alt="Game detail - badges, stats, and your progress" src="docs/screenshots/v004/04-game-detail.png" />
 </div>
 
 <div align="center">
-  <img width="49%" alt="Storage - where your disk space went" src="docs/screenshots/v001/04-storage.png" />
-  <img width="49%" alt="Settings - account, library, and scan filters" src="docs/screenshots/v001/06-settings-general.png" />
+  <img width="49%" alt="Play Next - ranked from your own progress" src="docs/screenshots/v004/05b-play-next-psx.png" />
+  <img width="49%" alt="Storage - where your disk space went" src="docs/screenshots/v004/07-storage.png" />
+</div>
+
+<div align="center">
+  <img width="49%" alt="Search - every system at once" src="docs/screenshots/v004/02i-search.png" />
+  <img width="49%" alt="Settings - account, library, and scan filters" src="docs/screenshots/v004/09-settings-general.png" />
 </div>
 
 ### 🎬 In action
 
 <div align="center">
-  <img width="55%" alt="Culling the collection" src="docs/screenshots/v001/gifs/cull-swipe.gif" />
+  <img width="55%" alt="Culling the collection" src="docs/screenshots/v004/gifs/cull-swipe.gif" />
   <br /><sub><b>Cull: keep or bin, one game at a time, with RetroAchievements data on every card</b></sub>
   <br /><br />
-  <img width="55%" alt="First-run setup wizard" src="docs/screenshots/v001/gifs/setup-wizard.gif" />
+  <img width="55%" alt="First-run setup wizard" src="docs/screenshots/v004/gifs/setup-wizard.gif" />
   <br /><sub><b>Guided first-run setup</b></sub>
 </div>
 
 ## 💻 Platform Support
 
-| Platform | Status | Notes |
-|----------|--------|-------|
-| Windows | ✅ Fully Supported | Windows 10/11 |
-| Linux | ⚠️ Untested | AppImage & Flatpak |
-| Android | ⚠️ Beta | Builds run; Everything should work except Wii and GC hashing at this point |
-| macOS | ⚠️ Untested | Builds in CI but not verified on a device; the maintainer has no Apple hardware. Contributions welcome. |
-| iOS | ⚠️ Untested | Builds in CI but not verified on a device; the maintainer has no Apple hardware. Contributions welcome. |
+| Platform | Status            | Notes                                                                                        |
+| -------- | ----------------- | -------------------------------------------------------------------------------------------- |
+| Windows  | ✅Fully Supported | Windows 10/11                                                                                |
+| Linux    | ⚠️ Untested       | AppImage & Flatpak                                                                           |
+| Android  | ️✅Fully Supported | Everything should work. The most common emulators are supported, report any issues.          |
+| macOS    | ⚠️ Untested       | Builds in CI but not verified on a device. I have no Apple hardware. Contributions welcome.  |
+| iOS      | ⚠️ Untested       | Builds in CI but not verified on a device. I have no Apple hardware.. Contributions welcome. |
 
 ---
 
