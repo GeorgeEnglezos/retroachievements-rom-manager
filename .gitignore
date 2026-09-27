@@ -70,3 +70,6 @@ docs/superpowers/
 .worktrees/
 AGENTS.md
 CLAUDE.md
+
+# Screenshot demo snapshot of a real library (see tool/demo/export_demo_data.dart)
+/tool/demo/demo_library.json

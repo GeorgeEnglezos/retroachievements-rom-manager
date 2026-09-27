@@ -4,6 +4,7 @@ import '../services/ra_service.dart' show RecentUnlock;
 import '../services/recent_unlocks.dart';
 import '../theme/ui_tokens.dart';
 import 'ra_image.dart';
+import '../strings.dart';
 
 /// A compact "recent achievement unlocks" panel, shown on Home in every UX mode
 /// (dashboard and couch). Loads its own data once from RA and is always visible:
@@ -71,9 +72,8 @@ class _UnlockHistoryState extends State<UnlockHistory> {
               padding: const EdgeInsets.symmetric(vertical: 18),
               child: Text(
                 snap.hasError
-                    ? "Couldn't load unlocks."
-                    : 'No recent unlocks yet. Earn achievements and they show up '
-                          'here.',
+                    ? HomeStrings.unlocksLoadFailed
+                    : HomeStrings.noUnlocks,
                 style: TextStyle(color: ui.muted, fontSize: 12),
               ),
             );
@@ -112,7 +112,7 @@ class _UnlockHistoryState extends State<UnlockHistory> {
         children: [
           Padding(
             padding: const EdgeInsets.only(bottom: 12, left: 4),
-            child: Text('RECENT UNLOCKS', style: ui.labelCaps),
+            child: Text(HomeStrings.recentUnlocks, style: ui.labelCaps),
           ),
           body,
         ],

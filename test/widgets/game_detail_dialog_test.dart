@@ -37,10 +37,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('File 1 of 2'), findsOneWidget);
-    expect(find.text('Disc 1'), findsOneWidget);
-    expect(find.text('Disc 2'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
 
-    await tester.tap(find.text('Disc 2'));
+    await tester.tap(find.text('2'));
     await tester.pump();
     expect(find.text('File 2 of 2'), findsOneWidget);
   });

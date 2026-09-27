@@ -14,9 +14,12 @@ import '../services/rom_file_lister.dart';
 import '../services/scan_settings.dart';
 import '../services/scraper/gamelist_importer.dart';
 import '../services/scraper/scraped_store.dart';
+import '../strings.dart';
 import '../theme/ui_tokens.dart';
-import '../widgets/app_shell.dart';
+import '../widgets/app_mode_toggle.dart';
 import '../widgets/pick_library_folder.dart';
+import '../widgets/restore_backup.dart';
+import '../widgets/theme_picker.dart';
 import '../widgets/ui_scale_control.dart';
 import '../widgets/ui/ui_button.dart';
 import '../widgets/ui/ui_dropdown.dart';
@@ -29,13 +32,13 @@ const kRaApiKeyUrl = 'https://retroachievements.org/settings?tab=applications';
 
 /// Verifies a username/key pair against RA and returns the account's canonical
 /// avatar path, or throws when the pair is rejected.
-typedef CredentialVerifier = Future<String> Function(
-    String username, String apiKey);
+typedef CredentialVerifier =
+    Future<String> Function(String username, String apiKey);
 
 /// Finds scrape sources under a root, matches them to [romPaths], and stores
 /// what matched.
-typedef ScrapedImporter = Future<ImportResult> Function(
-    String root, Set<String> romPaths);
+typedef ScrapedImporter =
+    Future<ImportResult> Function(String root, Set<String> romPaths);
 
 /// Detection and parsing run on a background isolate; only the matched games
 /// come back to be stored.
@@ -45,8 +48,19 @@ Future<ImportResult> _importAndStore(String root, Set<String> romPaths) async {
   return result;
 }
 
-/// First-run setup. Shown instead of [AppShell] until [PrefKeys.setupDone] is
-/// set, and reachable again from Settings.
+/// Opens setup as a modal. Tapping outside does not close it; a half-finished
+/// setup is left by Skip, which still marks it handled.
+Future<void> showSetupWizard(
+  BuildContext context, [
+  SetupWizard wizard = const SetupWizard(),
+]) => showDialog<void>(
+  context: context,
+  barrierDismissible: false,
+  builder: (_) => wizard,
+);
+
+/// First-run setup. Opened over [AppShell] until [PrefKeys.setupDone] is set,
+/// and reachable again from Settings.
 class SetupWizard extends StatefulWidget {
   /// Injectable for tests; defaults to a real RA profile lookup.
   final CredentialVerifier? verifyCredentials;
@@ -79,7 +93,7 @@ class _SetupWizardState extends State<SetupWizard> {
   String? _folder;
   bool _finishing = false;
 
-  static const _lastStep = 3;
+  static final _lastStep = _stepNames.length - 1;
 
   // Real verification hits RA's profile endpoint through RaService, which
   // already sets the User-Agent the API requires.
@@ -92,10 +106,10 @@ class _SetupWizardState extends State<SetupWizard> {
   // is the one setup mistake that fails silently everywhere else. Step 2 needs
   // a folder; there is nothing to scan without one.
   bool get _canContinue => switch (_step) {
-        1 => _verifiedCredentials != null,
-        2 => _folder != null,
-        _ => _step < _lastStep,
-      };
+    1 => _verifiedCredentials != null,
+    2 => _folder != null,
+    _ => _step < _lastStep,
+  };
 
   @override
   void dispose() {
@@ -119,13 +133,9 @@ class _SetupWizardState extends State<SetupWizard> {
     );
   }
 
-  // Marks setup handled and drops into the app. Whatever earlier steps saved
-  // stays saved; skipping abandons the remaining steps, not the finished ones.
-  //
-  // Two ways in, so two ways out: on first run the wizard *is* the root route
-  // and has to install an AppShell, but re-running from Settings pushed it on
-  // top of a live one, and replacing that would leave two shells (two home
-  // screens, doubled listeners) stacked on each other.
+  // Marks setup handled and closes the modal onto the shell underneath.
+  // Whatever earlier steps saved stays saved; skipping abandons the remaining
+  // steps, not the finished ones.
   Future<void> _finish({bool startScan = false}) async {
     if (_finishing) return; // a second tap during the route transition
     _finishing = true;
@@ -133,91 +143,195 @@ class _SetupWizardState extends State<SetupWizard> {
     await prefs.setBool(PrefKeys.setupDone, true);
     if (!mounted) return;
     if (startScan) firstScanRequest.value = true;
-    final navigator = Navigator.of(context);
-    if (navigator.canPop()) {
-      navigator.pop();
-    } else {
-      navigator.pushReplacement(
-        MaterialPageRoute(builder: (_) => const AppShell()),
-      );
-    }
+    Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    return Scaffold(
+    final size = MediaQuery.sizeOf(context);
+    // Phones get the whole screen, like the detail modal; the folder list
+    // needs the room.
+    final full = size.width < kBreakWide;
+    return Dialog(
       backgroundColor: ui.background,
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: UiFocusZoom(
-                      child: TextButton(
-                        onPressed: _finish,
-                        child: Text('Skip setup',
-                            style: ui.labelCaps.copyWith(color: ui.muted)),
-                      ),
+      insetPadding: EdgeInsets.all(full ? 8 : 24),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 720,
+          maxHeight: full ? double.infinity : size.height * 0.85,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: UiFocusZoom(
+                  child: TextButton(
+                    onPressed: _finish,
+                    child: Text(
+                      WizardStrings.skipSetup,
+                      style: ui.labelCaps.copyWith(color: ui.muted),
                     ),
                   ),
-                  Text('STEP ${_step + 1} OF ${_lastStep + 1}',
-                      style: ui.labelCaps.copyWith(color: ui.muted)),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: PageView(
-                      controller: _pageCtrl,
-                      // Steps gate each other (credentials must verify), so
-                      // swiping past them is not allowed.
-                      physics: const NeverScrollableScrollPhysics(),
-                      onPageChanged: (i) => setState(() => _step = i),
+                ),
+              ),
+              _StepBar(current: _step),
+              const SizedBox(height: 12),
+              Expanded(
+                child: PageView(
+                  controller: _pageCtrl,
+                  // Steps gate each other (credentials must verify), so
+                  // swiping past them is not allowed.
+                  physics: const NeverScrollableScrollPhysics(),
+                  onPageChanged: (i) => setState(() => _step = i),
+                  children: [
+                    const _WelcomeStep(),
+                    _CredentialsStep(
+                      verify: _verify,
+                      verified: _verifiedCredentials,
+                      onVerifiedChanged: (v) =>
+                          setState(() => _verifiedCredentials = v),
+                    ),
+                    _FolderStep(
+                      initialFolder: widget.initialFolder,
+                      importScrapedData:
+                          widget.importScrapedData ?? _importAndStore,
+                      onFolderChanged: (f) => setState(() => _folder = f),
+                    ),
+                    const _StyleStep(),
+                    const _FirstScanStep(),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  UiButton(
+                    label: WizardStrings.backButton,
+                    variant: UiButtonVariant.secondary,
+                    onPressed: _step == 0 ? null : _back,
+                  ),
+                  if (_step < _lastStep)
+                    UiButton(
+                      label: WizardStrings.continueButton,
+                      onPressed: _canContinue ? _next : null,
+                    )
+                  else
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
                       children: [
-                        const _WelcomeStep(),
-                        _CredentialsStep(
-                          verify: _verify,
-                          verified: _verifiedCredentials,
-                          onVerifiedChanged: (v) =>
-                              setState(() => _verifiedCredentials = v),
+                        UiButton(
+                          label: WizardStrings.laterButton,
+                          variant: UiButtonVariant.secondary,
+                          onPressed: _finish,
                         ),
-                        _FolderStep(
-                          initialFolder: widget.initialFolder,
-                          importScrapedData:
-                              widget.importScrapedData ?? _importAndStore,
-                          onFolderChanged: (f) => setState(() => _folder = f),
-                        ),
-                        _FirstScanStep(
-                          onStartScan: () => _finish(startScan: true),
-                          onLater: _finish,
+                        UiButton(
+                          label: WizardStrings.startScanButton,
+                          onPressed: () => _finish(startScan: true),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 16),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Labels for [_StepBar], one per page, in order.
+const _stepNames = [
+  WizardStrings.stepWelcome,
+  WizardStrings.stepAccount,
+  ShellStrings.navLibrary,
+  WizardStrings.stepStyle,
+  WizardStrings.scan,
+];
+
+/// Named progress row: done steps filled, the current one ringed, the rest
+/// hollow, joined by a line that fills as the user moves through.
+class _StepBar extends StatelessWidget {
+  final int current;
+
+  const _StepBar({required this.current});
+
+  @override
+  Widget build(BuildContext context) {
+    final ui = context.ui;
+    final last = _stepNames.length - 1;
+    Widget line(bool visible, bool reached) => Expanded(
+      child: Container(
+        height: 2,
+        color: !visible
+            ? Colors.transparent
+            : reached
+            ? ui.accent
+            : ui.border,
+      ),
+    );
+    return Semantics(
+      label: WizardStrings.stepSemantics(
+        current + 1,
+        last + 1,
+        _stepNames[current],
+      ),
+      excludeSemantics: true,
+      child: Row(
+        children: [
+          for (var i = 0; i <= last; i++)
+            Expanded(
+              child: Column(
+                children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      UiButton(
-                        label: 'BACK',
-                        variant: UiButtonVariant.secondary,
-                        onPressed: _step == 0 ? null : _back,
+                      line(i > 0, i <= current),
+                      Container(
+                        width: 14,
+                        height: 14,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: i < current ? ui.accent : ui.background,
+                          border: Border.all(
+                            color: i <= current ? ui.accent : ui.border,
+                            width: 2,
+                          ),
+                        ),
+                        child: i == current
+                            ? Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: ui.accent,
+                                ),
+                              )
+                            : null,
                       ),
-                      UiButton(
-                        label: 'CONTINUE',
-                        onPressed: _canContinue ? _next : null,
-                      ),
+                      line(i < last, i < current),
                     ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _stepNames[i],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: ui.labelCaps.copyWith(
+                      color: i == current ? ui.text : ui.muted,
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -229,30 +343,65 @@ class _WelcomeStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Welcome to Retroachievements Rom Manager', style: ui.display),
-        const SizedBox(height: 16),
-        Text(
-          'This app helps you clean up your ROM library. It scans your folder, '
-          'works out which game each file is, and matches it against '
-          'RetroAchievements so every keep-or-cut decision is backed by real '
-          'data: which games have achievements, how many, and how far through '
-          'them you are.',
-          style: ui.body,
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Setup takes three short steps: your RetroAchievements account, '
-          'your ROM folder, and a first scan.',
-          style: ui.body,
-        ),
-        const SizedBox(height: 24),
-        Text('UI scale', style: ui.labelCaps.copyWith(color: ui.muted)),
-        const SizedBox(height: 8),
-        const UiScaleControl(),
-      ],
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(WizardStrings.welcomeTitle, style: ui.display),
+          const SizedBox(height: 16),
+          Text(WizardStrings.welcomeBody, style: ui.body),
+          const SizedBox(height: 12),
+          Text(WizardStrings.welcomeSetupCovers, style: ui.body),
+          const SizedBox(height: 24),
+          Text(
+            WizardStrings.welcomeRestoreHint,
+            style: ui.body.copyWith(color: ui.muted),
+          ),
+          const SizedBox(height: 8),
+          UiButton(
+            label: WizardStrings.restoreFromBackupButton,
+            icon: Icons.restore,
+            variant: UiButtonVariant.secondary,
+            onPressed: () => restoreBackup(context),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Mode, theme and UI scale: the choices that change how every later screen
+/// looks. Each writes its setting straight away, like Settings does.
+class _StyleStep extends StatelessWidget {
+  const _StyleStep();
+
+  @override
+  Widget build(BuildContext context) {
+    final ui = context.ui;
+    final label = ui.labelCaps.copyWith(color: ui.muted);
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(WizardStrings.styleTitle, style: ui.display),
+          const SizedBox(height: 12),
+          Text(WizardStrings.styleBody, style: ui.body),
+          const SizedBox(height: 24),
+          Text(WizardStrings.modeLabel, style: label),
+          const SizedBox(height: 4),
+          Text(AppearanceStrings.modeHelp, style: ui.body),
+          const SizedBox(height: 8),
+          const AppModeToggle(),
+          const SizedBox(height: 24),
+          Text(WizardStrings.themeLabel, style: label),
+          const SizedBox(height: 8),
+          const ThemePicker(),
+          const SizedBox(height: 24),
+          Text(WizardStrings.uiScaleLabel, style: label),
+          const SizedBox(height: 8),
+          const UiScaleControl(),
+        ],
+      ),
     );
   }
 }
@@ -351,8 +500,10 @@ class _CredentialsStepState extends State<_CredentialsStep> {
     // in their browser, not an in-app webview.
     var opened = false;
     try {
-      opened = await launchUrl(Uri.parse(kRaApiKeyUrl),
-          mode: LaunchMode.externalApplication);
+      opened = await launchUrl(
+        Uri.parse(kRaApiKeyUrl),
+        mode: LaunchMode.externalApplication,
+      );
     } catch (_) {
       opened = false; // no handler registered for http on this desktop
     }
@@ -361,18 +512,19 @@ class _CredentialsStepState extends State<_CredentialsStep> {
     // noise on a step that already has two fields to fill in.
     await Clipboard.setData(const ClipboardData(text: kRaApiKeyUrl));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text("Couldn't open your browser. The link is on your "
-          'clipboard: $kRaApiKeyUrl'),
-      duration: Duration(seconds: 8),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ShellStrings.browserOpenFailed(kRaApiKeyUrl)),
+        duration: const Duration(seconds: 8),
+      ),
+    );
   }
 
   Future<void> _verify() async {
     final username = _usernameCtrl.text.trim();
     final apiKey = _apiKeyCtrl.text.trim();
     if (username.isEmpty || apiKey.isEmpty) {
-      setState(() => _error = 'Enter both your username and your Web API key.');
+      setState(() => _error = WizardStrings.credentialsMissing);
       return;
     }
     setState(() {
@@ -387,16 +539,18 @@ class _CredentialsStepState extends State<_CredentialsStep> {
       await prefs.setString(PrefKeys.raAvatarPath, path);
       if (!mounted) return;
       setState(() => _busy = false);
-      widget.onVerifiedChanged(
-          (username: username, apiKey: apiKey, avatarPath: path));
+      widget.onVerifiedChanged((
+        username: username,
+        apiKey: apiKey,
+        avatarPath: path,
+      ));
     } catch (_) {
       if (!mounted) return;
       // Nothing is saved on failure, so a bad key can't silently break every
       // later fetch.
       setState(() {
         _busy = false;
-        _error = "We couldn't sign in with that username and key. "
-            'Check both and try again.';
+        _error = WizardStrings.credentialsRejected;
       });
     }
   }
@@ -408,18 +562,13 @@ class _CredentialsStepState extends State<_CredentialsStep> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Your RetroAchievements account', style: ui.display),
+          Text(WizardStrings.accountTitle, style: ui.display),
           const SizedBox(height: 12),
-          Text(
-            'The app reads your achievement progress with a free Web API key. '
-            'Open your RetroAchievements settings while signed in and copy the '
-            'key from the Applications tab.',
-            style: ui.body,
-          ),
+          Text(WizardStrings.accountBody, style: ui.body),
           const SizedBox(height: 12),
           UiButton(
             icon: Icons.open_in_new,
-            label: 'GET MY API KEY',
+            label: WizardStrings.getApiKeyButton,
             variant: UiButtonVariant.secondary,
             onPressed: _openKeyPage,
           ),
@@ -429,7 +578,7 @@ class _CredentialsStepState extends State<_CredentialsStep> {
               key: const Key('setup-username'),
               controller: _usernameCtrl,
               decoration: const InputDecoration(
-                labelText: 'Username',
+                labelText: WizardStrings.usernameLabel,
                 isDense: true,
               ),
             ),
@@ -441,14 +590,14 @@ class _CredentialsStepState extends State<_CredentialsStep> {
               controller: _apiKeyCtrl,
               obscureText: true,
               decoration: const InputDecoration(
-                labelText: 'Web API key',
+                labelText: WizardStrings.apiKeyLabel,
                 isDense: true,
               ),
             ),
           ),
           const SizedBox(height: 16),
           UiButton(
-            label: _busy ? 'CHECKING…' : 'VERIFY',
+            label: _busy ? WizardStrings.checkingButton : WizardStrings.verifyButton,
             onPressed: _busy ? null : _verify,
           ),
           if (_error != null) ...[
@@ -463,7 +612,7 @@ class _CredentialsStepState extends State<_CredentialsStep> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Signed in as ${widget.verified!.username}.',
+                    WizardStrings.signedInAs(widget.verified!.username),
                     style: ui.body.copyWith(color: ui.supported),
                   ),
                 ),
@@ -488,8 +637,10 @@ class _ScrapedSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final ui = context.ui;
     if (importing) {
-      return Text('Looking for Skraper media and details…',
-          style: ui.body.copyWith(color: ui.muted));
+      return Text(
+        WizardStrings.scrapedLooking,
+        style: ui.body.copyWith(color: ui.muted),
+      );
     }
     final r = result;
     if (r == null || r.matched.isEmpty) return const SizedBox.shrink();
@@ -505,16 +656,12 @@ class _ScrapedSummary extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Found Skraper media and details for $games '
-                'game${games == 1 ? '' : 's'} across $systems '
-                'system${systems == 1 ? '' : 's'}.',
+                WizardStrings.scrapedFound(games, systems),
                 style: ui.body.copyWith(color: ui.supported),
               ),
               const SizedBox(height: 4),
               Text(
-                'This app primarily uses RetroAchievements for images and game '
-                'details. It also recognises media and metadata from Skraper, '
-                "and will show those alongside RA's.",
+                WizardStrings.scrapedExplainer,
                 style: ui.body.copyWith(color: ui.muted),
               ),
             ],
@@ -531,7 +678,7 @@ const _scanColumnWidth = 40.0;
 
 /// Auto-detect plus every hashable console, name-sorted, for the row dropdowns.
 final _consoleItems = <UiDropdownItem<int?>>[
-  (value: null, label: 'Auto-detect'),
+  (value: null, label: WizardStrings.autoDetect),
   ...(ConsoleMap.consoleNames.entries.toList()
         ..sort((a, b) => a.value.compareTo(b.value)))
       .map((e) => (value: e.key as int?, label: e.value)),
@@ -609,10 +756,12 @@ class _FolderStepState extends State<_FolderStep> {
         dirs.add(entity);
       }
     }
-    dirs.sort((a, b) => p
-        .basename(a.path)
-        .toLowerCase()
-        .compareTo(p.basename(b.path).toLowerCase()));
+    dirs.sort(
+      (a, b) => p
+          .basename(a.path)
+          .toLowerCase()
+          .compareTo(p.basename(b.path).toLowerCase()),
+    );
 
     final rows = <_SystemRow>[];
     for (final dir in dirs) {
@@ -747,28 +896,27 @@ class _FolderStepState extends State<_FolderStep> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Your ROM folder', style: ui.display),
+        Text(WizardStrings.folderTitle, style: ui.display),
         const SizedBox(height: 12),
-        Text(
-          'Pick the folder that holds one subfolder per console. Each '
-          'subfolder is hashed as the console shown next to it. Correct any '
-          'the app guessed wrong, and hide any you do not want scanned.',
-          style: ui.body,
-        ),
+        Text(WizardStrings.folderBody, style: ui.body),
         const SizedBox(height: 16),
         Row(
           children: [
             UiButton(
               icon: Icons.folder_open,
-              label: _root == null ? 'PICK FOLDER' : 'CHANGE FOLDER',
+              label: _root == null
+                  ? WizardStrings.pickFolderButton
+                  : WizardStrings.changeFolderButton,
               onPressed: _pick,
             ),
             if (_root != null) ...[
               const SizedBox(width: 12),
               Expanded(
-                child: Text(_root!,
-                    style: ui.body.copyWith(color: ui.muted),
-                    overflow: TextOverflow.ellipsis),
+                child: Text(
+                  _root!,
+                  style: ui.body.copyWith(color: ui.muted),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ],
@@ -782,8 +930,8 @@ class _FolderStepState extends State<_FolderStep> {
           child: _rows.isEmpty
               ? Text(
                   _root == null
-                      ? 'No folder picked yet.'
-                      : 'No subfolders found in that folder.',
+                      ? WizardStrings.noFolderPicked
+                      : WizardStrings.noSubfolders,
                   style: ui.body.copyWith(color: ui.muted),
                 )
               : Column(
@@ -797,12 +945,16 @@ class _FolderStepState extends State<_FolderStep> {
                         children: [
                           SizedBox(
                             width: _scanColumnWidth,
-                            child: Text('SCAN',
-                                textAlign: TextAlign.center,
-                                style: ui.labelCaps.copyWith(color: ui.muted)),
+                            child: Text(
+                              WizardStrings.scan,
+                              textAlign: TextAlign.center,
+                              style: ui.labelCaps.copyWith(color: ui.muted),
+                            ),
                           ),
-                          Text('FOLDER',
-                              style: ui.labelCaps.copyWith(color: ui.muted)),
+                          Text(
+                            WizardStrings.folderColumn,
+                            style: ui.labelCaps.copyWith(color: ui.muted),
+                          ),
                         ],
                       ),
                     ),
@@ -815,69 +967,68 @@ class _FolderStepState extends State<_FolderStep> {
   }
 
   Widget _folderList(UiTokens ui) => ListView.builder(
-                  itemCount: _rows.length,
-                  itemBuilder: (_, i) {
-                    final row = _rows[i];
-                    final count = row.romCount;
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: _scanColumnWidth,
-                            child: UiFocusZoom(
-                              child: Checkbox(
-                                key: Key('exclude-${row.name}'),
-                                value: !row.excluded,
-                                activeColor: ui.accent,
-                                visualDensity: VisualDensity.compact,
-                                onChanged: (v) => _setExcluded(i, v != true),
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(row.name,
-                                    style: row.excluded
-                                        ? ui.body.copyWith(
-                                            color: ui.muted,
-                                            decoration:
-                                                TextDecoration.lineThrough)
-                                        : ui.body,
-                                    overflow: TextOverflow.ellipsis),
-                                Text(
-                                  row.excluded
-                                      ? 'Excluded, not scanned'
-                                      : count == null
-                                          ? 'counting…'
-                                          : '$count ROM${count == 1 ? '' : 's'}',
-                                  style: ui.body.copyWith(color: ui.muted),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          UiDropdown<int?>(
-                            key: Key('console-${row.name}'),
-                            value: row.consoleId,
-                            items: _consoleItems,
-                            enabled: !row.excluded,
-                            onChanged: (v) => _setConsole(i, v),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+    itemCount: _rows.length,
+    itemBuilder: (_, i) {
+      final row = _rows[i];
+      final count = row.romCount;
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            SizedBox(
+              width: _scanColumnWidth,
+              child: UiFocusZoom(
+                child: Checkbox(
+                  key: Key('exclude-${row.name}'),
+                  value: !row.excluded,
+                  activeColor: ui.accent,
+                  visualDensity: VisualDensity.compact,
+                  onChanged: (v) => _setExcluded(i, v != true),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    row.name,
+                    style: row.excluded
+                        ? ui.body.copyWith(
+                            color: ui.muted,
+                            decoration: TextDecoration.lineThrough,
+                          )
+                        : ui.body,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    row.excluded
+                        ? WizardStrings.excludedFolder
+                        : count == null
+                        ? WizardStrings.counting
+                        : WizardStrings.romCount(count),
+                    style: ui.body.copyWith(color: ui.muted),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            UiDropdown<int?>(
+              key: Key('console-${row.name}'),
+              value: row.consoleId,
+              items: _consoleItems,
+              enabled: !row.excluded,
+              onChanged: (v) => _setConsole(i, v),
+            ),
+          ],
+        ),
       );
+    },
+  );
 }
 
 class _FirstScanStep extends StatelessWidget {
-  final VoidCallback onStartScan;
-  final VoidCallback onLater;
-
-  const _FirstScanStep({required this.onStartScan, required this.onLater});
+  const _FirstScanStep();
 
   @override
   Widget build(BuildContext context) {
@@ -885,33 +1036,11 @@ class _FirstScanStep extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Ready to scan', style: ui.display),
+        Text(WizardStrings.readyTitle, style: ui.display),
         const SizedBox(height: 12),
-        Text(
-          'The scan reads every ROM to work out which game it is, then asks '
-          'RetroAchievements what it knows about that game and how far you '
-          'have got with it.',
-          style: ui.body,
-        ),
+        Text(WizardStrings.readyBody, style: ui.body),
         const SizedBox(height: 12),
-        Text(
-          'On a large library this takes a while. You can stop it at any '
-          'point. Systems that already finished are skipped next time.',
-          style: ui.body,
-        ),
-        const SizedBox(height: 24),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            UiButton(label: 'START SCAN', onPressed: onStartScan),
-            UiButton(
-              label: 'LATER',
-              variant: UiButtonVariant.secondary,
-              onPressed: onLater,
-            ),
-          ],
-        ),
+        Text(WizardStrings.readyDuration, style: ui.body),
       ],
     );
   }

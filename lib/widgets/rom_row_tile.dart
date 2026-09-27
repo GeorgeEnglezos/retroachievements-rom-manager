@@ -5,6 +5,7 @@ import '../models/rom_result.dart';
 import '../models/rom_row.dart';
 import '../services/disc_formats.dart';
 import '../services/member_key.dart';
+import '../services/app_mode.dart';
 import '../services/play_view.dart';
 import '../services/playlist_store.dart';
 import '../services/rom_tap.dart';
@@ -16,6 +17,7 @@ import 'rom_badges.dart';
 import 'rom_progress.dart';
 import 'rom_thumb.dart';
 import 'row_display.dart';
+import '../strings.dart';
 
 /// A single list-row tile that renders any [RomRow], gating each visual element
 /// on the [RowDisplay] flag set. Decoupled from [RomResult] (it reads a
@@ -288,6 +290,7 @@ class RomRowTile extends StatelessWidget {
     // read in the meta line already carries how far in the game is.
     if (MediaQuery.sizeOf(context).shortestSide < kBreakCompact) return null;
     if (!display.showProgress ||
+        !playView.achievementCount ||
         row.rom == null ||
         row.earnedAchievements == null) {
       return null;
@@ -322,7 +325,7 @@ class RomRowTile extends StatelessWidget {
       child: Row(
         children: [
           for (var i = 0; i < shown.length; i++) ...[
-            if (i > 0) Text('  ·  ', style: style),
+            if (i > 0) Text(CommonStrings.dotSepWide, style: style),
             Flexible(
               child: Text(
                 shown[i],
@@ -349,20 +352,20 @@ class RomRowTile extends StatelessWidget {
     final rom = row.rom!;
     // Size lives in the subtitle for ROM rows only; the storage screen draws its
     // own via display.showSizeBar, which play mode never touches.
-    final sizeLabel = playView.fileSize ? row.sizeLabel : null;
+    final sizeLabel = gamingMode ? null : row.sizeLabel;
 
     // localOnly renders like a supported row minus RA data: filename title,
     // size, no achievements/progress and no "Not fetched" status text.
     if (rom.status == RomStatus.supported || rom.isLocalOnly) {
       final fileName =
-          playView.fileName && row.subtitle != null && row.subtitle != row.title
+          !gamingMode && row.subtitle != null && row.subtitle != row.title
           ? row.subtitle
           : null;
       // The same earned/total read the grid's GameMetaRow shows, inline in the
       // meta line alongside any progress bar below.
       final total = rom.achievementCount ?? 0;
       final achLabel = playView.achievementCount && total > 0
-          ? '${rom.earnedAchievements ?? 0}/$total'
+          ? CommonStrings.fraction(rom.earnedAchievements ?? 0, total)
           : null;
       final meta = _metaLine(ui, [fileName, sizeLabel, achLabel], fg: fg);
       final progress = _buildProgress(context, fg);
@@ -380,12 +383,13 @@ class RomRowTile extends StatelessWidget {
         null,
       // The row has the width for the fix, not just the diagnosis.
       RomStatus.unsupportedFormat => DiscFormats.isNkit(rom.filePath)
-          ? 'NKit format not supported'
-          : 'Compressed disc. Add Dolphin in Settings → Emulators to hash it',
+          ? FolderStrings.nkitUnsupported
+          : FolderStrings.compressedDiscNeedsDolphin,
       RomStatus.error => rom.errorMessage ?? statusLabel(rom.status),
       final s => statusLabel(s),
     };
-    if (statusText == null) return null;
+    // Repair hints are no use in play mode, which hides every fix.
+    if (statusText == null || gamingMode) return null;
     return _metaLine(
       ui,
       [statusText, sizeLabel],

@@ -25,6 +25,7 @@ import '../widgets/ra_image.dart';
 import '../widgets/rom_list_view.dart';
 import '../widgets/row_display.dart';
 import '../widgets/ui/ui_focusable.dart';
+import '../strings.dart';
 
 /// One level of the storage drill-down: a title plus the folders/files shown at
 /// it, kept sorted by size (largest first).
@@ -144,7 +145,7 @@ class _StorageScreenState extends State<StorageScreen> {
       _consoleIds = consoleIds;
       _stack
         ..clear()
-        ..add(_Level('ALL SYSTEMS', items));
+        ..add(_Level(StorageStrings.allSystems, items));
       _loading = false;
     });
   }
@@ -221,7 +222,7 @@ class _StorageScreenState extends State<StorageScreen> {
             child: Row(
               children: [
                 for (var i = 0; i < _stack.length; i++) ...[
-                  if (i > 0) const Text(' / '),
+                  if (i > 0) const Text(CommonStrings.pathSep),
                   _crumb(i),
                 ],
               ],
@@ -290,7 +291,7 @@ class _StorageScreenState extends State<StorageScreen> {
     final level = _stack.last;
     if (level.items.every((i) => i.bytes == 0)) {
       return Center(
-        child: Text('NO SCANNED SIZES YET. SCAN A FOLDER FIRST',
+        child: Text(StorageStrings.noScannedSizes,
             style: ui.labelCaps),
       );
     }
@@ -319,7 +320,7 @@ class _StorageScreenState extends State<StorageScreen> {
             children: [
               if (_stack.length > 1) ...[
                 UiButton(
-                  label: 'BACK',
+                  label: StorageStrings.back,
                   icon: Icons.arrow_back,
                   variant: UiButtonVariant.secondary,
                   onPressed: _back,

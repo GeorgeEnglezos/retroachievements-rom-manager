@@ -6,6 +6,7 @@ import 'ui/ui_search_field.dart';
 import 'ui/ui_segmented.dart';
 import 'active_filter_chips.dart';
 import 'filter_panel.dart';
+import '../strings.dart';
 
 /// GB-themed playlist toolbar: shared search + filter panel plus a
 /// group-by-system toggle. No sort / actions / duplicates / grid.
@@ -78,7 +79,7 @@ class _PlaylistToolbarState extends State<PlaylistToolbar> {
               Expanded(
                 child: UiSearchField(
                   controller: _textController,
-                  hintText: 'Search name or title',
+                  hintText: FolderStrings.searchHint,
                   onChanged: (v) =>
                       widget.onFilterChanged(widget.filter.copyWith(text: v)),
                 ),
@@ -87,8 +88,8 @@ class _PlaylistToolbarState extends State<PlaylistToolbar> {
               UiSegmented<bool>(
                 value: widget.grouped,
                 segments: const [
-                  (value: false, label: 'List', icon: Icons.view_list),
-                  (value: true, label: 'By system', icon: Icons.category),
+                  (value: false, label: PlaylistStrings.listLayout, icon: Icons.view_list),
+                  (value: true, label: PlaylistStrings.bySystemLayout, icon: Icons.category),
                 ],
                 onChanged: (v) {
                   if (v != widget.grouped) widget.onGroupedToggle();
@@ -108,7 +109,7 @@ class _PlaylistToolbarState extends State<PlaylistToolbar> {
                 onChanged: widget.onFilterChanged,
               ),
               UiChip(
-                label: 'Filters',
+                label: FolderStrings.filtersButton,
                 icon: _expanded ? Icons.expand_less : Icons.tune,
                 selected: _expanded,
                 onTap: () => setState(() => _expanded = !_expanded),

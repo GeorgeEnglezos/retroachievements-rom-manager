@@ -8,6 +8,7 @@ import '../services/playlist_store.dart';
 import '../theme/ui_tokens.dart';
 import '../widgets/cull_card.dart';
 import '../widgets/ui/ui_focusable.dart';
+import '../strings.dart';
 
 /// The swiping view for one console: one card at a time, the next peeking
 /// behind. Swipe/arrow left = trash, right = keep; favorite counts as keep.
@@ -58,6 +59,8 @@ class _CullDeckState extends State<CullDeck> {
   // Trash/Favorites membership that predates the swipe.
   final List<(CullCardData, CullVerdict, Future<Set<String>>)> _history = [];
 
+  final _buttonsKey = GlobalKey();
+
   bool get _canUndo => _history.isNotEmpty;
   int get _total => _cards.length;
   int get _done => _total - _pending.length;
@@ -72,7 +75,18 @@ class _CullDeckState extends State<CullDeck> {
     final decided =
         _store.decide(card.memberKey, verdict, trashKeys: card.memberKeys);
     setState(() => _history.add((card, verdict, decided)));
+    final messenger = ScaffoldMessenger.of(context);
     await decided;
+    if (verdict == CullVerdict.trash && await _store.takeTrashHint()) {
+      // Floats above the verdict buttons, which sit in the body where a
+      // plain snackbar would cover them and swallow the next tap.
+      final bar = _buttonsKey.currentContext?.size?.height ?? 0;
+      messenger.showSnackBar(SnackBar(
+        content: const Text(CullStrings.trashHint),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.fromLTRB(16, 0, 16, bar + 8),
+      ));
+    }
   }
 
   // A ROM deleted from within the detail dialog: drop that card from the deck
@@ -99,20 +113,18 @@ class _CullDeckState extends State<CullDeck> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Start over?'),
-        content: Text(
-            'Forget all ${widget.consoleName} decisions and rebuild the deck? '
-            'Trashed games stay in the Trash playlist.'),
+        title: const Text(CullStrings.startOverTitle),
+        content: Text(CullStrings.startOverConfirm(widget.consoleName)),
         actions: [
           UiFocusZoom(
             child: TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel')),
+                child: const Text(PlaylistStrings.cancel)),
           ),
           UiFocusZoom(
             child: TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Start over')),
+                child: const Text(CullStrings.startOver)),
           ),
         ],
       ),
@@ -131,7 +143,7 @@ class _CullDeckState extends State<CullDeck> {
   Future<void> _openUrl(String url) async {
     final messenger = ScaffoldMessenger.of(context);
     if (!await FileActions.openUrl(url)) {
-      messenger.showSnackBar(const SnackBar(content: Text("Couldn't open browser")));
+      messenger.showSnackBar(const SnackBar(content: Text(CullStrings.browserOpenFailed)));
     }
   }
 
@@ -146,7 +158,7 @@ class _CullDeckState extends State<CullDeck> {
           UiFocusZoom(
             child: IconButton(
               icon: const Icon(Icons.replay),
-              tooltip: 'Start over for this console',
+              tooltip: CullStrings.startOverTooltip,
               onPressed: _startOver,
             ),
           ),
@@ -164,11 +176,11 @@ class _CullDeckState extends State<CullDeck> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('All ${widget.consoleName} games decided.',
+          Text(CullStrings.allGamesDecided(widget.consoleName),
               style: ui.display.copyWith(fontSize: 16)),
           if (next == null) ...[
             const SizedBox(height: 4),
-            Text('Every console is done.',
+            Text(CullStrings.everyConsoleDone,
                 style: ui.body.copyWith(color: ui.muted)),
           ],
           const SizedBox(height: 12),
@@ -176,7 +188,7 @@ class _CullDeckState extends State<CullDeck> {
             UiFocusZoom(
               child: FilledButton.icon(
                 icon: const Icon(Icons.skip_next),
-                label: Text('Next: $next'),
+                label: Text(CullStrings.nextConsole(next)),
                 onPressed: widget.onNextConsole,
               ),
             ),
@@ -186,12 +198,12 @@ class _CullDeckState extends State<CullDeck> {
           UiFocusZoom(
             child: TextButton.icon(
               icon: const Icon(Icons.undo),
-              label: const Text('Undo last card'),
+              label: const Text(CullStrings.undoLastCard),
               onPressed: _canUndo ? _undo : null,
             ),
           ),
           UiFocusZoom(
-            child: TextButton(onPressed: _startOver, child: const Text('Start over')),
+            child: TextButton(onPressed: _startOver, child: const Text(CullStrings.startOver)),
           ),
         ],
       ),
@@ -287,6 +299,7 @@ class _CullDeckState extends State<CullDeck> {
   // rather than a Row so the four buttons fold to a second line on a phone
   // instead of overflowing.
   Widget _buttons(UiTokens ui, CullCardData top) => SafeArea(
+        key: _buttonsKey,
         top: false,
         child: Padding(
           padding: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
@@ -298,14 +311,14 @@ class _CullDeckState extends State<CullDeck> {
               UiFocusZoom(
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.undo),
-                  label: const Text('UNDO'),
+                  label: const Text(CullStrings.undoAction),
                   onPressed: _canUndo ? _undo : null,
                 ),
               ),
               UiFocusZoom(
                 child: OutlinedButton.icon(
                   icon: Icon(Icons.delete, color: kDangerColor),
-                  label: const Text('TRASH'),
+                  label: const Text(CullStrings.trashAction),
                   style: OutlinedButton.styleFrom(foregroundColor: kDangerColor),
                   onPressed: () => _decide(CullVerdict.trash),
                 ),
@@ -318,7 +331,7 @@ class _CullDeckState extends State<CullDeck> {
                         : Icons.favorite_border,
                     color: kFavoriteColor,
                   ),
-                  label: const Text('FAVORITE'),
+                  label: const Text(CullStrings.favoriteAction),
                   style: OutlinedButton.styleFrom(foregroundColor: kFavoriteColor),
                   onPressed: () => _decide(CullVerdict.favorite),
                 ),
@@ -326,7 +339,7 @@ class _CullDeckState extends State<CullDeck> {
               UiFocusZoom(
                 child: OutlinedButton.icon(
                   icon: Icon(Icons.check, color: ui.supported),
-                  label: const Text('KEEP'),
+                  label: const Text(CullStrings.keepAction),
                   style: OutlinedButton.styleFrom(foregroundColor: ui.supported),
                   onPressed: () => _decide(CullVerdict.keep),
                 ),

@@ -8,6 +8,7 @@ import '../unlock_history.dart';
 import 'couch_hero.dart';
 import 'couch_shelves.dart';
 import 'cover_row.dart';
+import '../../strings.dart';
 
 // Cover size on the compact (phone/short-window) layout, where rows scroll
 // vertically so there is no fixed height to fill. The fitted layout derives its
@@ -37,7 +38,7 @@ class CouchHome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!dashboard.hasContent) {
-      return const CouchEmpty(message: 'Your library fills up as you play.');
+      return const CouchEmpty(message: HomeStrings.libraryEmpty);
     }
     final spotlight = dashboard.spotlight;
     final beat = dashboard.beatSpotlight;
@@ -175,9 +176,9 @@ class CouchHome extends StatelessWidget {
   /// The non-empty cover-row buckets, in display order. Empty buckets are dropped
   /// so a sparse library doesn't leave labelled blanks.
   List<(String, List<RomResult>)> _rowData() => <(String, List<RomResult>)>[
-    ('Jump back in', dashboard.continuePlaying),
-    ('Closest to mastery', dashboard.closestToMastery),
-    ('Popular & unplayed', dashboard.popularUnplayed),
+    (HomeStrings.rowJumpBackIn, dashboard.continuePlaying),
+    (HomeStrings.rowClosestToMastery, dashboard.closestToMastery),
+    (HomeStrings.rowPopularUnplayed, dashboard.popularUnplayed),
   ].where((r) => r.$2.isNotEmpty).toList();
 
   /// The fitted layout's rows, sized so they fill the column's height instead of
@@ -215,7 +216,7 @@ class CouchHome extends StatelessWidget {
   }) {
     final mastery = CouchHero(
       rom: spotlight,
-      eyebrow: 'MASTERY',
+      eyebrow: HomeStrings.mastery,
       autofocus: beat == null,
       onOpen: () => onOpen(spotlight),
       onIgnore: () => onIgnore(spotlight),
@@ -224,7 +225,7 @@ class CouchHome extends StatelessWidget {
     if (beat == null) return mastery;
     final beatHero = CouchHero(
       rom: beat,
-      eyebrow: 'CLOSEST TO BEAT',
+      eyebrow: HomeStrings.closestToBeat,
       autofocus: true,
       onOpen: () => onOpen(beat),
       onIgnore: () => onIgnore(beat),

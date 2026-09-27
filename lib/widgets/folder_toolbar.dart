@@ -9,6 +9,7 @@ import 'ui/ui_segmented.dart';
 import 'active_filter_chips.dart';
 import 'filter_panel.dart';
 import 'ui/ui_focusable.dart';
+import '../strings.dart';
 
 /// Full-width, GB-themed two-tier folder toolbar. Owns the search field and the
 /// inline filter panel; all sort/view/duplicates state lives in the parent and
@@ -156,7 +157,7 @@ class _FolderToolbarState extends State<FolderToolbar> {
         Expanded(
           child: UiSearchField(
             controller: _textController,
-            hintText: 'Search name or title',
+            hintText: FolderStrings.searchHint,
             onChanged: (v) =>
                 widget.onFilterChanged(widget.filter.copyWith(text: v)),
           ),
@@ -201,7 +202,7 @@ class _FolderToolbarState extends State<FolderToolbar> {
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text('SORT', style: ui.labelCaps.copyWith(color: ui.muted)),
+        Text(FolderStrings.sortLabel, style: ui.labelCaps.copyWith(color: ui.muted)),
         UiDropdown<FolderSort>(
           value: _sortOptions.contains(widget.sort)
               ? widget.sort
@@ -239,14 +240,14 @@ class _FolderToolbarState extends State<FolderToolbar> {
           ),
         if (widget.anyDuplicates)
           UiChip(
-            label: 'Duplicates',
+            label: FolderStrings.duplicatesToggle,
             icon: Icons.copy_all,
             selected: _dupActive,
             onTap: () => widget.onDuplicatesToggle(!_dupActive),
           ),
         if (widget.showHot)
           UiChip(
-            label: 'Hot',
+            label: FolderStrings.hotToggle,
             icon: Icons.local_fire_department,
             selected: widget.hot,
             onTap: () => widget.onHotToggle(!widget.hot),
@@ -257,7 +258,7 @@ class _FolderToolbarState extends State<FolderToolbar> {
           onChanged: widget.onFilterChanged,
         ),
         UiChip(
-          label: 'Filters',
+          label: FolderStrings.filtersButton,
           icon: _expanded ? Icons.expand_less : Icons.tune,
           selected: _expanded,
           onTap: () => setState(() => _expanded = !_expanded),

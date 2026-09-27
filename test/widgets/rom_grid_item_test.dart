@@ -14,32 +14,47 @@ import 'package:rarm/theme/ui_tokens.dart';
 import 'package:rarm/widgets/game_cover.dart';
 import 'package:rarm/widgets/ra_image.dart';
 import 'package:rarm/widgets/rom_grid_item.dart';
+import 'package:rarm/widgets/rom_list_view.dart' show gridTextBlock;
+import 'package:rarm/widgets/rom_thumb.dart';
 import 'package:rarm/widgets/ui/ui_progress_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/fixtures.dart';
 
+// A library-grid-sized cell: a full-screen host would make the square art
+// taller than the test view.
+Widget _cell(Widget tile) => Align(
+  alignment: Alignment.topLeft,
+  child: SizedBox(width: 150, child: tile),
+);
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('onOpen fires on tap and preempts the single-ROM dialog',
-      (tester) async {
+  testWidgets('onOpen fires on tap and preempts the single-ROM dialog', (
+    tester,
+  ) async {
     var opened = false;
     final rom = RomResult(
-        filePath: 'psx/FF7 (Disc 1).chd', fileName: 'FF7 (Disc 1).chd')
-      ..status = RomStatus.supported;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: RomGridItem(
-          rom: rom,
-          store: PlaylistStore(),
-          onOpen: () => opened = true,
-          discCount: 2,
+      filePath: 'psx/FF7 (Disc 1).chd',
+      fileName: 'FF7 (Disc 1).chd',
+    )..status = RomStatus.supported;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: _cell(
+            RomGridItem(
+              rom: rom,
+              store: PlaylistStore(),
+              onOpen: () => opened = true,
+              discCount: 2,
+            ),
+          ),
         ),
       ),
-    ));
+    );
 
-    expect(find.text('💿 2'), findsOneWidget); // disc badge
+    expect(find.text('2'), findsOneWidget); // disc badge
     await tester.tap(find.byType(RomGridItem));
     await tester.pump();
     expect(opened, true);
@@ -47,16 +62,21 @@ void main() {
     expect(find.byType(Dialog), findsNothing);
   });
 
-  testWidgets('local-only rom is tappable and opens the detail dialog',
-      (tester) async {
+  testWidgets('local-only rom is tappable and opens the detail dialog', (
+    tester,
+  ) async {
     final rom = RomResult(filePath: 'ps3/game.iso', fileName: 'game.iso')
       ..status = RomStatus.localOnly
       ..consoleId = -3
       ..consoleName = 'PlayStation 3'
       ..fileSize = 1024;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: RomGridItem(rom: rom, store: PlaylistStore())),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: _cell(RomGridItem(rom: rom, store: PlaylistStore())),
+        ),
+      ),
+    );
 
     // No "Not fetched" label; shows the filename.
     expect(find.text('Not fetched'), findsNothing);
@@ -67,50 +87,70 @@ void main() {
     expect(find.byType(Dialog), findsOneWidget);
   });
 
-  testWidgets('unmatched rom with imported metadata opens the detail dialog',
-      (tester) async {
+  testWidgets('unmatched rom with imported metadata opens the detail dialog', (
+    tester,
+  ) async {
     ScrapedStore.instance.seed(
-        const ScrapedGame(romPath: 'snes/imported.sfc', title: 'Imported'));
-    final rom = RomResult(filePath: 'snes/imported.sfc', fileName: 'imported.sfc')
-      ..status = RomStatus.unsupported;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: RomGridItem(rom: rom, store: PlaylistStore())),
-    ));
+      const ScrapedGame(romPath: 'snes/imported.sfc', title: 'Imported'),
+    );
+    final rom = RomResult(
+      filePath: 'snes/imported.sfc',
+      fileName: 'imported.sfc',
+    )..status = RomStatus.unsupported;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: _cell(RomGridItem(rom: rom, store: PlaylistStore())),
+        ),
+      ),
+    );
 
     await tester.tap(find.byType(RomGridItem));
     await tester.pump();
     expect(find.byType(Dialog), findsOneWidget);
   });
 
-  testWidgets('unmatched rom without imported metadata stays inert',
-      (tester) async {
+  testWidgets('unmatched rom without imported metadata stays inert', (
+    tester,
+  ) async {
     final rom = RomResult(filePath: 'snes/mystery.sfc', fileName: 'mystery.sfc')
       ..status = RomStatus.unsupported;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: RomGridItem(rom: rom, store: PlaylistStore())),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: _cell(RomGridItem(rom: rom, store: PlaylistStore())),
+        ),
+      ),
+    );
 
     await tester.tap(find.byType(RomGridItem));
     await tester.pump();
     expect(find.byType(Dialog), findsNothing);
   });
 
-  testWidgets('localOnly rom falls back to the scraped box art thumbnail',
-      (tester) async {
+  testWidgets('localOnly rom falls back to the scraped box art thumbnail', (
+    tester,
+  ) async {
     final dir = Directory.systemTemp.createTempSync('grid_thumb');
     addTearDown(() => dir.deleteSync(recursive: true));
     final art = File(p.join(dir.path, 'game.png'))..writeAsBytesSync(kTinyPng);
-    ScrapedStore.instance.seed(ScrapedGame(
-      romPath: 'ps3/scraped.iso',
-      title: 'Scraped',
-      images: {'boxart': art.path},
-    ));
+    ScrapedStore.instance.seed(
+      ScrapedGame(
+        romPath: 'ps3/scraped.iso',
+        title: 'Scraped',
+        images: {'boxart': art.path},
+      ),
+    );
 
     final rom = RomResult(filePath: 'ps3/scraped.iso', fileName: 'scraped.iso')
       ..status = RomStatus.localOnly;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: RomGridItem(rom: rom, store: PlaylistStore())),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: _cell(RomGridItem(rom: rom, store: PlaylistStore())),
+        ),
+      ),
+    );
 
     // cacheWidth wraps the FileImage in a ResizeImage.
     final provider =
@@ -124,9 +164,13 @@ void main() {
       ..status = RomStatus.metadataOnly
       ..gameTitle = 'Racer'
       ..imageUrl = 'https://cdn.screenscraper.fr/box.png';
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: RomGridItem(rom: rom, store: PlaylistStore())),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: _cell(RomGridItem(rom: rom, store: PlaylistStore())),
+        ),
+      ),
+    );
     // The absolute cover URL is used as-is (not prefixed with the RA host).
     final img = tester.widget<RaImage>(find.byType(RaImage));
     expect(img.url, 'https://cdn.screenscraper.fr/box.png');
@@ -145,7 +189,10 @@ void main() {
           ..fileSize = 512 * 1024;
 
     Widget host(RomResult rom) => MaterialApp(
-        home: Scaffold(body: RomGridItem(rom: rom, store: PlaylistStore())));
+      home: Scaffold(
+        body: _cell(RomGridItem(rom: rom, store: PlaylistStore())),
+      ),
+    );
 
     testWidgets('cleaning shows the file name and size', (tester) async {
       await tester.pumpWidget(host(named()));
@@ -161,14 +208,6 @@ void main() {
       expect(find.text('smw.sfc'), findsNothing);
       expect(find.text('512.0 KB'), findsNothing);
     });
-
-    testWidgets('play mode can title cards by file name', (tester) async {
-      appModeListenable.value = AppMode.gaming;
-      playViewListenable.value = const PlayView(raTitle: false);
-      await tester.pumpWidget(host(named()));
-      expect(find.text('Super Mario World'), findsNothing);
-      expect(find.text('smw.sfc'), findsOneWidget);
-    });
   });
 
   group('home-style meta', () {
@@ -181,16 +220,20 @@ void main() {
           ..earnedAchievements = 44;
 
     Widget host(RomResult rom) => MaterialApp(
-        theme: uiTheme(UiTokens.light),
-        home: Scaffold(body: RomGridItem(rom: rom, store: PlaylistStore())));
+      theme: uiTheme(UiTokens.light),
+      home: Scaffold(
+        body: _cell(RomGridItem(rom: rom, store: PlaylistStore())),
+      ),
+    );
 
     testWidgets('renders through the shared GameCover', (tester) async {
       await tester.pumpWidget(host(inProgress()));
       expect(find.byType(GameCover), findsOneWidget);
     });
 
-    testWidgets('shows earned/total numbers, not a text-area progress bar',
-        (tester) async {
+    testWidgets('shows earned/total numbers, not a text-area progress bar', (
+      tester,
+    ) async {
       await tester.pumpWidget(host(inProgress()));
       // The Home-style read: numbers, and the console name is gone (we are
       // already inside a console folder).
@@ -212,23 +255,33 @@ void main() {
       await tester.pumpWidget(host(rom));
       // The chip and the numbers share one GameMetaRow.
       final row = find.ancestor(
-          of: find.text('🔥 HOT'), matching: find.byType(GameMetaRow));
+        of: find.text('HOT'),
+        matching: find.byType(GameMetaRow),
+      );
       expect(row, findsOneWidget);
       expect(
-          find.descendant(of: row, matching: find.text('44/120')),
-          findsOneWidget);
+        find.descendant(of: row, matching: find.text('44/120')),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('lean tile shows the console and drops the chips', (tester) async {
+    testWidgets('lean tile shows the console and drops the chips', (
+      tester,
+    ) async {
       final rom = inProgress()..numPlayersCasual = 100000; // would be hot
-      await tester.pumpWidget(MaterialApp(
-        theme: uiTheme(UiTokens.light),
-        home: Scaffold(
-            body: RomGridItem(rom: rom, store: PlaylistStore(), lean: true)),
-      ));
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: uiTheme(UiTokens.light),
+          home: Scaffold(
+            body: _cell(
+              RomGridItem(rom: rom, store: PlaylistStore(), lean: true),
+            ),
+          ),
+        ),
+      );
       expect(find.text('44/120'), findsOneWidget);
       expect(find.textContaining('SNES'), findsOneWidget); // console shown
-      expect(find.text('🔥 HOT'), findsNothing); // no chips in lean mode
+      expect(find.text('HOT'), findsNothing); // no chips in lean mode
     });
   });
 
@@ -238,48 +291,53 @@ void main() {
       playViewListenable.value = const PlayView();
     });
 
-    RomResult game() =>
-        RomResult(filePath: 'snes/smw.sfc', fileName: 'smw.sfc')
-          ..status = RomStatus.supported
-          ..gameTitle = 'Super Mario World'
-          ..consoleName = 'SNES'
-          ..achievementCount = 40
-          ..earnedAchievements = 10
-          ..numPlayersCasual = 100000 // over the hot threshold
-          ..fileSize = 512 * 1024;
+    RomResult game() => RomResult(filePath: 'snes/smw.sfc', fileName: 'smw.sfc')
+      ..status = RomStatus.supported
+      ..gameTitle = 'Super Mario World'
+      ..consoleName = 'SNES'
+      ..achievementCount = 40
+      ..earnedAchievements = 10
+      ..numPlayersCasual =
+          100000 // over the hot threshold
+      ..fileSize = 512 * 1024;
 
     Widget host(RomResult rom) => MaterialApp(
-          theme: uiTheme(UiTokens.light),
-          home: Scaffold(
-            body: RomGridItem(
-              rom: rom,
-              store: PlaylistStore(),
-              lean: true,
-              listingExtras: true,
-              raName: true,
-            ),
+      theme: uiTheme(UiTokens.light),
+      home: Scaffold(
+        body: _cell(
+          RomGridItem(
+            rom: rom,
+            store: PlaylistStore(),
+            lean: true,
+            listingExtras: true,
           ),
-        );
+        ),
+      ),
+    );
 
-    testWidgets('wears the Home framed-cover design, not the card', (tester) async {
+    testWidgets('wears the Home framed-cover design, not the card', (
+      tester,
+    ) async {
       await tester.pumpWidget(host(game()));
       expect(find.byType(GameCover), findsOneWidget);
       expect(find.text('10/40'), findsOneWidget); // Home-style numbers
     });
 
-    testWidgets('cleaning layers the size + hot extras onto the tile',
-        (tester) async {
+    testWidgets('cleaning layers the size + hot extras onto the tile', (
+      tester,
+    ) async {
       await tester.pumpWidget(host(game()));
-      expect(find.text('🔥 HOT'), findsOneWidget); // playView all-on
+      expect(find.text('HOT'), findsOneWidget); // playView all-on
       expect(find.text('512.0 KB'), findsOneWidget);
     });
 
-    testWidgets('play mode keeps only the extras its play view enables',
-        (tester) async {
+    testWidgets('play mode keeps only the extras its play view enables', (
+      tester,
+    ) async {
       appModeListenable.value = AppMode.gaming;
       playViewListenable.value = const PlayView(); // hot on, size off
       await tester.pumpWidget(host(game()));
-      expect(find.text('🔥 HOT'), findsOneWidget);
+      expect(find.text('HOT'), findsOneWidget);
       expect(find.text('512.0 KB'), findsNothing);
     });
   });
@@ -287,11 +345,13 @@ void main() {
   group('cell fit', () {
     // Worst case for the text block: every optional line present, a long title,
     // and a file name carrying every tag chip the parser can produce.
-    RomResult loaded() => RomResult(
-          filePath: 'snes/long.sfc',
-          fileName: 'The Legend of Something Very Long Indeed (Europe) '
-              '(En,Fr,De,Es,It,Pt,Nl,Sv) [Hack] [!].sfc',
-        )
+    RomResult loaded() =>
+        RomResult(
+            filePath: 'snes/long.sfc',
+            fileName:
+                'The Legend of Something Very Long Indeed (Europe) '
+                '(En,Fr,De,Es,It,Pt,Nl,Sv) [Hack] [!].sfc',
+          )
           ..status = RomStatus.supported
           ..gameTitle = 'The Legend of Something Very Long Indeed'
           ..achievementCount = 120
@@ -300,33 +360,37 @@ void main() {
           ..duplicateGroupId = 1
           ..fileSize = 512 * 1024;
 
-    // The grid delegate (maxCrossAxisExtent 300, childAspectRatio 0.75) hands
-    // a phone-width viewport two columns of roughly 155x207 — the smallest cell
-    // the app can produce, and the one a multi-run chip strip used to burst.
-    for (final cell in const [Size(155, 207), Size(300, 400)]) {
-      for (final lean in const [false, true]) {
-        testWidgets(
-            '${lean ? 'lean+extras' : 'card'} fully loaded fits a '
-            '${cell.width.toInt()}x${cell.height.toInt()} cell', (tester) async {
-          await tester.pumpWidget(MaterialApp(
-            theme: uiTheme(UiTokens.light),
-            home: Scaffold(
-              body: Center(
-                child: SizedBox(
-                  width: cell.width,
-                  height: cell.height,
-                  child: RomGridItem(
-                    rom: loaded(),
-                    store: PlaylistStore(),
-                    lean: lean,
-                    listingExtras: lean,
+    tearDown(() => appModeListenable.value = AppMode.cleaning);
+
+    // The library grid's cell: a square cover plus gridTextBlock. The art must
+    // stay square and the text must fit in either mode (gaming drops lines).
+    for (final width in const [150.0, 300.0]) {
+      for (final gaming in const [false, true]) {
+        testWidgets('${gaming ? 'gaming' : 'cleaning'} fully loaded fits a '
+            '${width.toInt()}px cell with square art', (tester) async {
+          appModeListenable.value = gaming ? AppMode.gaming : AppMode.cleaning;
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: uiTheme(UiTokens.light),
+              home: Scaffold(
+                body: Center(
+                  child: SizedBox(
+                    width: width,
+                    height: width + gridTextBlock,
+                    child: RomGridItem(
+                      rom: loaded(),
+                      store: PlaylistStore(),
+                      lean: true,
+                      listingExtras: true,
+                    ),
                   ),
                 ),
               ),
             ),
-          ));
+          );
           await tester.pump();
           expect(tester.takeException(), isNull);
+          expect(tester.getSize(find.byType(RomThumb)), Size(width, width));
         });
       }
     }

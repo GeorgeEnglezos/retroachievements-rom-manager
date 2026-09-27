@@ -68,7 +68,7 @@ void main() {
 
   test('Markdown report includes the summary table', () {
     final md = LibraryExport.toMarkdown([_sys()], rows);
-    expect(md, contains('# Library health report'));
+    expect(md, contains('# Library report'));
     expect(md, contains('| Supported | 1 |'));
     expect(md, contains('| NES | 2 | 1 | 2 |'));
   });

@@ -9,6 +9,7 @@ import '../models/rom_result.dart' show gameDisplayName;
 import '../widgets/ra_image.dart' show raImageUrl;
 import 'library_export.dart';
 import 'log_service.dart';
+import '../strings.dart';
 
 /// Per-system game-list PDF (icon + name + chosen fields). A bad icon is
 /// skipped, never failing the document.
@@ -21,13 +22,13 @@ Future<Uint8List> buildSystemPdf(
   final icons = await _fetchIcons(games);
 
   final doc = pw.Document();
-  final headers = ['', 'Name', ...LibraryExport.fieldHeaders(options.fields)];
+  final headers = ['', ExportStrings.name, ...LibraryExport.fieldHeaders(options.fields)];
 
   doc.addPage(
     pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
       build: (context) => [
-        pw.Header(level: 0, text: '$systemName library'),
+        pw.Header(level: 0, text: ExportStrings.systemTitle(systemName)),
         pw.Table(
           border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
           columnWidths: {0: const pw.FixedColumnWidth(28)},

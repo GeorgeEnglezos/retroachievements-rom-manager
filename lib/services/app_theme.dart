@@ -1,20 +1,21 @@
 import '../theme/ui_tokens.dart';
 import 'enum_setting.dart';
+import '../strings.dart';
 
 /// Which visual theme the app uses. Each case carries its display [label] and
 /// its [tokens] palette; [AppTheme.values] is the ordered list the picker
 /// renders, and [name] is the key persisted to prefs.
 enum AppTheme {
-  dark('RetroAchievements', UiTokens.dark),
-  light('Light', UiTokens.light),
-  oled('OLED', UiTokens.oled),
-  nord('Nord', UiTokens.nord),
-  github('GitHub', UiTokens.github),
-  lavenderDark('Lavender Dark', UiTokens.lavenderDark),
-  gameboy('Game Boy', UiTokens.gameboy),
-  lavenderLight('Lavender Light', UiTokens.lavenderLight),
-  slate('Slate', UiTokens.slate),
-  monochromeLight('Monochrome', UiTokens.monochromeLight);
+  dark(ThemeStrings.retroAchievements, UiTokens.dark),
+  light(ThemeStrings.light, UiTokens.light),
+  oled(ThemeStrings.oled, UiTokens.oled),
+  nord(ThemeStrings.nord, UiTokens.nord),
+  github(ThemeStrings.github, UiTokens.github),
+  lavenderDark(ThemeStrings.lavenderDark, UiTokens.lavenderDark),
+  gameboy(ThemeStrings.gameboy, UiTokens.gameboy),
+  lavenderLight(ThemeStrings.lavenderLight, UiTokens.lavenderLight),
+  slate(ThemeStrings.slate, UiTokens.slate),
+  monochromeLight(ThemeStrings.monochrome, UiTokens.monochromeLight);
 
   const AppTheme(this.label, this.tokens);
   final String label;

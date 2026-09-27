@@ -109,8 +109,22 @@ class UiFocusable extends StatefulWidget {
     this.showShadow = true,
   });
 
+  /// Whether the nearest enclosing [UiFocusable] is focused or hovered, so a
+  /// descendant (the tile's scrolling title) can react to the same state.
+  static bool litOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_LitScope>()?.lit ?? false;
+
   @override
   State<UiFocusable> createState() => _UiFocusableState();
+}
+
+class _LitScope extends InheritedWidget {
+  final bool lit;
+
+  const _LitScope({required this.lit, required super.child});
+
+  @override
+  bool updateShouldNotify(_LitScope old) => lit != old.lit;
 }
 
 class _UiFocusableState extends State<UiFocusable>
@@ -239,7 +253,7 @@ class _UiFocusableState extends State<UiFocusable>
               ),
             ),
           ),
-        widget.child,
+        _LitScope(lit: _lit, child: widget.child),
       ],
     );
 

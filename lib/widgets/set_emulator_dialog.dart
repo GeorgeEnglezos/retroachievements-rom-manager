@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../strings.dart';
+
 import '../services/console_map.dart';
 import '../services/emulator_catalog.dart';
 import '../services/emulator_store.dart';
@@ -12,7 +14,7 @@ import 'ui/ui_focusable.dart';
 /// retries the launch), false on cancel.
 Future<bool> showSetEmulatorDialog(
     BuildContext context, int consoleId) async {
-  final name = ConsoleMap.nameFor(consoleId) ?? 'this system';
+  final name = ConsoleMap.nameFor(consoleId) ?? GameActionStrings.thisSystem;
   final result = await showDialog<bool>(
     context: context,
     builder: (_) => _SetEmulatorDialog(consoleId: consoleId, consoleName: name),
@@ -78,7 +80,7 @@ class _SetEmulatorDialogState extends State<_SetEmulatorDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Set emulator for ${widget.consoleName}'),
+      title: Text(GameActionStrings.setEmulatorTitle(widget.consoleName)),
       content: _loading
           ? const SizedBox(
               height: 48,
@@ -89,12 +91,10 @@ class _SetEmulatorDialogState extends State<_SetEmulatorDialog> {
               children: [
                 if (_emulators.isEmpty)
                   Text(Platform.isAndroid
-                      ? 'No emulators added yet. Pick an installed app below. '
-                          'This system will use it for every game in the folder.'
-                      : 'No emulators added yet. Browse for one below. This '
-                          'system will use it for every game in the folder.')
+                      ? GameActionStrings.noEmulatorsAndroid
+                      : GameActionStrings.noEmulatorsDesktop)
                 else ...[
-                  const Text('Pick one of your emulators:'),
+                  const Text(GameActionStrings.pickEmulator),
                   const SizedBox(height: 8),
                   for (final emu in _emulators)
                     UiFocusZoom(
@@ -115,14 +115,16 @@ class _SetEmulatorDialogState extends State<_SetEmulatorDialog> {
         UiFocusZoom(
           child: TextButton(
             onPressed: _busy ? null : () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const Text(GameActionStrings.cancel),
           ),
         ),
         UiFocusZoom(
           child: FilledButton.icon(
             onPressed: _busy ? null : _add,
             icon: const Icon(Icons.add),
-            label: Text(Platform.isAndroid ? 'Pick app…' : 'Browse exe…'),
+            label: Text(Platform.isAndroid
+                ? GameActionStrings.pickApp
+                : GameActionStrings.browseExe),
           ),
         ),
       ],

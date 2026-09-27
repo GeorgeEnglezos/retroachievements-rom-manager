@@ -20,6 +20,7 @@ import 'require_credentials.dart';
 import 'rom_list_view.dart';
 import 'row_display.dart';
 import 'ui/ui_focusable.dart';
+import '../strings.dart';
 
 /// Global search over the home index. With no query it renders [child] and
 /// shows [idleActions] beside the bar.
@@ -133,7 +134,7 @@ class _HomeSearchState extends State<HomeSearch> {
     final searchField = TextField(
       controller: _searchController,
       decoration: InputDecoration(
-        hintText: 'Search games…',
+        hintText: LibraryStrings.searchHint,
         prefixIcon: const Icon(Icons.search),
         isDense: true,
         suffixIcon: _searchQuery.isEmpty
@@ -154,7 +155,7 @@ class _HomeSearchState extends State<HomeSearch> {
       child: TextField(
         controller: _excludeController,
         decoration: const InputDecoration(
-          hintText: 'Exclude results containing… (Enter to add)',
+          hintText: LibraryStrings.excludeHint,
           prefixIcon: Icon(Icons.search_off),
           isDense: true,
         ),
@@ -205,7 +206,9 @@ class _HomeSearchState extends State<HomeSearch> {
                 icon: Icon(_searchSectioned
                     ? Icons.format_list_bulleted
                     : Icons.view_agenda_outlined),
-                tooltip: _searchSectioned ? 'Flat list' : 'Grouped list',
+                tooltip: _searchSectioned
+                    ? LibraryStrings.flatListTooltip
+                    : LibraryStrings.groupedListTooltip,
                 onPressed: () =>
                     setState(() => _searchSectioned = !_searchSectioned),
               ),
@@ -214,7 +217,7 @@ class _HomeSearchState extends State<HomeSearch> {
               child: IconButton(
                 style: compactIconButton,
                 icon: const Icon(Icons.refresh),
-                tooltip: 'Refresh results',
+                tooltip: LibraryStrings.refreshResultsTooltip,
                 onPressed:
                     _searchPending ? null : () => _runSearch(_searchQuery),
               ),
@@ -288,7 +291,7 @@ class _HomeSearchState extends State<HomeSearch> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_searchHits.isEmpty && _folderHits.isEmpty) {
-      return Center(child: Text('Nothing found for "$_searchQuery"'));
+      return Center(child: Text(LibraryStrings.nothingFound(_searchQuery)));
     }
     if (_searchHits.isEmpty) {
       // Folder matches only (e.g. an empty or unscanned system).
@@ -309,7 +312,7 @@ class _HomeSearchState extends State<HomeSearch> {
       groups = [
         for (final n in names)
           RomGroup(
-            label: '$n · ${groupMap[n]!.length} ${groupMap[n]!.length == 1 ? "result" : "results"}',
+            label: LibraryStrings.searchGroupLabel(n, groupMap[n]!.length),
             rows: groupMap[n]!,
           ),
       ];
@@ -356,8 +359,7 @@ class _HomeSearchState extends State<HomeSearch> {
               dense: true,
               leading: const Icon(Icons.folder_open),
               title: Text(ConsoleMap.nameFor(s.consoleId) ?? s.name),
-              subtitle: Text('${s.name} · ${s.totalGames} '
-                  '${s.totalGames == 1 ? 'game' : 'games'}'),
+              subtitle: Text(LibraryStrings.searchSystemSubtitle(s.name, s.totalGames)),
               onTap: () => widget.onOpenFolder?.call(s.systemPath),
             ),
           ),
@@ -395,8 +397,7 @@ class _HomeSearchState extends State<HomeSearch> {
     await _removeFromSearch(paths);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Excluded ${paths.length} '
-          'file${paths.length == 1 ? '' : 's'}')),
+      SnackBar(content: Text(LibraryStrings.excludedFiles(paths.length))),
     );
   }
 
@@ -453,12 +454,12 @@ class _HomeSearchState extends State<HomeSearch> {
         applyGameInfo(hit.rom, info);
         applyProgress(hit.rom, progress);
       });
-      messenger.showSnackBar(const SnackBar(content: Text('Progress synced')));
+      messenger.showSnackBar(const SnackBar(content: Text(LibraryStrings.progressSynced)));
     } catch (e) {
       LogService.error('HomeSearch/syncProgress', 'game $gameId: $e');
       if (mounted) {
         messenger.showSnackBar(
-            SnackBar(content: Text('Failed to sync progress: $e')));
+            SnackBar(content: Text(LibraryStrings.syncProgressFailed(e))));
       }
     }
   }

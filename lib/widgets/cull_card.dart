@@ -6,6 +6,8 @@ import '../models/folder_stats.dart' show achievementFraction, compactCount;
 import '../models/rom_result.dart';
 import '../models/scraped_game.dart';
 import '../services/cull_deck_builder.dart';
+import '../services/game_lookup.dart';
+import '../services/library.dart';
 import '../services/playlist_store.dart';
 import '../services/scraper/scraped_store.dart';
 import '../theme/ui_tokens.dart';
@@ -16,6 +18,7 @@ import 'rom_badges.dart';
 import 'rom_thumb.dart';
 import 'ui/ui_card.dart';
 import 'ui/ui_progress_bar.dart';
+import '../strings.dart';
 
 /// One elimination-game card: art, listing thumbnail, title, file name,
 /// achievements and metadata, with the search button supplied by the deck. The
@@ -27,14 +30,68 @@ import 'ui/ui_progress_bar.dart';
 /// Artwork is shown whole (letterboxed on its own panel) rather than cropped to
 /// fill: a keep-or-trash call is made off the picture, so cutting the edges off
 /// a cover would be hiding the thing being judged.
-class CullCard extends StatelessWidget {
+///
+/// Every time a card shows a game it live-fetches that game's full RA detail
+/// and redraws with it, so box art and screenshots appear even for games never
+/// opened before.
+class CullCard extends StatefulWidget {
   final CullCardData card;
   final VoidCallback onSearch;
   // Lets the host deck advance past a ROM deleted from within the dialog.
   final VoidCallback? onDeleted;
 
+  /// Fetches and applies detail onto the rom; true when something changed.
+  /// Defaults to [refreshGameDetail] against the app library.
+  final Future<bool> Function(RomResult rom)? fetchDetail;
+
   const CullCard({
     super.key,
+    required this.card,
+    required this.onSearch,
+    this.onDeleted,
+    this.fetchDetail,
+  });
+
+  @override
+  State<CullCard> createState() => _CullCardState();
+}
+
+class _CullCardState extends State<CullCard> {
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  @override
+  void didUpdateWidget(CullCard old) {
+    super.didUpdateWidget(old);
+    if (old.card.rom != widget.card.rom) _fetch();
+  }
+
+  Future<void> _fetch() async {
+    final rom = widget.card.rom;
+    final fetch = widget.fetchDetail ??
+        (r) => refreshGameDetail(r, library: Library.instance);
+    if (await fetch(rom) && mounted && widget.card.rom == rom) {
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => _CullCardView(
+        card: widget.card,
+        onSearch: widget.onSearch,
+        onDeleted: widget.onDeleted,
+      );
+}
+
+class _CullCardView extends StatelessWidget {
+  final CullCardData card;
+  final VoidCallback onSearch;
+  final VoidCallback? onDeleted;
+
+  const _CullCardView({
     required this.card,
     required this.onSearch,
     this.onDeleted,
@@ -91,7 +148,7 @@ class CullCard extends StatelessWidget {
                     UiFocusZoom(
                       child: IconButton(
                         icon: const Icon(Icons.search),
-                        tooltip: 'Search Google',
+                        tooltip: CullStrings.searchGoogle,
                         onPressed: onSearch,
                       ),
                     ),
@@ -133,7 +190,7 @@ class CullCard extends StatelessWidget {
       UiFocusZoom(
         child: IconButton(
           icon: const Icon(Icons.info_outline),
-          tooltip: 'Game details',
+          tooltip: CullStrings.gameDetails,
           onPressed: () => showDialog(
             context: context,
             builder: (_) => GameDetailDialog(
@@ -276,10 +333,11 @@ class CullCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('ACHIEVEMENTS',
+          Text(CullStrings.achievementsLabel,
               style: ui.labelCaps.copyWith(color: ui.muted, fontSize: 10)),
           const SizedBox(height: 4),
-          Text('$earned/$total', style: ui.mono.copyWith(fontSize: 22)),
+          Text(CommonStrings.fraction(earned, total),
+              style: ui.mono.copyWith(fontSize: 22)),
           const SizedBox(height: 10),
           UiProgressBar(
               value: achievementFraction(earned, total),
@@ -330,9 +388,9 @@ class CullCard extends StatelessWidget {
         raOrScraped(rom.released, scraped?.releaseDate),
         raOrScraped(rom.publisher, scraped?.publisher) ??
             raOrScraped(rom.developer, scraped?.developer),
-        if ((rom.points ?? 0) > 0) '${rom.points} pts',
+        if ((rom.points ?? 0) > 0) CullStrings.points(rom.points!),
         if ((rom.numPlayersCasual ?? 0) > 0)
-          '${compactCount(rom.numPlayersCasual!)} players',
+          CullStrings.players(compactCount(rom.numPlayersCasual!)),
         rom.fileSizeLabel,
-      ].whereType<String>().join(' · ');
+      ].whereType<String>().join(CommonStrings.dotSep);
 }

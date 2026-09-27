@@ -12,6 +12,7 @@ import '../services/scan_settings.dart';
 import '../widgets/playlist_toolbar.dart';
 import '../widgets/rom_list_view.dart';
 import '../widgets/row_display.dart';
+import '../strings.dart';
 
 class PlaylistView extends StatefulWidget {
   final String playlistId;
@@ -96,7 +97,7 @@ class _PlaylistViewState extends State<PlaylistView> {
   Map<String, List<RomResult>> _bySystem() {
     final map = <String, List<RomResult>>{};
     for (final r in _visibleRoms) {
-      final name = ConsoleMap.nameFor(r.consoleId) ?? 'Unknown';
+      final name = ConsoleMap.nameFor(r.consoleId) ?? PlaylistStrings.unknownSystem;
       map.putIfAbsent(name, () => []).add(r);
     }
     return map;
@@ -151,7 +152,7 @@ class _PlaylistViewState extends State<PlaylistView> {
                 ),
                 Expanded(
                   child: _visibleRoms.isEmpty
-                      ? const Center(child: Text('No games match.'))
+                      ? const Center(child: Text(PlaylistStrings.noGamesMatch))
                       : RomListView(
                           rows: _grouped
                               ? const []

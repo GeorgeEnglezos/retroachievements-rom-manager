@@ -57,52 +57,52 @@ void main() {
       int earned = 0,
       int earnedHardcore = 0,
       Map<String, dynamic>? achievements,
-    }) =>
-        {
-          'Title': 'Cavern Runner',
-          'ConsoleName': 'PlayStation',
-          'ConsoleID': 12,
-          'NumAchievements': 2,
-          'NumDistinctPlayersCasual': 100,
-          'NumDistinctPlayersHardcore': 50,
-          'Points': 200,
-          'NumAwardedToUser': earned,
-          'NumAwardedToUserHardcore': earnedHardcore,
-          'Achievements': achievements ??
-              {
-                '10': {
-                  'ID': 10,
-                  'Title': 'First',
-                  'Description': 'Do first thing',
-                  'Points': 5,
-                  'BadgeName': '00010',
-                  'DisplayOrder': 2,
-                  'NumAwarded': 100,
-                  'DateEarned': '2026-05-01 10:00:00',
-                  'DateEarnedHardcore': null,
-                },
-                '20': {
-                  'ID': 20,
-                  'Title': 'Second',
-                  'Description': 'Do second thing',
-                  'Points': 10,
-                  'BadgeName': '00020',
-                  'DisplayOrder': 1,
-                  'NumAwarded': 50,
-                  'DateEarned': null,
-                  'DateEarnedHardcore': null,
-                },
-              },
-        };
+    }) => {
+      'Title': 'Cavern Runner',
+      'ConsoleName': 'PlayStation',
+      'ConsoleID': 12,
+      'NumAchievements': 2,
+      'NumDistinctPlayersCasual': 100,
+      'NumDistinctPlayersHardcore': 50,
+      'Points': 200,
+      'NumAwardedToUser': earned,
+      'NumAwardedToUserHardcore': earnedHardcore,
+      'Achievements':
+          achievements ??
+          {
+            '10': {
+              'ID': 10,
+              'Title': 'First',
+              'Description': 'Do first thing',
+              'Points': 5,
+              'BadgeName': '00010',
+              'DisplayOrder': 2,
+              'NumAwarded': 100,
+              'DateEarned': '2026-05-01 10:00:00',
+              'DateEarnedHardcore': null,
+            },
+            '20': {
+              'ID': 20,
+              'Title': 'Second',
+              'Description': 'Do second thing',
+              'Points': 10,
+              'BadgeName': '00020',
+              'DisplayOrder': 1,
+              'NumAwarded': 50,
+              'DateEarned': null,
+              'DateEarnedHardcore': null,
+            },
+          },
+    };
 
     /// A payload with no Achievements map at all.
     Map<String, dynamic> bare() => {
-          'Title': 'Racer',
-          'ConsoleName': 'Genesis',
-          'NumAchievements': 0,
-          'NumAwardedToUser': 0,
-          'NumAwardedToUserHardcore': 0,
-        };
+      'Title': 'Racer',
+      'ConsoleName': 'Genesis',
+      'NumAchievements': 0,
+      'NumAwardedToUser': 0,
+      'NumAwardedToUserHardcore': 0,
+    };
 
     test('parses GameInfo correctly', () {
       final (info, _) = parseHelper(response());
@@ -127,35 +127,49 @@ void main() {
     });
 
     test('lastPlayed is max DateEarned across achievements', () {
-      final (_, progress) = parseHelper(response(
-        earned: 2,
-        achievements: {
-          '1': {'DateEarned': '2026-05-01 10:00:00'},
-          '2': {'DateEarned': '2026-05-03 12:00:00'},
-        },
-      ));
+      final (_, progress) = parseHelper(
+        response(
+          earned: 2,
+          achievements: {
+            '1': {'DateEarned': '2026-05-01 10:00:00'},
+            '2': {'DateEarned': '2026-05-03 12:00:00'},
+          },
+        ),
+      );
       expect(progress.lastPlayed, DateTime.parse('2026-05-03 12:00:00'));
     });
 
     test('lastPlayed is null when no achievements earned', () {
-      final (_, progress) = parseHelper(response(
-        achievements: {
-          '1': {'DateEarned': null},
-          '2': {'DateEarned': null},
-        },
-      ));
+      final (_, progress) = parseHelper(
+        response(
+          achievements: {
+            '1': {'DateEarned': null},
+            '2': {'DateEarned': null},
+          },
+        ),
+      );
       expect(progress.lastPlayed, isNull);
     });
 
-    test('achievements are parsed, sorted by displayOrder, and flag earned', () {
-      final (_, progress) = parseHelper(response());
-      expect(progress.achievements, hasLength(2));
-      expect(progress.achievements.map((a) => a.id), [20, 10]); // displayOrder
-      expect(progress.achievements.firstWhere((a) => a.id == 10).isEarned,
-          isTrue);
-      expect(progress.achievements.firstWhere((a) => a.id == 20).isEarned,
-          isFalse);
-    });
+    test(
+      'achievements are parsed, sorted by displayOrder, and flag earned',
+      () {
+        final (_, progress) = parseHelper(response());
+        expect(progress.achievements, hasLength(2));
+        expect(progress.achievements.map((a) => a.id), [
+          20,
+          10,
+        ]); // displayOrder
+        expect(
+          progress.achievements.firstWhere((a) => a.id == 10).isEarned,
+          isTrue,
+        );
+        expect(
+          progress.achievements.firstWhere((a) => a.id == 20).isEarned,
+          isFalse,
+        );
+      },
+    );
 
     test('points is summed from achievement points', () {
       final (info, _) = parseHelper(response());
@@ -169,13 +183,15 @@ void main() {
     });
 
     test('captures per-achievement Type', () {
-      final (_, progress) = parseHelper(response(
-        achievements: {
-          '1': {'ID': 1, 'DisplayOrder': 1, 'Type': 'progression'},
-          '2': {'ID': 2, 'DisplayOrder': 2, 'Type': 'win_condition'},
-          '3': {'ID': 3, 'DisplayOrder': 3}, // standard: no Type
-        },
-      ));
+      final (_, progress) = parseHelper(
+        response(
+          achievements: {
+            '1': {'ID': 1, 'DisplayOrder': 1, 'Type': 'progression'},
+            '2': {'ID': 2, 'DisplayOrder': 2, 'Type': 'win_condition'},
+            '3': {'ID': 3, 'DisplayOrder': 3}, // standard: no Type
+          },
+        ),
+      );
       final byId = {for (final a in progress.achievements) a.id: a};
       expect(byId[1]!.type, 'progression');
       expect(byId[2]!.type, 'win_condition');
@@ -200,56 +216,63 @@ void main() {
     // a beaten game (all progression + a win condition earned), so it read as
     // unbeaten. The award must be recovered from the achievements instead.
     test('derives beaten-softcore when RA omits the award', () {
-      final (_, progress) = parseHelper(response(
-        achievements: {
-          '1': {
-            'ID': 1,
-            'Type': 'progression',
-            'DateEarned': '2026-05-01 10:00:00',
-            'DateEarnedHardcore': null, // softcore-only -> not hardcore beaten
+      final (_, progress) = parseHelper(
+        response(
+          achievements: {
+            '1': {
+              'ID': 1,
+              'Type': 'progression',
+              'DateEarned': '2026-05-01 10:00:00',
+              'DateEarnedHardcore':
+                  null, // softcore-only -> not hardcore beaten
+            },
+            '2': {
+              'ID': 2,
+              'Type': 'win_condition',
+              'DateEarned': '2026-05-02 10:00:00',
+              'DateEarnedHardcore': '2026-05-02 10:00:00',
+            },
           },
-          '2': {
-            'ID': 2,
-            'Type': 'win_condition',
-            'DateEarned': '2026-05-02 10:00:00',
-            'DateEarnedHardcore': '2026-05-02 10:00:00',
-          },
-        },
-      ));
+        ),
+      );
       expect(progress.highestAward, RaAward.beatenSoftcore);
     });
 
     test('derives beaten-hardcore when every requirement is hardcore', () {
-      final (_, progress) = parseHelper(response(
-        achievements: {
-          '1': {
-            'ID': 1,
-            'Type': 'progression',
-            'DateEarned': '2026-05-01 10:00:00',
-            'DateEarnedHardcore': '2026-05-01 10:00:00',
+      final (_, progress) = parseHelper(
+        response(
+          achievements: {
+            '1': {
+              'ID': 1,
+              'Type': 'progression',
+              'DateEarned': '2026-05-01 10:00:00',
+              'DateEarnedHardcore': '2026-05-01 10:00:00',
+            },
+            '2': {
+              'ID': 2,
+              'Type': 'win_condition',
+              'DateEarned': '2026-05-02 10:00:00',
+              'DateEarnedHardcore': '2026-05-02 10:00:00',
+            },
           },
-          '2': {
-            'ID': 2,
-            'Type': 'win_condition',
-            'DateEarned': '2026-05-02 10:00:00',
-            'DateEarnedHardcore': '2026-05-02 10:00:00',
-          },
-        },
-      ));
+        ),
+      );
       expect(progress.highestAward, RaAward.beatenHardcore);
     });
 
     test('does not derive beaten when a progression is unearned', () {
-      final (_, progress) = parseHelper(response(
-        achievements: {
-          '1': {'ID': 1, 'Type': 'progression', 'DateEarned': null},
-          '2': {
-            'ID': 2,
-            'Type': 'win_condition',
-            'DateEarned': '2026-05-02 10:00:00',
+      final (_, progress) = parseHelper(
+        response(
+          achievements: {
+            '1': {'ID': 1, 'Type': 'progression', 'DateEarned': null},
+            '2': {
+              'ID': 2,
+              'Type': 'win_condition',
+              'DateEarned': '2026-05-02 10:00:00',
+            },
           },
-        },
-      ));
+        ),
+      );
       expect(progress.highestAward, RaAward.none);
     });
 
@@ -285,22 +308,23 @@ void main() {
       int trueRatio = 33,
       String? dateEarned,
       String? dateEarnedHardcore,
-    }) =>
-        {
-          'ID': id,
-          'Title': title,
-          'Description': description,
-          'Points': points,
-          'BadgeName': badgeName,
-          'DisplayOrder': displayOrder,
-          'NumAwarded': numAwarded,
-          'TrueRatio': trueRatio,
-          'DateEarned': dateEarned,
-          'DateEarnedHardcore': dateEarnedHardcore,
-        };
+    }) => {
+      'ID': id,
+      'Title': title,
+      'Description': description,
+      'Points': points,
+      'BadgeName': badgeName,
+      'DisplayOrder': displayOrder,
+      'NumAwarded': numAwarded,
+      'TrueRatio': trueRatio,
+      'DateEarned': dateEarned,
+      'DateEarnedHardcore': dateEarnedHardcore,
+    };
 
     test('parses all fields', () {
-      final a = Achievement.fromJson(achJson(dateEarned: '2026-05-01 10:00:00'));
+      final a = Achievement.fromJson(
+        achJson(dateEarned: '2026-05-01 10:00:00'),
+      );
       expect(a.id, 1);
       expect(a.title, 'My Badge');
       expect(a.description, 'Do the thing');
@@ -314,14 +338,18 @@ void main() {
     });
 
     test('isEarned is true when dateEarned is set', () {
-      final earned = Achievement.fromJson(achJson(dateEarned: '2026-05-01 10:00:00'));
+      final earned = Achievement.fromJson(
+        achJson(dateEarned: '2026-05-01 10:00:00'),
+      );
       final unearned = Achievement.fromJson(achJson());
       expect(earned.isEarned, isTrue);
       expect(unearned.isEarned, isFalse);
     });
 
     test('round-trips through toJson', () {
-      final original = Achievement.fromJson(achJson(dateEarned: '2026-05-01 10:00:00'));
+      final original = Achievement.fromJson(
+        achJson(dateEarned: '2026-05-01 10:00:00'),
+      );
       final back = Achievement.fromJson(original.toJson());
       expect(back.id, original.id);
       expect(back.title, original.title);
@@ -338,8 +366,7 @@ void main() {
     });
 
     test('Type is captured, empty string normalised to null, round-trips', () {
-      final missable =
-          Achievement.fromJson(achJson()..['Type'] = 'missable');
+      final missable = Achievement.fromJson(achJson()..['Type'] = 'missable');
       expect(missable.type, 'missable');
       expect(Achievement.fromJson(missable.toJson()).type, 'missable');
       // RA sends "" for a standard achievement; treat it as no type.
@@ -350,24 +377,24 @@ void main() {
 
   group('parseGameList', () {
     List<dynamic> sample() => [
-          {
-            'ID': 1,
-            'Title': 'Racer',
-            'ConsoleID': 1,
-            'ImageIcon': '/Images/001.png',
-            'NumAchievements': 24,
-            'Points': 400,
-            'DateModified': '2026-01-02 03:04:05',
-            'Hashes': ['ABC123', 'def456'],
-          },
-          {
-            'ID': 2,
-            'Title': 'Ecco',
-            'ConsoleID': 1,
-            'NumAchievements': 0,
-            'Hashes': [],
-          },
-        ];
+      {
+        'ID': 1,
+        'Title': 'Racer',
+        'ConsoleID': 1,
+        'ImageIcon': '/Images/001.png',
+        'NumAchievements': 24,
+        'Points': 400,
+        'DateModified': '2026-01-02 03:04:05',
+        'Hashes': ['ABC123', 'def456'],
+      },
+      {
+        'ID': 2,
+        'Title': 'Ecco',
+        'ConsoleID': 1,
+        'NumAchievements': 0,
+        'Hashes': [],
+      },
+    ];
 
     test('parses id, title, points, achievement count', () {
       final entries = RaService.parseGameList(sample());
@@ -386,8 +413,7 @@ void main() {
 
     test('dateModified parsed; null when absent', () {
       final entries = RaService.parseGameList(sample());
-      expect(entries.first.dateModified,
-          DateTime.parse('2026-01-02 03:04:05'));
+      expect(entries.first.dateModified, DateTime.parse('2026-01-02 03:04:05'));
       expect(entries[1].dateModified, isNull);
     });
 
@@ -402,20 +428,20 @@ void main() {
 
   group('parseCompletionProgress hardcore + date', () {
     Map<String, dynamic> payload() => {
-          'Count': 1,
-          'Total': 1,
-          'Results': [
-            {
-              'GameID': 5,
-              'Title': 'Crash',
-              'ConsoleName': 'PS1',
-              'NumAwarded': 3,
-              'NumAwardedHardcore': 2,
-              'MaxPossible': 10,
-              'MostRecentAwardedDate': '2026-05-03 12:00:00',
-            }
-          ],
-        };
+      'Count': 1,
+      'Total': 1,
+      'Results': [
+        {
+          'GameID': 5,
+          'Title': 'Crash',
+          'ConsoleName': 'PS1',
+          'NumAwarded': 3,
+          'NumAwardedHardcore': 2,
+          'MaxPossible': 10,
+          'MostRecentAwardedDate': '2026-05-03 12:00:00',
+        },
+      ],
+    };
 
     test('captures hardcore count', () {
       final g = RaService.parseCompletionProgress(payload()).single;
@@ -452,18 +478,40 @@ void main() {
     });
   });
 
+  group('parseWantToPlayIds', () {
+    test('collects game ids from Results', () {
+      final ids = RaService.parseWantToPlayIds({
+        'Count': 2,
+        'Total': 2,
+        'Results': [
+          {'ID': 5, 'Title': 'Widget Quest'},
+          {'ID': 9, 'Title': 'Blorp Adventures'},
+        ],
+      });
+      expect(ids, {5, 9});
+    });
+
+    test('empty Results yields an empty set', () {
+      expect(RaService.parseWantToPlayIds({'Results': []}), isEmpty);
+    });
+
+    test('missing or non-list Results yields an empty set', () {
+      expect(RaService.parseWantToPlayIds({}), isEmpty);
+    });
+  });
+
   group('parseRecentAchievements', () {
     List<dynamic> sample() => [
-          {
-            'Title': 'First Blood',
-            'Description': 'Kill the first demon',
-            'GameTitle': 'Doom',
-            'BadgeName': '12345',
-            'Points': 10,
-            'HardcoreMode': 1,
-            'Date': '2026-05-03 12:00:00',
-          },
-        ];
+      {
+        'Title': 'First Blood',
+        'Description': 'Kill the first demon',
+        'GameTitle': 'Doom',
+        'BadgeName': '12345',
+        'Points': 10,
+        'HardcoreMode': 1,
+        'Date': '2026-05-03 12:00:00',
+      },
+    ];
 
     test('maps fields, hardcore flag, date and badge url', () {
       final u = RaService.parseRecentAchievements(sample()).single;
@@ -473,8 +521,7 @@ void main() {
       expect(u.points, 10);
       expect(u.hardcore, isTrue);
       expect(u.date, DateTime.parse('2026-05-03 12:00:00'));
-      expect(u.badgeUrl,
-          'https://media.retroachievements.org/Badge/12345.png');
+      expect(u.badgeUrl, 'https://media.retroachievements.org/Badge/12345.png');
     });
 
     test('softcore flag and missing date parse safely', () {
@@ -502,7 +549,6 @@ void main() {
       expect(raAwardFromKind('something-new'), RaAward.none);
     });
   });
-
 }
 
 (GameInfo, UserProgress) parseHelper(Map<String, dynamic> data) {

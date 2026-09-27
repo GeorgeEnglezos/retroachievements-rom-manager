@@ -6,8 +6,14 @@ import '../../theme/ui_tokens.dart';
 class UiBadge extends StatelessWidget {
   final String label;
   final Color color;
+  final IconData? icon;
 
-  const UiBadge({super.key, required this.label, required this.color});
+  const UiBadge({
+    super.key,
+    required this.label,
+    required this.color,
+    this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +25,16 @@ class UiBadge extends StatelessWidget {
         borderRadius: UiTokens.pill,
         border: Border.all(color: color, width: ui.borderWidth),
       ),
-      child: Text(label, style: ui.labelCaps.copyWith(color: color, fontSize: 9)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 10, color: color),
+            const SizedBox(width: 3),
+          ],
+          Text(label, style: ui.labelCaps.copyWith(color: color, fontSize: 9)),
+        ],
+      ),
     );
   }
 }

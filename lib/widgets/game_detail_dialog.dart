@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+
+import '../strings.dart';
 import '../models/folder_stats.dart' show compactCount;
 import '../models/rom_result.dart';
 import '../models/scraped_game.dart';
@@ -33,9 +35,9 @@ import 'rom_progress.dart';
 /// of reach. Pure and top-level so the set of RA type strings that count stays
 /// unit-testable.
 String? achievementTypeLabel(String? type) => switch (type) {
-      'win_condition' => 'Win condition',
-      'progression' => 'Progression',
-      'missable' => 'Missable',
+      'win_condition' => GameStrings.winCondition,
+      'progression' => GameStrings.progression,
+      'missable' => GameStrings.missable,
       _ => null,
     };
 
@@ -189,7 +191,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
         if (current()) {
           setState(() {
             _achievementsLoading = false;
-            _achievementsError = 'Add RA credentials in Settings to load achievements';
+            _achievementsError = GameStrings.noCredentials;
           });
         }
         return;
@@ -220,7 +222,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     } catch (_) {
       if (current()) {
         setState(() {
-          _achievementsError = "Couldn't load achievements";
+          _achievementsError = GameStrings.achievementsLoadFailed;
           _achievementsLoading = false;
         });
       }
@@ -259,7 +261,8 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     final deleted = await Library.instance.deleteRom(rom.filePath);
     if (!mounted) return;
     if (!deleted) {
-      messenger.showSnackBar(const SnackBar(content: Text("Couldn't delete file")));
+      messenger.showSnackBar(
+          const SnackBar(content: Text(GameActionStrings.deleteFailed)));
       return;
     }
     widget.onDeleted?.call();
@@ -305,23 +308,27 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
             children: [
               if (!gamingMode) ...[
                 _actionButton(
-                    'reveal', Icons.folder_open, 'Reveal in Explorer'),
-                _actionButton('copy', Icons.copy, 'Copy path'),
+                    'reveal', Icons.folder_open, GameActionStrings.reveal),
+                _actionButton('copy', Icons.copy, GameActionStrings.copyPath),
               ],
-              _actionButton('google', Icons.search, 'Search Google'),
+              _actionButton(
+                  'google', Icons.search, GameActionStrings.searchGoogle),
               if (canOpenRa)
-                _actionButton('ra', Icons.open_in_new, 'Open RA page'),
+                _actionButton(
+                    'ra', Icons.open_in_new, GameActionStrings.openRaPage),
               if (showFetch && !gamingMode)
                 _actionButton(
                   'fetch',
                   rom.status == RomStatus.supported
                       ? Icons.sync
                       : Icons.cloud_download_outlined,
-                  rom.status == RomStatus.supported ? 'Sync progress' : 'Fetch',
+                  rom.status == RomStatus.supported
+                      ? GameActionStrings.syncProgress
+                      : GameActionStrings.fetch,
                 ),
               if (showPlaylist)
-                _actionButton(
-                    'playlist', Icons.playlist_add, 'Add to playlist…'),
+                _actionButton('playlist', Icons.playlist_add,
+                    GameActionStrings.addToPlaylist),
             ],
           ),
         ),
@@ -370,7 +377,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
             RomActions(rom: _playTarget, store: widget.store ?? PlaylistStore())
                 .handle(context, 'play'),
         icon: const Icon(Icons.play_arrow, size: 18),
-        label: const Text('Play (beta)'),
+        label: const Text(GameActionStrings.play),
       ),
     );
   }
@@ -381,7 +388,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
         child: FilledButton.icon(
           onPressed: _toggleFavorite,
           icon: const Icon(Icons.favorite, size: 18),
-          label: const Text('Favorited'),
+          label: const Text(GameStrings.favorited),
           style: FilledButton.styleFrom(
             backgroundColor: kFavoriteColor,
             foregroundColor: Colors.white,
@@ -393,7 +400,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
       child: OutlinedButton.icon(
         onPressed: _toggleFavorite,
         icon: const Icon(Icons.favorite_border, size: 18),
-        label: const Text('Favorite'),
+        label: const Text(GameStrings.favorite),
         style: OutlinedButton.styleFrom(
           foregroundColor: kFavoriteColor,
           side: const BorderSide(color: kFavoriteColor),
@@ -407,7 +414,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
       child: FilledButton.icon(
         onPressed: () => _handle('delete'),
         icon: const Icon(Icons.delete_outline, size: 18),
-        label: const Text('Delete'),
+        label: const Text(GameActionStrings.delete),
         style: FilledButton.styleFrom(
           backgroundColor: kDangerColor,
           foregroundColor: Colors.white,
@@ -572,7 +579,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
                 children: [
                   Icon(Icons.help_outline, size: 14, color: context.ui.muted),
                   const SizedBox(width: 4),
-                  Text('Unverified name match',
+                  Text(GameStrings.unverifiedMatch,
                       style: Theme.of(context)
                           .textTheme
                           .bodySmall
@@ -723,7 +730,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
         ? switchPartLabels([for (final d in _discs) d.fileName])
         : [
             for (var i = 0; i < _discs.length; i++)
-              'Disc ${discNumber(_discs[i].fileName) ?? i + 1}',
+              (discNumber(_discs[i].fileName) ?? i + 1).toString(),
           ];
     return Padding(
       padding: const EdgeInsets.only(top: 12),
@@ -737,16 +744,19 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
               onChanged: _selectDisc,
               segments: [
                 for (var i = 0; i < _discs.length; i++)
-                  (value: i, label: labels[i], icon: null),
+                  (
+                    value: i,
+                    label: labels[i],
+                    icon: _switchTitle ? null : Icons.album,
+                  ),
               ],
             ),
           ),
           const SizedBox(height: 4),
           Text(
               _switchTitle && switchPart(rom.fileName) != SwitchPart.base
-                  ? 'File ${_selected + 1} of ${_discs.length} · installed '
-                      'content, the base game is what boots'
-                  : 'File ${_selected + 1} of ${_discs.length}',
+                  ? GameStrings.fileOfInstalled(_selected + 1, _discs.length)
+                  : GameStrings.fileOf(_selected + 1, _discs.length),
               style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
@@ -761,9 +771,11 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
       spacing: 16,
       runSpacing: 8,
       children: [
-        _stat(context, '${rom.achievementCount ?? 0}', 'Achievements'),
-        if ((rom.points ?? 0) > 0) _stat(context, '${rom.points}', 'Points'),
-        _stat(context, _fmt(rom.numPlayersCasual), 'Players'),
+        _stat(context, (rom.achievementCount ?? 0).toString(),
+            GameStrings.achievements),
+        if ((rom.points ?? 0) > 0)
+          _stat(context, '${rom.points}', GameStrings.points),
+        _stat(context, _fmt(rom.numPlayersCasual), GameStrings.players),
       ],
     );
   }
@@ -780,14 +792,20 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   Widget _buildMetaRows(BuildContext context) {
     final s = widget.scraped;
     final rows = <(String, String?)>[
-      ('Developer', raOrScraped(rom.developer, s?.developer)),
-      ('Publisher', raOrScraped(rom.publisher, s?.publisher)),
-      ('Genre', raOrScraped(rom.genre, s?.genre)),
-      ('Released', raOrScraped(rom.released, s?.releaseDate)),
-      ('Players', s?.players),
-      ('Rating', s?.rating),
-      ('Set released', rom.setCreated != null ? _fmtDate(rom.setCreated!) : null),
-      ('Set updated', rom.setUpdated != null ? _fmtDate(rom.setUpdated!) : null),
+      (GameStrings.developer, raOrScraped(rom.developer, s?.developer)),
+      (GameStrings.publisher, raOrScraped(rom.publisher, s?.publisher)),
+      (GameStrings.genre, raOrScraped(rom.genre, s?.genre)),
+      (GameStrings.released, raOrScraped(rom.released, s?.releaseDate)),
+      (GameStrings.players, s?.players),
+      (GameStrings.rating, s?.rating),
+      (
+        GameStrings.setReleased,
+        rom.setCreated != null ? GameStrings.shortDate(rom.setCreated!) : null
+      ),
+      (
+        GameStrings.setUpdated,
+        rom.setUpdated != null ? GameStrings.shortDate(rom.setUpdated!) : null
+      ),
     ];
     final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
           color: Theme.of(context).colorScheme.primary,
@@ -831,7 +849,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Your progress',
+          GameStrings.yourProgress,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 color: Theme.of(context).colorScheme.primary,
               ),
@@ -853,7 +871,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
           Padding(
             padding: const EdgeInsets.only(top: 2),
             child: Text(
-              'Last played: ${_fmtDate(rom.lastPlayed!)}',
+              GameStrings.lastPlayed(GameStrings.shortDate(rom.lastPlayed!)),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
@@ -887,7 +905,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     if (list == null || list.isEmpty) {
       if (!sidePanel) return const SizedBox.shrink();
       // The side panel is a card of its own, so it needs something to show.
-      return Text('No achievements in this set',
+      return Text(GameStrings.noAchievementsInSet,
           style: Theme.of(context)
               .textTheme
               .bodySmall
@@ -905,7 +923,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
           children: [
             Expanded(
               child: Text(
-                'Achievements',
+                GameStrings.achievements,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       color: Theme.of(context).colorScheme.primary,
                     ),
@@ -925,7 +943,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
           Padding(
             padding: const EdgeInsets.only(top: 2),
             child: Text(
-              'Effort to master: ~$effort RetroPoints still to earn',
+              GameStrings.masteryEffort(effort),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
@@ -955,43 +973,33 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   /// game, a progression step on the way there, or a missable one. Null for
   /// standard achievements. The win condition borrows the same accent as the
   /// "Beaten" badge shown elsewhere so the two read as one idea.
-  ({
-    String label,
-    String mark,
-    IconData? icon,
-    String? emoji,
-    Color color,
-    double ring
-  })? _typeMarker(Achievement a) {
+  ({String label, String mark, IconData icon, Color color, double ring})?
+      _typeMarker(Achievement a) {
     final label = achievementTypeLabel(a.type);
     if (label == null) return null;
     final ui = context.ui;
     // The win condition finishes the game: gold (the app's mastery/completion
-    // accent), a crown, and a thicker ring so it clearly outranks the
-    // progression steps, which get a lighter flag. No Material crown glyph
-    // exists, so the crown is an emoji (gold in both themes). Missable is a
-    // caution, not a rank, so it takes the danger red.
+    // accent), a trophy, and a thicker ring so it clearly outranks the
+    // progression steps, which get a lighter flag. Missable is a caution, not
+    // a rank, so it takes the danger red.
     return switch (a.type) {
       'win_condition' => (
           label: label,
-          mark: '★',
-          emoji: '👑',
-          icon: null,
+          mark: GameStrings.markStar,
+          icon: Icons.emoji_events,
           color: ui.warning,
           ring: 3,
         ),
       'missable' => (
           label: label,
-          mark: '⚠',
-          emoji: null,
+          mark: GameStrings.markWarning,
           icon: Icons.warning_amber_rounded,
           color: kDangerColor,
           ring: 2,
         ),
       _ => (
           label: label,
-          mark: '★',
-          emoji: null,
+          mark: GameStrings.markStar,
           icon: Icons.flag_outlined,
           color: ui.accent,
           ring: 2,
@@ -1057,7 +1065,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
               ),
             ),
             const SizedBox(width: 8),
-            Text('${achievement.points} pts',
+            Text(GameStrings.pointsShort(achievement.points),
                 style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
@@ -1097,9 +1105,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
                 shape: BoxShape.circle,
                 border: Border.all(color: marker.color, width: 1),
               ),
-              child: marker.emoji != null
-                  ? Text(marker.emoji!, style: const TextStyle(fontSize: 11))
-                  : Icon(marker.icon, size: 12, color: marker.color),
+              child: Icon(marker.icon, size: 12, color: marker.color),
             ),
           ),
         ],
@@ -1113,20 +1119,18 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
     final buf = StringBuffer();
     buf.writeln(a.title);
     if (a.description.isNotEmpty) buf.writeln(a.description);
-    if (_typeMarker(a) case final m?) buf.writeln('${m.mark} ${m.label}');
-    buf.write('${a.points} pts');
-    if (a.isEarned) buf.write(' · Earned ${_fmtDate(a.dateEarned!)}');
-    buf.write('\n${_fmt(a.numAwarded)} players earned this');
+    if (_typeMarker(a) case final m?) {
+      buf.writeln(GameStrings.typeMarker(m.mark, m.label));
+    }
+    buf.write(GameStrings.pointsShort(a.points));
+    if (a.isEarned) {
+      buf.write(GameStrings.earnedOn(GameStrings.shortDate(a.dateEarned!)));
+    }
+    buf.writeln();
+    buf.write(GameStrings.playersEarned(_fmt(a.numAwarded)));
     return buf.toString();
   }
 
-  String _fmtDate(DateTime dt) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${months[dt.month - 1]} ${dt.day} ${dt.year}';
-  }
 
   String _fmt(int? n) => n == null ? '0' : compactCount(n);
 }

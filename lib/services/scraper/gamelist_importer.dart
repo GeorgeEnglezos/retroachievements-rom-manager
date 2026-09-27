@@ -6,6 +6,7 @@ import '../console_map.dart';
 import 'dat_parser.dart';
 import 'gamelist_parser.dart';
 import 'rom_path_key.dart';
+import '../../strings.dart';
 
 /// Outcome of an import: matched games plus counts for the summary UI.
 class ImportResult {
@@ -88,7 +89,7 @@ ImportResult importFrom(
 
   for (final gl in sources) {
     final system =
-        ConsoleMap.nameFor(ConsoleMap.idForFolder(gl.parent.path)) ?? 'Unknown';
+        ConsoleMap.nameFor(ConsoleMap.idForFolder(gl.parent.path)) ?? RomStatusStrings.unknownSystem;
     final List<ScrapedGame> games;
     try {
       games = parseScrapeSource(gl);

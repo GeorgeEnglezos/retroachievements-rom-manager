@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 import '../services/playlist_store.dart';
 import 'ui/ui_focusable.dart';
+import '../strings.dart';
+
+/// Played and Want to Play are fully re-derived on every library refresh (see
+/// HomeScreen._refreshPlaylists), so a manual add/remove here would just be
+/// silently overwritten on the next fetch. Disabled rather than hidden, so the
+/// picker still shows a game's membership in them.
+bool _isAutoManaged(String playlistId) =>
+    playlistId == playedId || playlistId == wantToPlayId;
 
 /// Asks for a new playlist name; null on cancel or empty input.
 Future<String?> _promptPlaylistName(BuildContext context) async {
@@ -9,23 +17,26 @@ Future<String?> _promptPlaylistName(BuildContext context) async {
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('New playlist'),
+        title: const Text(PlaylistStrings.newPlaylistTitle),
         content: UiFocusZoom(
           child: TextField(
             controller: controller,
             autofocus: true,
-            decoration: const InputDecoration(hintText: 'Playlist name'),
+            decoration: const InputDecoration(hintText: PlaylistStrings.playlistNameHint),
           ),
         ),
         actions: [
           UiFocusZoom(
             child: TextButton(
-                onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(PlaylistStrings.cancel),
+            ),
           ),
           UiFocusZoom(
             child: TextButton(
-                onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-                child: const Text('Create')),
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text(PlaylistStrings.create),
+            ),
           ),
         ],
       ),
@@ -42,10 +53,17 @@ class PlaylistPicker extends StatefulWidget {
   final PlaylistStore store;
   final String memberKey;
 
-  const PlaylistPicker({super.key, required this.store, required this.memberKey});
+  const PlaylistPicker({
+    super.key,
+    required this.store,
+    required this.memberKey,
+  });
 
   static Future<void> show(
-      BuildContext context, PlaylistStore store, String memberKey) {
+    BuildContext context,
+    PlaylistStore store,
+    String memberKey,
+  ) {
     return showDialog<void>(
       context: context,
       builder: (_) => PlaylistPicker(store: store, memberKey: memberKey),
@@ -53,7 +71,10 @@ class PlaylistPicker extends StatefulWidget {
   }
 
   static Future<void> showBulk(
-      BuildContext context, PlaylistStore store, List<String> memberKeys) {
+    BuildContext context,
+    PlaylistStore store,
+    List<String> memberKeys,
+  ) {
     return showDialog<void>(
       context: context,
       builder: (_) => _BulkPlaylistPicker(store: store, memberKeys: memberKeys),
@@ -104,7 +125,7 @@ class _PlaylistPickerState extends State<PlaylistPicker> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Add to playlist'),
+      title: const Text(PlaylistStrings.addToPlaylistTitle),
       content: SizedBox(
         width: 320,
         child: Column(
@@ -114,15 +135,20 @@ class _PlaylistPickerState extends State<PlaylistPicker> {
               UiFocusZoom(
                 child: CheckboxListTile(
                   title: Text(pl.name),
+                  subtitle: _isAutoManaged(pl.id)
+                      ? const Text(PlaylistStrings.autoManaged)
+                      : null,
                   value: _member.contains(pl.id),
-                  onChanged: (v) => _toggle(pl, v ?? false),
+                  onChanged: _isAutoManaged(pl.id)
+                      ? null
+                      : (v) => _toggle(pl, v ?? false),
                 ),
               ),
             const Divider(),
             UiFocusZoom(
               child: ListTile(
                 leading: const Icon(Icons.add),
-                title: const Text('New playlist…'),
+                title: const Text(PlaylistStrings.newPlaylistEllipsis),
                 onTap: _createNew,
               ),
             ),
@@ -132,8 +158,9 @@ class _PlaylistPickerState extends State<PlaylistPicker> {
       actions: [
         UiFocusZoom(
           child: TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Done')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text(PlaylistStrings.done),
+          ),
         ),
       ],
     );
@@ -184,7 +211,7 @@ class _BulkPlaylistPickerState extends State<_BulkPlaylistPicker> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Add ${widget.memberKeys.length} ROM${widget.memberKeys.length == 1 ? '' : 's'} to playlist'),
+      title: Text(PlaylistStrings.addRomsToPlaylist(widget.memberKeys.length)),
       content: SizedBox(
         width: 320,
         child: Column(
@@ -193,21 +220,27 @@ class _BulkPlaylistPickerState extends State<_BulkPlaylistPicker> {
             if (_playlists.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text('No playlists yet.'),
+                child: Text(PlaylistStrings.noPlaylistsYet),
               ),
             for (final pl in _playlists)
               UiFocusZoom(
                 child: ListTile(
                   title: Text(pl.name),
+                  subtitle: _isAutoManaged(pl.id)
+                      ? const Text(PlaylistStrings.autoManaged)
+                      : null,
                   trailing: const Icon(Icons.playlist_add),
-                  onTap: () => _addToPlaylist(pl),
+                  enabled: !_isAutoManaged(pl.id),
+                  onTap: _isAutoManaged(pl.id)
+                      ? null
+                      : () => _addToPlaylist(pl),
                 ),
               ),
             const Divider(),
             UiFocusZoom(
               child: ListTile(
                 leading: const Icon(Icons.add),
-                title: const Text('New playlist…'),
+                title: const Text(PlaylistStrings.newPlaylistEllipsis),
                 onTap: _createNew,
               ),
             ),
@@ -218,7 +251,7 @@ class _BulkPlaylistPickerState extends State<_BulkPlaylistPicker> {
         UiFocusZoom(
           child: TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text(PlaylistStrings.cancel),
           ),
         ),
       ],

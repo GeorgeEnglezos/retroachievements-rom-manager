@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../strings.dart';
 import '../models/folder_stats.dart' show achievementFraction, kNearMasteryRatio;
 import '../models/rom_result.dart';
 import '../services/ra_service.dart' show RaAward;
@@ -49,16 +51,15 @@ class RomProgress extends StatelessWidget {
       // RA "completed" is all-achievements softcore, distinct from a hardcore
       // mastery; don't call it mastered.
       return rom.highestAward == RaAward.completed
-          ? "You've completed this set (softcore) ✓"
-          : "You've mastered this set ★";
+          ? GameStrings.completedSet
+          : GameStrings.masteredSet;
     }
     if (earned == 0) return null;
     final remaining = total - earned;
-    final plural = remaining == 1 ? '' : 's';
     if (achievementFraction(earned, total) >= kNearMasteryRatio) {
-      return '🏆 Close to mastery: $remaining achievement$plural to go';
+      return GameStrings.closeToMastery(remaining);
     }
-    return '$remaining achievement$plural to go';
+    return GameStrings.achievementsToGo(remaining);
   }
 
   @override
@@ -75,23 +76,23 @@ class RomProgress extends StatelessWidget {
     final Color color;
     switch (rom.highestAward ?? RaAward.none) {
       case RaAward.mastered:
-        label = 'Mastered ★';
+        label = GameStrings.mastered;
         color = ui.warning;
       case RaAward.completed:
-        label = 'Completed ✓';
+        label = GameStrings.completed;
         color = ui.warning;
       case RaAward.beatenHardcore || RaAward.beatenSoftcore:
-        label = 'Beaten';
+        label = GameStrings.beaten;
         color = ui.accentGames;
       case RaAward.none:
         if (total > 0 && earned >= total) {
-          label = 'Mastered ★';
+          label = GameStrings.mastered;
           color = ui.warning;
         } else if (earned == 0) {
-          label = 'Not started';
+          label = GameStrings.notStarted;
           color = ui.muted;
         } else {
-          label = '$earned / $total';
+          label = GameStrings.progressCount(earned, total);
           color = ui.supported;
         }
     }

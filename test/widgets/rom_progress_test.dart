@@ -82,15 +82,15 @@ void main() {
       expect(
         await _labelColor(
             tester, _rom(earned: 40, total: 40, award: RaAward.completed),
-            'Completed ✓'),
+            'Completed'),
         UiTokens.light.warning,
       );
-      expect(find.text('Mastered ★'), findsNothing);
+      expect(find.text('Mastered'), findsNothing);
 
       await _labelColor(
           tester, _rom(earned: 40, total: 40, award: RaAward.mastered),
-          'Mastered ★');
-      expect(find.text('Completed ✓'), findsNothing);
+          'Mastered');
+      expect(find.text('Completed'), findsNothing);
     });
 
     testWidgets('beaten uses the games-highlight token', (tester) async {

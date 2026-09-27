@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/android_emulators.dart';
+import '../strings.dart';
 import 'ui/ui_focusable.dart';
 
 /// Android app picker: lists installed launchable apps (known emulators first)
@@ -37,14 +38,14 @@ class _AppPickerDialogState extends State<_AppPickerDialog> {
   Widget build(BuildContext context) {
     final apps = _apps;
     return AlertDialog(
-      title: const Text('Pick an emulator app'),
+      title: const Text(SettingsStrings.appPickerTitle),
       content: SizedBox(
         width: double.maxFinite,
         child: apps == null
             ? const SizedBox(
                 height: 80, child: Center(child: CircularProgressIndicator()))
             : apps.isEmpty
-                ? const Text('No apps found.')
+                ? const Text(SettingsStrings.noApps)
                 : ListView.builder(
                     shrinkWrap: true,
                     itemCount: apps.length,
@@ -69,7 +70,7 @@ class _AppPickerDialogState extends State<_AppPickerDialog> {
         UiFocusZoom(
           child: TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text(SettingsStrings.cancel),
           ),
         ),
       ],

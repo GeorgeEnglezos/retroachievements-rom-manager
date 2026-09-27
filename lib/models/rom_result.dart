@@ -1,6 +1,7 @@
 import '../services/ra_service.dart' show RaAward;
 import 'folder_stats.dart' show formatBytes;
 import 'game_metadata.dart';
+import '../strings.dart';
 
 enum RomStatus {
   notFetched,
@@ -25,14 +26,14 @@ enum RomStatus {
 /// need no note and the row tile overrides [RomStatus.unsupportedFormat] with
 /// its longer, format-specific hint.
 String statusLabel(RomStatus s) => switch (s) {
-      RomStatus.notFetched => 'Not fetched',
-      RomStatus.checking => 'Checking...',
-      RomStatus.supported => 'Supported',
-      RomStatus.unsupported => 'No achievements',
-      RomStatus.unsupportedFormat => 'Bad format',
-      RomStatus.error => 'Error',
-      RomStatus.localOnly => 'Not on RetroAchievements',
-      RomStatus.metadataOnly => 'No achievements',
+      RomStatus.notFetched => RomStatusStrings.notFetched,
+      RomStatus.checking => RomStatusStrings.checking,
+      RomStatus.supported => RomStatusStrings.supported,
+      RomStatus.unsupported => RomStatusStrings.noAchievements,
+      RomStatus.unsupportedFormat => RomStatusStrings.badFormat,
+      RomStatus.error => RomStatusStrings.error,
+      RomStatus.localOnly => RomStatusStrings.notOnRa,
+      RomStatus.metadataOnly => RomStatusStrings.noAchievements,
     };
 
 // RA returns a placeholder title like "GAME #1100002368" for matched games that

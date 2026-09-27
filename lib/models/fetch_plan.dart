@@ -12,6 +12,7 @@ class FetchPlan {
   final bool match; // hash ROMs + identify game on RA
   final bool matchReFetchAll; // false = only unfetched ROMs
   final bool progress; // sync achievement progress for matched games
+  final bool pruneMissing; // delete scan data for folders no longer on disk
 
   const FetchPlan({
     required this.scope,
@@ -20,5 +21,6 @@ class FetchPlan {
     this.match = false,
     this.matchReFetchAll = false,
     this.progress = false,
+    this.pruneMissing = false,
   });
 }

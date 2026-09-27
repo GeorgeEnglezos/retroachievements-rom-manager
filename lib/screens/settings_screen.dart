@@ -1,4 +1,3 @@
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -6,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/ui_tokens.dart';
 import '../services/app_mode.dart';
 import '../services/play_view.dart';
-import '../services/app_theme.dart';
 import '../services/backup_service.dart';
 import '../services/credentials.dart';
 import '../services/data_wipe.dart';
@@ -15,10 +13,12 @@ import '../services/library.dart';
 import '../services/log_service.dart';
 import '../services/pref_keys.dart';
 import '../services/library_folder.dart';
-import '../services/scraper/gamelist_importer.dart';
-import '../services/scraper/scraped_store.dart';
+import '../strings.dart';
 import '../widgets/clear_data_dialog.dart';
+import '../widgets/app_mode_toggle.dart';
 import '../widgets/pick_library_folder.dart';
+import '../widgets/restore_backup.dart';
+import '../widgets/theme_picker.dart';
 import '../services/scan_settings.dart';
 import '../services/settings_bus.dart';
 import '../services/rom_tap.dart';
@@ -64,7 +64,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final info = await PackageInfo.fromPlatform();
       if (mounted) {
-        setState(() => _version = 'v${info.version}+${info.buildNumber}');
+        setState(() => _version = SettingsStrings.version(info.version, info.buildNumber));
       }
     } catch (_) {
       // No platform plugin under tests, leave the label blank.
@@ -113,172 +113,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  /// Yes/no dialog for an action that destroys data, shared by every
-  /// destructive button in the Data section.
-  Future<bool> _confirm({
-    required String title,
-    required String message,
-    required String confirmLabel,
-  }) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          UiFocusZoom(
-            child: TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel')),
-          ),
-          UiFocusZoom(
-            child: TextButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: Text(confirmLabel)),
-          ),
-        ],
-      ),
-    );
-    return ok == true;
-  }
-
   Future<void> _clearData() async {
     final targets = await showClearDataDialog(context);
     if (targets == null || targets.isEmpty || !mounted) return;
     try {
       await DataWipe(library: widget.library).clear(targets);
-      _toast('Deleted ${targets.length} of '
-          '${ClearTarget.values.length} kinds of data.');
+      _toast(
+        SettingsStrings.dataDeleted(
+          targets.length,
+          ClearTarget.values.length,
+        ),
+      );
     } catch (e) {
       LogService.error('Settings/clearData', 'wipe failed', err: e);
-      _toast('Could not delete everything, see the log for details.');
+      _toast(SettingsStrings.deleteDataFailed);
     }
-  }
-
-  Future<void> _pruneMissing() async {
-    final library = widget.library ?? Library.instance;
-    final missing = await library.missingSystemNames();
-    if (!mounted) return;
-    if (missing.isEmpty) {
-      _toast('No missing systems to remove.');
-      return;
-    }
-    // Naming them matters: an unplugged drive looks exactly like a deleted
-    // folder from here, and this delete can't be undone.
-    if (!await _confirm(
-      title: 'Remove ${missing.length} missing '
-          'system${missing.length == 1 ? '' : 's'}?',
-      message: 'These folders are not on disk right now:\n\n'
-          '${missing.join('\n')}\n\n'
-          'Their scan results will be deleted. If one of these is on a drive '
-          'that is currently unplugged, cancel and plug it back in first.',
-      confirmLabel: 'Remove',
-    )) {
-      return;
-    }
-    final removed = await library.pruneMissingSystems();
-    _toast('Removed $removed missing system${removed == 1 ? '' : 's'}.');
   }
 
   Future<void> _backup() async {
     try {
       final path = await FilePicker.platform.saveFile(
-        dialogTitle: 'Back up library',
-        fileName:
-            'rarm-backup-${DateTime.now().toIso8601String().split('T').first}.zip',
+        dialogTitle: SettingsStrings.backupDialogTitle,
+        fileName: SettingsStrings.backupFileName(DateTime.now()),
       );
       if (path == null) return; // cancelled
-      _toast('Backing up, this can take a while on a large library.');
+      _toast(SettingsStrings.backupStarted);
       await const BackupService().create(path);
-      _toast('Backup saved to $path');
+      _toast(SettingsStrings.backupSaved(path));
     } catch (e) {
       LogService.error('Settings/backup', 'backup failed', err: e);
-      _toast('Backup failed, see the log for details.');
+      _toast(SettingsStrings.backupFailed);
     }
-  }
-
-  Future<void> _restore() async {
-    if (!await _confirm(
-      title: 'Restore from backup?',
-      message: 'This replaces everything you have now: scan results, imported '
-          'metadata, cached artwork and settings. Your RetroAchievements API '
-          'key is not in a backup, so the one you have now is kept. Restart '
-          'the app afterwards.',
-      confirmLabel: 'Restore',
-    )) {
-      return;
-    }
-    try {
-      final res = await FilePicker.platform.pickFiles(
-        dialogTitle: 'Choose a backup zip',
-        type: FileType.custom,
-        allowedExtensions: ['zip'],
-      );
-      final path = res?.files.single.path;
-      if (path == null) return; // cancelled
-      await const BackupService().restore(path);
-      if (!mounted) return;
-      // Every in-memory store still holds the pre-restore data, and the next
-      // save would write it back over the files just restored. Block the UI
-      // until the app is restarted rather than trust a dismissable toast.
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => const AlertDialog(
-          title: Text('Restored'),
-          content: Text('Close and reopen the app to load the backup. Using '
-              'it before then can overwrite what was just restored.'),
-        ),
-      );
-    } on FormatException {
-      _toast('That zip is not a RARM backup.');
-    } catch (e) {
-      LogService.error('Settings/restore', 'restore failed', err: e);
-      _toast('Restore failed, see the log for details.');
-    }
-  }
-
-  // Imports Skraper / gamelist.xml data from a chosen folder, matched to
-  // already-scanned ROMs. Fills RA metadata gaps and adds local images.
-  Future<void> _importScrapedData() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final path = await FilePicker.platform.getDirectoryPath();
-    if (path == null) return;
-
-    // Scanned ROM absolute paths from the library, to match gamelist entries.
-    final scanned = await (widget.library ?? Library.instance).allRomPaths();
-    if (!mounted) return;
-    ImportResult result;
-    try {
-      // Detection + parse run off the UI isolate.
-      result = await importFromDirectory(path, scanned);
-    } catch (e) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-          const SnackBar(content: Text("Couldn't import scraped data")));
-      return;
-    }
-    if (result.matched.isEmpty && result.unmatched == 0) {
-      messenger.showSnackBar(SnackBar(
-          content: Text(result.errors == 0
-              ? 'No gamelist.xml or .dat found in that folder'
-              : 'Found ${result.errors} scrape file(s), but none could be '
-                  'read')));
-      return;
-    }
-    await ScrapedStore.instance.putAll(result.matched);
-    if (!mounted) return;
-    messenger.showSnackBar(SnackBar(
-        content: Text('Imported ${result.matched.length} games across '
-            '${result.systemCount} systems, ${result.unmatched} unmatched'
-            '${result.errors == 0 ? '' : ', ${result.errors} unreadable'}')));
   }
 
   void _toast(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _resetExtensions() {
@@ -299,8 +171,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 6),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
-          child: Text(description,
-              style: TextStyle(fontSize: 13, height: 1.45, color: ui.muted)),
+          child: Text(
+            description,
+            style: TextStyle(fontSize: 13, height: 1.45, color: ui.muted),
+          ),
         ),
         const SizedBox(height: 16),
       ],
@@ -311,13 +185,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _heading('Account',
-            'Web API key from retroachievements.org → Settings → Keys.'),
+        _heading(
+          SettingsStrings.accountTitle,
+          SettingsStrings.accountHelp,
+        ),
         UiFocusZoom(
           child: TextField(
             controller: _usernameCtrl,
             decoration: const InputDecoration(
-              labelText: 'Username',
+              labelText: SettingsStrings.usernameLabel,
               isDense: true,
             ),
             onChanged: (v) => _setStringPref(PrefKeys.raUsername, v.trim()),
@@ -330,13 +206,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             controller: _apiKeyCtrl,
             focusNode: _apiKeyFocus,
             decoration: const InputDecoration(
-              labelText: 'Web API key',
+              labelText: SettingsStrings.apiKeyLabel,
               isDense: true,
             ),
             obscureText: true,
-            onEditingComplete: () =>
-                saveApiKey(_apiKeyCtrl.text.trim())
-                    .then((_) => publishSettingsChange()),
+            onEditingComplete: () => saveApiKey(
+              _apiKeyCtrl.text.trim(),
+            ).then((_) => publishSettingsChange()),
           ),
         ),
       ],
@@ -347,15 +223,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _heading('Scan filters',
-            'Comma-separated. Unlisted extensions are skipped; ignored folders '
-            'are hidden and never scanned.'),
+        _heading(
+          SettingsStrings.scanFiltersTitle,
+          SettingsStrings.scanFiltersHelp,
+        ),
         UiFocusZoom(
           child: TextField(
             controller: _extensionsCtrl,
             decoration: const InputDecoration(
-              labelText: 'Extensions',
-              hintText: 'chd, nds, gb, gba, ...',
+              labelText: SettingsStrings.extensionsLabel,
+              hintText: SettingsStrings.extensionsHint,
               isDense: true,
             ),
             minLines: 1,
@@ -366,12 +243,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Align(
           alignment: Alignment.centerRight,
           child: Tooltip(
-            message: 'Replaces the list above with the extensions the app '
-                'ships with, discarding your edits.',
+            message: SettingsStrings.resetExtensionsTooltip,
             child: UiFocusZoom(
               child: TextButton(
                 onPressed: _resetExtensions,
-                child: const Text('Reset to defaults'),
+                child: const Text(SettingsStrings.resetExtensionsButton),
               ),
             ),
           ),
@@ -380,8 +256,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: TextField(
             controller: _ignoredCtrl,
             decoration: const InputDecoration(
-              labelText: 'Ignored folders',
-              hintText: 'BIOS, Saves, Cheats',
+              labelText: SettingsStrings.ignoredFoldersLabel,
+              hintText: SettingsStrings.ignoredFoldersHint,
               isDense: true,
             ),
             minLines: 1,
@@ -394,10 +270,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: TextField(
             controller: _excludedCtrl,
             decoration: const InputDecoration(
-              labelText: 'Excluded files',
-              hintText: r'C:\roms\snes\bad-dump.sfc',
-              helperText: 'Full paths, one per line. Excluded files are hidden and '
-                  'skipped, but not deleted.',
+              labelText: SettingsStrings.excludedFilesLabel,
+              hintText: SettingsStrings.excludedFilesHint,
+              helperText: SettingsStrings.excludedFilesHelp,
               helperMaxLines: 2,
               isDense: true,
             ),
@@ -414,19 +289,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _heading('Display',
-            'Show the full system name ("Super Nintendo") or the original '
-            'folder name ("SNES") on cards and titles.'),
+        _heading(
+          SettingsStrings.displayTitle,
+          SettingsStrings.displayHelp,
+        ),
         ValueListenableBuilder<NameMode>(
           valueListenable: nameModeListenable,
           builder: (context, mode, _) => UiFocusZoom(
             child: SwitchListTile(
               contentPadding: EdgeInsets.zero,
               dense: true,
-              title: const Text('Show full system names'),
+              title: const Text(SettingsStrings.fullSystemNamesSwitch),
               value: mode == NameMode.systemName,
               onChanged: (on) => nameModeListenable.save(
-                  on ? NameMode.systemName : NameMode.folderName),
+                on ? NameMode.systemName : NameMode.folderName,
+              ),
             ),
           ),
         ),
@@ -436,20 +313,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: SwitchListTile(
               contentPadding: EdgeInsets.zero,
               dense: true,
-              title: const Text('Combine systems'),
-              subtitle: const Text(
-                  'Merge folders that map to the same console into one card '
-                  'on Home.'),
+              title: const Text(SettingsStrings.combineSystemsSwitch),
+              subtitle: const Text(SettingsStrings.combineSystemsHelp),
               value: on,
               onChanged: saveCombineSystems,
             ),
           ),
         ),
         const SizedBox(height: 12),
-        Text('UI scale', style: Theme.of(context).textTheme.labelLarge),
+        Text(SettingsStrings.uiScaleTitle, style: Theme.of(context).textTheme.labelLarge),
         const SizedBox(height: 2),
-        Text('Zoom the whole app in or out. Applies immediately.',
-            style: Theme.of(context).textTheme.bodySmall),
+        Text(
+          SettingsStrings.uiScaleHelp,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
         const SizedBox(height: 8),
         const UiScaleControl(),
       ],
@@ -460,22 +337,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _heading('Mode',
-            'Play hides the maintenance tabs, scans, multi-select and every '
-            'delete button, so the app is safe to hand over. A controller '
-            'drives either mode.'),
+        _heading(SettingsStrings.modeTitle, AppearanceStrings.modeHelp),
         ValueListenableBuilder<AppMode>(
           valueListenable: appModeListenable,
-          builder: (context, mode, _) => UiFocusZoom(
-            child: SegmentedButton<AppMode>(
-              segments: const [
-                ButtonSegment(value: AppMode.cleaning, label: Text('Cleaning')),
-                ButtonSegment(value: AppMode.gaming, label: Text('Play')),
+          builder: (context, mode, _) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const AppModeToggle(),
+              if (mode == AppMode.gaming) ...[
+                const SizedBox(height: 24),
+                _kioskListings(),
               ],
-              selected: {mode},
-              showSelectedIcon: false,
-              onSelectionChanged: (s) => appModeListenable.save(s.first),
-            ),
+            ],
           ),
         ),
       ],
@@ -486,17 +359,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _heading('Clicking a game',
-            'What a plain click on a game does. Ctrl/shift-click still '
-            'multi-selects, and Play stays on the right-click menu either way.'),
+        _heading(
+          SettingsStrings.romTapTitle,
+          SettingsStrings.romTapHelp,
+        ),
         ValueListenableBuilder<RomTapAction>(
           valueListenable: romTapListenable,
           builder: (context, action, _) => UiFocusZoom(
             child: SegmentedButton<RomTapAction>(
               segments: const [
                 ButtonSegment(
-                    value: RomTapAction.detail, label: Text('Open details')),
-                ButtonSegment(value: RomTapAction.play, label: Text('Play')),
+                  value: RomTapAction.detail,
+                  label: Text(SettingsStrings.romTapDetail),
+                ),
+                ButtonSegment(value: RomTapAction.play, label: Text(SettingsStrings.romTapPlay)),
               ],
               selected: {action},
               showSelectedIcon: false,
@@ -527,39 +403,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _playViewSection() {
+  Widget _kioskListings() {
     return ValueListenableBuilder<PlayView>(
       valueListenable: playViewListenable,
       builder: (context, v, _) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _heading('Play listings',
-              'What ROM lists show while Play is on. Cleaning always shows '
-              'everything.'),
-          _playSwitch('RetroAchievements names', v.raTitle,
-              (on) => v.copyWith(raTitle: on),
-              subtitle: 'Off names games by their file name instead.'),
+          _heading(
+            SettingsStrings.kioskListingsTitle,
+            SettingsStrings.kioskListingsHelp,
+          ),
           _playSwitch(
-              'File name line', v.fileName, (on) => v.copyWith(fileName: on)),
+            SettingsStrings.achievementCountSwitch,
+            v.achievementCount,
+            (on) => v.copyWith(achievementCount: on),
+            subtitle: SettingsStrings.achievementCountHelp,
+          ),
+          _playSwitch(SettingsStrings.hotBadgeSwitch, v.hot, (on) => v.copyWith(hot: on)),
           _playSwitch(
-              'File size', v.fileSize, (on) => v.copyWith(fileSize: on)),
-          _playSwitch('Achievement count badge', v.achievementCount,
-              (on) => v.copyWith(achievementCount: on)),
-          _playSwitch('Hot badge', v.hot, (on) => v.copyWith(hot: on)),
-          _playSwitch('No-achievements badge', v.noAchievements,
-              (on) => v.copyWith(noAchievements: on)),
+            SettingsStrings.noAchievementsBadgeSwitch,
+            v.noAchievements,
+            (on) => v.copyWith(noAchievements: on),
+          ),
           _playSwitch(
-              'File name tags', v.fileTags, (on) => v.copyWith(fileTags: on),
-              subtitle: 'Region, HACK, ENG and friends, read off the file name.'),
+            SettingsStrings.fileTagsSwitch,
+            v.fileTags,
+            (on) => v.copyWith(fileTags: on),
+            subtitle: SettingsStrings.fileTagsHelp,
+          ),
           const SizedBox(height: 8),
-          Text('Layout', style: Theme.of(context).textTheme.labelLarge),
+          Text(SettingsStrings.layoutLabel, style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 4),
           UiFocusZoom(
             child: SegmentedButton<PlayLayout>(
               segments: const [
-                ButtonSegment(value: PlayLayout.follow, label: Text('My choice')),
-                ButtonSegment(value: PlayLayout.list, label: Text('List')),
-                ButtonSegment(value: PlayLayout.grid, label: Text('Grid')),
+                ButtonSegment(
+                  value: PlayLayout.follow,
+                  label: Text(SettingsStrings.layoutFollow),
+                ),
+                ButtonSegment(value: PlayLayout.list, label: Text(SettingsStrings.layoutList)),
+                ButtonSegment(value: PlayLayout.grid, label: Text(SettingsStrings.layoutGrid)),
               ],
               selected: {v.layout},
               showSelectedIcon: false,
@@ -576,22 +459,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _heading('Theme', 'Pick a colour palette. Applies immediately.'),
-        ValueListenableBuilder<AppTheme>(
-          valueListenable: appThemeListenable,
-          builder: (context, current, _) => Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              for (final theme in AppTheme.values)
-                _ThemeSwatch(
-                  theme: theme,
-                  selected: theme == current,
-                  onTap: () => appThemeListenable.save(theme),
-                ),
-            ],
-          ),
-        ),
+        _heading(SettingsStrings.themeTitle, SettingsStrings.themeHelp),
+        const ThemePicker(),
       ],
     );
   }
@@ -602,15 +471,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context, folder, _) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _heading('Library folder',
-              'The root folder holding your per-system ROM subfolders.'),
+          _heading(
+            SettingsStrings.libraryFolderTitle,
+            SettingsStrings.libraryFolderHelp,
+          ),
           if (folder != null)
             Text(folder, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 12),
           UiFocusZoom(
             child: OutlinedButton.icon(
               icon: const Icon(Icons.folder_open),
-              label: Text(folder == null ? 'Pick folder' : 'Change folder'),
+              label: Text(
+                folder == null
+                    ? SettingsStrings.pickFolderButton
+                    : SettingsStrings.changeFolderButton,
+              ),
               onPressed: () => pickLibraryFolder(context),
             ),
           ),
@@ -623,86 +498,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _heading('Data',
-            'Back up or restore everything the app has saved. Clear it all to '
-            'start over from a fresh scan.'),
+        _heading(
+          SettingsStrings.dataTitle,
+          SettingsStrings.dataHelp,
+        ),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
             Tooltip(
-              message: 'Writes a zip holding your scan results, imported '
-                  'metadata, cached artwork, playlists and settings. ROM '
-                  'files and your API key are not included.',
+              message: SettingsStrings.backupTooltip,
               child: UiFocusZoom(
                 child: OutlinedButton.icon(
                   onPressed: _backup,
                   icon: const Icon(Icons.save_alt),
-                  label: const Text('Back up'),
+                  label: const Text(SettingsStrings.backupButton),
                 ),
               ),
             ),
             Tooltip(
-              message: 'Loads a backup zip, replacing everything you have '
-                  'now except your API key. Needs an app restart afterwards.',
+              message: SettingsStrings.restoreTooltip,
               child: UiFocusZoom(
                 child: OutlinedButton.icon(
-                  onPressed: _restore,
+                  onPressed: () => restoreBackup(context),
                   icon: const Icon(Icons.restore),
-                  label: const Text('Restore'),
+                  label: const Text(SettingsStrings.restoreButton),
                 ),
               ),
             ),
             Tooltip(
-              message: 'Reads gamelist.xml and Logiqx .dat files from a '
-                  'Skraper or EmulationStation folder and attaches their box '
-                  'art and descriptions to ROMs you already scanned.',
+              message: SettingsStrings.deleteDataTooltip,
               child: UiFocusZoom(
                 child: OutlinedButton.icon(
-                  onPressed: _importScrapedData,
-                  icon: const Icon(Icons.image_search),
-                  label: const Text('Import scraped data…'),
-                ),
-              ),
-            ),
-            Tooltip(
-              message: 'Opens the first-run wizard again (library folder, '
-                  'RetroAchievements account, emulators).',
-              child: UiFocusZoom(
-                child: OutlinedButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SetupWizard()),
-                  ),
-                  icon: const Icon(Icons.restart_alt),
-                  label: const Text('Re-run setup'),
-                ),
-              ),
-            ),
-            Tooltip(
-              message: 'Deletes scan results for library folders that no longer '
-                  'exist (e.g. after moving or renaming your ROMs). Folders '
-                  'still on disk are untouched.',
-              child: UiFocusZoom(
-                child: OutlinedButton.icon(
-                  onPressed: _pruneMissing,
-                  icon: const Icon(Icons.folder_off_outlined),
-                  label: const Text('Remove missing systems'),
-                ),
-              ),
-            ),
-            Tooltip(
-              message: 'Choose what to delete: scan results, playlists, '
-                  'imported metadata, cached artwork. Your ROM files, '
-                  'settings and login are never touched.',
-              child: UiFocusZoom(
-                child: OutlinedButton(
                   onPressed: _clearData,
-                  child: const Text('Clear data…'),
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text(SettingsStrings.deleteDataButton),
                 ),
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 24),
+        _heading(
+          SettingsStrings.setupTitle,
+          SettingsStrings.setupHelp,
+        ),
+        UiFocusZoom(
+          child: OutlinedButton.icon(
+            onPressed: () => showSetupWizard(context),
+            icon: const Icon(Icons.restart_alt),
+            label: const Text(SettingsStrings.setupWizardButton),
+          ),
         ),
       ],
     );
@@ -715,7 +561,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _heading('About', 'Retroachievements Rom Manager by George Englezos.'),
+        _heading(SettingsStrings.aboutTitle, SettingsStrings.aboutHelp),
         if (_version.isNotEmpty) Text(_version, style: style),
       ],
     );
@@ -732,7 +578,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         for (var i = 0; i < sections.length; i++)
           Padding(
             padding: EdgeInsets.only(bottom: i == sections.length - 1 ? 0 : 16),
-            child: UiCard(padding: const EdgeInsets.all(20), child: sections[i]),
+            child: UiCard(
+              padding: const EdgeInsets.all(20),
+              child: sections[i],
+            ),
           ),
       ],
     );
@@ -740,14 +589,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // Centred, width-capped scroll body shared by every tab.
   Widget _scroll(double maxWidth, Widget child) => Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
-            child: child,
-          ),
-        ),
-      );
+    child: ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
+        child: child,
+      ),
+    ),
+  );
 
   // One tab's body; two columns of section cards when there's room.
   Widget _tabBody(List<Widget> sections) {
@@ -784,7 +633,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _displaySection(),
       _modeSection(),
       _romTapSection(),
-      _playViewSection(),
       _themeSection(),
       _dataSection(),
       // Mobile has no sidebar, so surface the version here.
@@ -807,7 +655,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (wide) ...[
-                    Text('Settings', style: ui.display.copyWith(fontSize: 26)),
+                    Text(SettingsStrings.title, style: ui.display.copyWith(fontSize: 26)),
                     const SizedBox(height: 16),
                   ],
                   const Align(
@@ -817,12 +665,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       tabAlignment: TabAlignment.start,
                       dividerHeight: 0,
                       tabs: [
-                        UiFocusZoom(
-                          child: Tab(text: 'General'),
-                        ),
-                        UiFocusZoom(
-                          child: Tab(text: 'Systems'),
-                        ),
+                        UiFocusZoom(child: Tab(text: SettingsStrings.generalTab)),
+                        UiFocusZoom(child: Tab(text: SettingsStrings.systems)),
                       ],
                     ),
                   ),
@@ -835,97 +679,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   _tabBody(general),
                   // Draws its own cards, so it gets the raw scroll body and the
-                  // full width rather than a section card.
-                  _scroll(1400, SystemSettingsSection(library: widget.library)),
+                  // full, uncapped width rather than a section card.
+                  _scroll(
+                    double.infinity,
+                    SystemSettingsSection(library: widget.library),
+                  ),
                 ],
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// One tappable palette card in the theme picker. Painted in the palette's own
-/// colours so it previews the theme; the selection ring uses the *current*
-/// theme's accent so it reads against the live UI.
-class _ThemeSwatch extends StatelessWidget {
-  final AppTheme theme;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ThemeSwatch({
-    required this.theme,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final ui = context.ui; // live theme, for the selection ring
-    final t = theme.tokens; // this card's palette, for the preview
-    final dots = [t.accent, t.supported, t.accentAlt, t.accentGames];
-    return UiFocusZoom(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: ui.roundMd,
-        child: Container(
-          width: 152,
-          decoration: BoxDecoration(
-            borderRadius: ui.roundMd,
-            border: Border.all(
-              color: selected ? ui.accent : t.border,
-              width: selected ? 2 : 1,
-            ),
-          ),
-          child: ClipRRect(
-            borderRadius: ui.roundMd,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  height: 46,
-                  width: double.infinity,
-                  color: t.background,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    children: [
-                      for (final c in dots)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: Container(
-                            width: 14,
-                            height: 14,
-                            decoration:
-                                BoxDecoration(color: c, shape: BoxShape.circle),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: double.infinity,
-                  color: t.surface,
-                  padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          theme.label,
-                          style: t.body.copyWith(fontWeight: FontWeight.w600),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (selected)
-                        Icon(Icons.check_circle, size: 16, color: ui.accent),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );

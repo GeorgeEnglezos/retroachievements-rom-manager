@@ -13,13 +13,10 @@ void main() {
 
   test('round-trips through JSON', () {
     const v = PlayView(
-      fileName: true,
-      fileSize: true,
       achievementCount: false,
       hot: false,
       noAchievements: true,
       fileTags: true,
-      raTitle: false,
       layout: PlayLayout.grid,
     );
     expect(PlayView.fromJson(v.toJson()).toJson(), v.toJson());
@@ -39,7 +36,7 @@ void main() {
     expect(base.copyWith(fileTags: true).fileTags, isTrue);
     expect(base.copyWith(fileTags: true).hot, base.hot);
     expect(base.copyWith(layout: PlayLayout.grid).layout, PlayLayout.grid);
-    expect(base.copyWith(layout: PlayLayout.grid).raTitle, base.raTitle);
+    expect(base.copyWith(layout: PlayLayout.grid).hot, base.hot);
   });
 
   test('save then load survives a restart', () async {
@@ -58,26 +55,30 @@ void main() {
 
   test('cleaning mode ignores the play settings', () {
     playViewListenable.value =
-        const PlayView(hot: false, fileTags: false, raTitle: false);
+        const PlayView(hot: false, fileTags: false);
     expect(playView.hot, isTrue);
     expect(playView.fileTags, isTrue);
-    expect(playView.raTitle, isTrue);
 
     appModeListenable.value = AppMode.gaming;
     expect(playView.hot, isFalse);
     expect(playView.fileTags, isFalse);
-    expect(playView.raTitle, isFalse);
   });
 
-  test('listingTitle uses the file name when RA titles are off', () {
+  test('a placeholder RA title falls back to the cleaned file name', () {
     appModeListenable.value = AppMode.gaming;
+    expect(listingTitle('GAME #1100002368', 'block_stacker.sfc'),
+        'block stacker');
+  });
 
-    playViewListenable.value = const PlayView(raTitle: false);
-    expect(listingTitle('Super Mario World', 'smw.sfc'), 'smw.sfc');
+  test('kiosk falls back to a cleaned file name when there is no RA title',
+      () {
+    const file = 'Block Stacker (Europe) (Rev 1) [!].sfc';
+    expect(listingTitle(null, file), file); // cleaning keeps the raw name
 
-    playViewListenable.value = const PlayView();
-    expect(listingTitle('Super Mario World', 'smw.sfc'), 'Super Mario World');
-    // A placeholder RA title still falls back, as gameDisplayName decides.
-    expect(listingTitle('GAME #1100002368', 'smw.sfc'), 'smw.sfc');
+    appModeListenable.value = AppMode.gaming;
+    expect(listingTitle(null, file), 'Block Stacker');
+    expect(listingTitle('Cave Hopper', file), 'Cave Hopper');
+    // Nothing left after cleaning: the raw name beats a blank title.
+    expect(listingTitle(null, '(Beta).sfc'), '(Beta).sfc');
   });
 }

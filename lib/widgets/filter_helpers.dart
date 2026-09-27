@@ -1,13 +1,14 @@
 export '../models/rom_result.dart' show statusLabel;
 
 import '../services/rom_filter.dart';
+import '../strings.dart';
 
 /// Display label for a progress-state chip.
 String progressLabel(ProgressState s) => switch (s) {
-      ProgressState.notStarted => 'Not started',
-      ProgressState.started => 'Started',
-      ProgressState.nearComplete => 'Near complete',
-      ProgressState.mastered => 'Mastered',
+      ProgressState.notStarted => FilterStrings.notStarted,
+      ProgressState.started => FilterStrings.started,
+      ProgressState.nearComplete => FilterStrings.nearComplete,
+      ProgressState.mastered => FilterStrings.mastered,
     };
 
 /// Returns a new set with [v] toggled (added if absent, removed if present).

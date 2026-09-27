@@ -17,13 +17,13 @@ import 'row_display.dart';
 import 'ui/ui_focusable.dart';
 
 /// The text block under each cover in the library grid: the title, the
-/// achievement numbers/chips, and the status/size line. A grid cell is the
-/// square cover plus this height, so the art box stays square at any column
-/// width — the same square silhouette Home's shelves use.
+/// achievement numbers/chips and, while cleaning, the file name and status/size
+/// lines. A grid cell is the square cover plus this height.
 ///
-/// ponytail: an estimate tuned to RomGridItem(lean, listingExtras); it errs
-/// generous so the meta line never overflows. Bump it if a font change clips.
-const double kGridTextBlock = 78;
+/// ponytail: worst cases measured for RomGridItem(lean, listingExtras) (81 and
+/// 50 px) plus a small margin; ignores text scaling. Re-measure if a line or
+/// font changes, the cell-fit test in rom_grid_item_test catches an overflow.
+double get gridTextBlock => gamingMode ? 54 : 85;
 
 /// How many columns fit across [width] when each tile is at most [target] px
 /// wide with [spacing] between them. Matches Flutter's
@@ -412,11 +412,9 @@ class _RomListViewState extends State<RomListView> {
         rom: r.rom!,
         store: widget.store,
         // The Library grid wears Home's framed-cover design; listingExtras
-        // layers the play-view fields (size, hot/no-ach/tag chips) back on,
-        // and raName reads titles the way Home does.
+        // layers the play-view fields (size, hot/no-ach/tag chips) back on.
         lean: true,
         listingExtras: true,
-        raName: true,
         isSelected: _isSelected(r),
         isSelectMode: _selected.isNotEmpty,
         onSelectToggle: _selectToggle(r),

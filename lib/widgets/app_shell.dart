@@ -11,23 +11,25 @@ import '../screens/home_screen.dart';
 import '../screens/logs_screen.dart';
 import '../screens/recommendations_screen.dart';
 import '../screens/settings_screen.dart';
+import '../screens/setup_wizard.dart';
 import '../screens/storage_screen.dart';
 import '../services/update_check.dart';
 import '../theme/ui_tokens.dart';
 import 'update_banner.dart';
 import 'ui/ui_focusable.dart';
+import '../strings.dart';
 
 /// The shell's nav destinations (label, icon), indexed by the ints in
 /// [kGamingNav] / [kCleaningNav]. Public so a route pushed over the shell (a
 /// FolderView's landscape rail) can render the same set.
 const List<(String, IconData)> kShellDests = <(String, IconData)>[
-  ('HOME', Icons.home_rounded),
-  ('LIBRARY', Icons.grid_view),
-  ('PLAY NEXT', Icons.recommend_outlined),
-  ('CULL', Icons.style_outlined),
-  ('STORAGE', Icons.pie_chart),
-  ('LOGS', Icons.receipt_long),
-  ('SETTINGS', Icons.settings),
+  (ShellStrings.navHome, Icons.home_rounded),
+  (ShellStrings.navLibrary, Icons.grid_view),
+  (ShellStrings.navPlayNext, Icons.recommend_outlined),
+  (ShellStrings.navCull, Icons.style_outlined),
+  (ShellStrings.navStorage, Icons.pie_chart),
+  (ShellStrings.navLogs, Icons.receipt_long),
+  (ShellStrings.navSettings, Icons.settings),
 ];
 
 // Which _dests the two modes offer. Gaming keeps browsing and playing; culling,
@@ -47,7 +49,10 @@ void Function(int destIndex)? shellNavigate;
 /// Top-level responsive navigation shell. Holds the destinations in an
 /// IndexedStack so each keeps its state across nav switches.
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  /// First run: opens the setup modal over the shell once it is on screen.
+  final bool showSetup;
+
+  const AppShell({super.key, this.showSetup = false});
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -63,6 +68,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     super.initState();
     shellNavigate = _navigateFromPushed;
     _loadVersion();
+    if (widget.showSetup) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => showSetupWizard(context));
+    }
     if (Platform.isAndroid) {
       WidgetsBinding.instance.addObserver(this);
       _drainPendingShortcut(); // cold start via a home-screen shortcut
@@ -88,7 +97,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       return;
     }
     if (!mounted) return;
-    setState(() => _version = 'v${info.version}+${info.buildNumber}');
+    setState(() =>
+        _version = SettingsStrings.version(info.version, info.buildNumber));
 
     final update = await UpdateCheck.check(currentVersion: info.version);
     if (mounted && update != null) setState(() => _update = update);
@@ -127,7 +137,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     );
     if (err != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Couldn't launch shortcut: $err")));
+          SnackBar(content: Text(ShellStrings.shortcutLaunchFailed(err))));
     }
   }
 
@@ -319,7 +329,7 @@ class _Sidebar extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(16),
             child:
-                Text('RARM', style: ui.display.copyWith(fontSize: 18)),
+                Text(ShellStrings.appName, style: ui.display.copyWith(fontSize: 18)),
           ),
           // Expanded + ListView: the tiles take the leftover height and scroll
           // when the window is too short, instead of overflowing the Column.
@@ -347,7 +357,7 @@ class _Sidebar extends StatelessWidget {
                   Text(version,
                       style:
                           ui.labelCaps.copyWith(fontSize: 11, color: ui.muted)),
-                Text('by George Englezos',
+                Text(ShellStrings.author,
                     style: ui.labelCaps.copyWith(fontSize: 11, color: ui.muted)),
               ],
             ),

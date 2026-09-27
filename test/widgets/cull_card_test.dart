@@ -193,6 +193,59 @@ void main() {
     });
   });
 
+  group('live detail', () {
+    testWidgets('fetches on display and redraws with the box art',
+        (tester) async {
+      final rom = RomResult(filePath: 'snes/mu.sfc', fileName: 'mu.sfc')
+        ..status = RomStatus.supported
+        ..gameId = 9;
+      final fetched = <String>[];
+      await tester.pumpWidget(_wrap(CullCard(
+        card: CullCardData(rom: rom, discs: [rom], memberKey: 'ra:9'),
+        onSearch: () {},
+        fetchDetail: (r) async {
+          fetched.add(r.filePath);
+          r.imageBoxArt = '/Images/mu_box.png';
+          return true;
+        },
+      )));
+      await tester.pump();
+
+      expect(fetched, ['snes/mu.sfc']);
+      expect(
+          tester
+              .widgetList<RaImage>(find.byType(RaImage))
+              .map((w) => w.url),
+          contains('https://retroachievements.org/Images/mu_box.png'));
+    });
+
+    testWidgets('fetches again when the card shows a different game',
+        (tester) async {
+      RomResult romFor(int id) =>
+          RomResult(filePath: 'snes/$id.sfc', fileName: '$id.sfc')
+            ..status = RomStatus.supported
+            ..gameId = id;
+      final fetched = <int>[];
+      Future<bool> fetch(RomResult r) async {
+        fetched.add(r.gameId!);
+        return false;
+      }
+
+      final a = romFor(10);
+      final b = romFor(11);
+      await tester.pumpWidget(_wrap(CullCard(
+          card: CullCardData(rom: a, discs: [a], memberKey: 'ra:10'),
+          onSearch: () {},
+          fetchDetail: fetch)));
+      await tester.pumpWidget(_wrap(CullCard(
+          card: CullCardData(rom: b, discs: [b], memberKey: 'ra:11'),
+          onSearch: () {},
+          fetchDetail: fetch)));
+
+      expect(fetched, [10, 11]);
+    });
+  });
+
   group('header', () {
     testWidgets('shows the listing thumbnail and file name, not the console',
         (tester) async {

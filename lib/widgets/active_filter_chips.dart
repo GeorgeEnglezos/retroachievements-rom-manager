@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/rom_filter.dart';
 import 'ui/ui_chip.dart';
 import 'filter_helpers.dart';
+import '../strings.dart';
 
 /// Builds the removable active-filter chips for [filter]. Returned as a list so
 /// callers can interleave them in their own Wrap/Row. Each chip clears exactly
@@ -49,7 +50,7 @@ List<Widget> activeFilterChips({
   for (final id in f.includePlaylistIds) {
     chips.add(UiChip(
       key: ValueKey('inc-$id'),
-      label: '${playlistName(playlists, id)}: only',
+      label: FilterStrings.playlistOnly(playlistName(playlists, id)),
       selected: true,
       onRemove: () => onChanged(
           f.copyWith(includePlaylistIds: withoutSet(f.includePlaylistIds, id))),
@@ -58,7 +59,7 @@ List<Widget> activeFilterChips({
   for (final id in f.excludePlaylistIds) {
     chips.add(UiChip(
       key: ValueKey('exc-$id'),
-      label: '${playlistName(playlists, id)}: exclude',
+      label: FilterStrings.playlistExclude(playlistName(playlists, id)),
       selected: true,
       onRemove: () => onChanged(
           f.copyWith(excludePlaylistIds: withoutSet(f.excludePlaylistIds, id))),

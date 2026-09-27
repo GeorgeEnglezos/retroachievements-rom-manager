@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../strings.dart';
 
 /// The zoom levels the picker offers, smallest first. 1.0 is the size every
 /// layout was designed at; the rest divide the viewport so the app still
@@ -52,4 +53,4 @@ double uiScaleStep(double scale, int delta) {
 }
 
 /// The zoom as the picker shows it, e.g. `125%`.
-String uiScaleLabel(double scale) => '${(scale * 100).round()}%';
+String uiScaleLabel(double scale) => ThemeStrings.uiScale(scale);

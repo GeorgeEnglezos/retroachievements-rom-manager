@@ -8,6 +8,7 @@ import '../folder_card.dart' show ConsoleLogo;
 import '../rom_thumb.dart';
 import '../ui/console_card.dart';
 import '../ui/ui_card.dart';
+import '../../strings.dart';
 
 // The right panel lists a system's hottest few; the rest aren't worth a longer
 // scroll for a "what to play next" glance.
@@ -30,7 +31,7 @@ class ConsoleBrowser extends StatefulWidget {
     required this.rows,
     required this.overall,
     required this.onOpen,
-    this.emptyMessage = 'Nothing here yet.',
+    this.emptyMessage = HomeStrings.nothingHere,
   });
 
   @override
@@ -93,7 +94,7 @@ class _ConsoleBrowserState extends State<ConsoleBrowser> {
       itemBuilder: (_, i) {
         if (i == 0) {
           return _ConsoleTile(
-            name: 'All Consoles',
+            name: HomeStrings.allConsoles,
             icon: Icons.apps,
             gameCount: widget.overall.games.length,
             selected: _selected == _overallIndex,
@@ -158,9 +159,7 @@ class _ConsoleTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 2),
-            Text(
-                '$gameCount '
-                '${gameCount == 1 ? 'game' : 'games'}',
+            Text(HomeStrings.gameCount(gameCount),
                 style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
@@ -238,7 +237,7 @@ class _GameRow extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     if (players > 0)
-                      Text('${compactCount(players)} players',
+                      Text(HomeStrings.players(compactCount(players)),
                           style: TextStyle(fontSize: 12, color: ui.muted)),
                   ],
                 ),
@@ -264,7 +263,7 @@ class _Prompt extends StatelessWidget {
           children: [
             Icon(Icons.videogame_asset_outlined, size: 48, color: ui.muted),
             const SizedBox(height: 12),
-            Text('Pick a system to see its top games',
+            Text(HomeStrings.pickSystemPrompt,
                 textAlign: TextAlign.center,
                 style: TextStyle(color: ui.muted, fontSize: 15)),
           ],

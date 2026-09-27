@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../strings.dart';
+
 import '../services/emulator_store.dart';
 import 'ui/ui_focusable.dart';
 
@@ -14,12 +16,12 @@ Future<Emulator?> showPlayWithDialog(
     showDialog<Emulator>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Play with'),
+        title: const Text(GameActionStrings.playWithTitle),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Emulators you added for $consoleName:'),
+            Text(GameActionStrings.emulatorsFor(consoleName)),
             const SizedBox(height: 8),
             for (final emu in choices)
               UiFocusZoom(
@@ -39,7 +41,7 @@ Future<Emulator?> showPlayWithDialog(
           UiFocusZoom(
             child: TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
+              child: const Text(GameActionStrings.cancel),
             ),
           ),
         ],

@@ -4,6 +4,8 @@ import '../models/rom_result.dart';
 import '../services/play_view.dart';
 import '../theme/ui_tokens.dart';
 import 'rom_thumb.dart';
+import 'ui/marquee_text.dart';
+import '../strings.dart';
 
 /// The shared game tile: full-bleed art with a mastery trophy or in-progress
 /// strip over it, then the title and a caller-built [meta] line. Home and the
@@ -20,8 +22,8 @@ class GameCover extends StatelessWidget {
   /// the achievement numbers + chips and a status/size line.
   final Widget meta;
 
-  /// Art box height. Null makes the art fill the available height (Expanded),
-  /// for a fixed-height grid cell; Home passes a square height.
+  /// Art box height. Null makes the art a square of the available width (a grid
+  /// cell), so the cell's text budget can't stretch or squash it.
   final double? height;
 
   /// Outer width. Null fills the parent (grid cell); Home passes a square.
@@ -47,11 +49,6 @@ class GameCover extends StatelessWidget {
   /// Inset for the text block under the art.
   final EdgeInsets textPadding;
 
-  /// Force the RetroAchievements name (falling back to the file name only when
-  /// there is none), ignoring the play-mode file-name setting. Big Picture sets
-  /// this so its shelves always read as game names.
-  final bool raName;
-
   const GameCover({
     super.key,
     required this.rom,
@@ -64,15 +61,12 @@ class GameCover extends StatelessWidget {
     this.foreground,
     this.framedArt = true,
     this.textPadding = const EdgeInsets.only(top: 8),
-    this.raName = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    final title = raName
-        ? gameDisplayName(rom.gameTitle, rom.fileName)
-        : listingTitle(rom.gameTitle, rom.fileName);
+    final title = listingTitle(rom.gameTitle, rom.fileName);
     final art = _art(ui);
 
     return SizedBox(
@@ -84,16 +78,14 @@ class GameCover extends StatelessWidget {
           if (height != null)
             SizedBox(height: height, child: art)
           else
-            Expanded(child: art),
+            AspectRatio(aspectRatio: 1, child: art),
           Padding(
             padding: textPadding,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                MarqueeText(title,
                     style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
@@ -201,7 +193,7 @@ class GameCover extends StatelessWidget {
               children: [
                 Expanded(child: bar),
                 const SizedBox(width: 8),
-                Text('${(frac * 100).round()}%',
+                Text(FolderStrings.progressPercent(frac),
                     style: ui.mono.copyWith(fontSize: 10, color: kOnScrim)),
               ],
             );
@@ -234,8 +226,8 @@ class GameMetaRow extends StatelessWidget {
     final total = rom.achievementCount ?? 0;
     final earned = rom.earnedAchievements ?? 0;
     final items = <Widget>[
-      if (total > 0)
-        Text('$earned/$total',
+      if (total > 0 && playView.achievementCount)
+        Text(CommonStrings.fraction(earned, total),
             style: ui.mono
                 .copyWith(fontSize: 11, color: numberColor ?? ui.accentGames)),
       ...trailing,

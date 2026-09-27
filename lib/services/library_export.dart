@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../models/folder_stats.dart' show formatBytes;
 import '../models/home_index.dart';
 import '../models/rom_result.dart';
+import '../strings.dart';
 import 'scan_health.dart';
 
 /// Optional columns for a per-system game-list export. Iteration/enum order is
@@ -105,9 +106,9 @@ class LibraryExport {
   // --- Per-system game-list export (name + chosen fields) -------------------
 
   static const _fieldHeaders = {
-    GameField.hasAchievements: 'Has achievements',
-    GameField.progress: 'Progress',
-    GameField.size: 'Size',
+    GameField.hasAchievements: ExportStrings.hasAchievements,
+    GameField.progress: ExportStrings.progress,
+    GameField.size: ExportStrings.size,
   };
 
   /// Ordered subset of [fields], in enum/column order. For the PDF builder.
@@ -125,7 +126,7 @@ class LibraryExport {
   static String _fieldValue(GameField f, SearchIndexEntry e) {
     switch (f) {
       case GameField.hasAchievements:
-        return (e.achievementCount ?? 0) > 0 ? 'Yes' : 'No';
+        return (e.achievementCount ?? 0) > 0 ? ExportStrings.yes : ExportStrings.no;
       case GameField.progress:
         return '${e.earnedAchievements ?? 0}/${e.achievementCount ?? 0}';
       case GameField.size:
@@ -152,7 +153,7 @@ class LibraryExport {
       List<SearchIndexEntry> rows, SystemReportOptions options) {
     final fields = _orderedFields(options.fields);
     final buf = StringBuffer(
-        ['Name', ...fields.map((f) => _fieldHeaders[f])].map(_csvCell).join(','))
+        [ExportStrings.name, ...fields.map((f) => _fieldHeaders[f])].map(_csvCell).join(','))
       ..write('\n');
     for (final e in prepareRows(rows, options)) {
       buf.writeln([
@@ -167,8 +168,12 @@ class LibraryExport {
   static String systemMarkdown(String systemName, List<SearchIndexEntry> rows,
       SystemReportOptions options) {
     final fields = _orderedFields(options.fields);
-    final headers = ['Name', ...fields.map((f) => _fieldHeaders[f]!)];
-    final buf = StringBuffer('# $systemName library\n\n');
+    final headers = [
+      ExportStrings.name,
+      ...fields.map((f) => _fieldHeaders[f]!),
+    ];
+    final buf =
+        StringBuffer('# ${ExportStrings.systemTitle(systemName)}\n\n');
     buf.writeln('| ${headers.join(' | ')} |');
     buf.writeln('| ${headers.map((_) => '---').join(' | ')} |');
     for (final e in prepareRows(rows, options)) {
@@ -185,17 +190,18 @@ class LibraryExport {
   static String toMarkdown(
       List<SystemSummary> systems, List<SearchIndexEntry> rows) {
     final h = ScanHealth.fromIndex(systems, rows);
-    final buf = StringBuffer('# Library health report\n\n');
-    buf.writeln('| Metric | Count |');
+    final buf = StringBuffer('# ${ExportStrings.healthTitle}\n\n');
+    buf.writeln('| ${ExportStrings.metric} | ${ExportStrings.count} |');
     buf.writeln('| --- | --- |');
-    buf.writeln('| Total ROMs | ${h.totalRoms} |');
-    buf.writeln('| Supported | ${h.supported} |');
-    buf.writeln('| Unsupported | ${h.unsupported} |');
-    buf.writeln('| Not fetched | ${h.notFetched} |');
-    buf.writeln('| With progress | ${h.withProgress} |');
-    buf.writeln('| Systems | ${h.systems} |');
-    buf.writeln('\n## Per system\n');
-    buf.writeln('| System | Games | Supported | Scanned |');
+    buf.writeln('| ${ExportStrings.totalRoms} | ${h.totalRoms} |');
+    buf.writeln('| ${ExportStrings.supported} | ${h.supported} |');
+    buf.writeln('| ${ExportStrings.unsupported} | ${h.unsupported} |');
+    buf.writeln('| ${ExportStrings.notFetched} | ${h.notFetched} |');
+    buf.writeln('| ${ExportStrings.withProgress} | ${h.withProgress} |');
+    buf.writeln('| ${ExportStrings.systems} | ${h.systems} |');
+    buf.writeln('\n## ${ExportStrings.perSystem}\n');
+    buf.writeln('| ${ExportStrings.system} | ${ExportStrings.games} | '
+        '${ExportStrings.supported} | ${ExportStrings.scanned} |');
     buf.writeln('| --- | --- | --- | --- |');
     final sorted = [...systems]..sort((a, b) => a.name.compareTo(b.name));
     for (final s in sorted) {

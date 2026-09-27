@@ -4,9 +4,12 @@ import '../models/game_metadata.dart';
 import '../models/rom_result.dart';
 import '../models/user_progress.dart';
 import 'console_map.dart';
+import 'credentials.dart';
 import 'library.dart';
+import 'log_service.dart';
 import 'ra_service.dart';
 import 'rom_name.dart';
+import '../strings.dart';
 
 /// Maps a RetroAchievements [GameInfo] onto a [RomResult]. A null [info] means
 /// the hash was looked up but unsupported. Shared by the folder view and the
@@ -142,7 +145,7 @@ RomResult romFromEntry(GameEntry entry, {int? consoleId, String? consoleName}) {
     // Still a supported game; showing it as unscanned would invite a pointless
     // re-hash of a file we already identified.
     rom.status = RomStatus.supported;
-    rom.gameTitle = 'Game #${entry.gameId}';
+    rom.gameTitle = RomStatusStrings.gamePlaceholder(entry.gameId);
     rom.consoleName ??= ConsoleMap.nameFor(consoleId) ?? consoleName;
   } else if (entry.metadata != null &&
       !kRemovedMetadataProviders.contains(entry.metadata!.providerId)) {
@@ -217,4 +220,33 @@ Future<void> saveGameDetail(
   final games = [...data.games];
   games[i] = games[i].copyWith(gameInfo: info, progress: progress);
   await library.save(data.copyWith(games: games));
+}
+
+/// Live-fetches [rom]'s full RA detail (box art, screenshots, genre, progress),
+/// applies it onto [rom] and persists it. False when [rom] isn't a matched RA
+/// game, there are no saved credentials, or the call fails.
+Future<bool> refreshGameDetail(
+  RomResult rom, {
+  required Library library,
+  RaService? service,
+}) async {
+  final gameId = rom.gameId;
+  if (gameId == null || rom.status != RomStatus.supported) return false;
+  try {
+    var ra = service;
+    if (ra == null) {
+      final creds = await savedCredentials();
+      if (creds == null) return false;
+      ra = RaService(username: creds.$1, apiKey: creds.$2);
+    }
+    final (info, progress) = await ra.getGameInfoAndUserProgress(gameId);
+    applyGameInfo(rom, info);
+    applyProgress(rom, progress);
+    await saveGameDetail(rom.filePath,
+        info: info, progress: progress, library: library);
+    return true;
+  } catch (e) {
+    LogService.error('refreshGameDetail', 'game $gameId: $e');
+    return false;
+  }
 }

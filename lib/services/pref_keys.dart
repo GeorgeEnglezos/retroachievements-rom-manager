@@ -56,4 +56,8 @@ abstract final class PrefKeys {
   // Systems pinned to the top of the Library grid (owned by
   // favorite_systems.dart).
   static const favoriteSystems = 'favorite_systems';
+
+  // RA game ids from the last successful Want to Play sync (owned by
+  // want_to_play_store.dart). Pure cache of RA state, re-fetched every sync.
+  static const raWantToPlayIds = 'ra_want_to_play_ids';
 }

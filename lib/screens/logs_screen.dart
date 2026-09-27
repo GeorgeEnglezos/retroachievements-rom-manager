@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import '../services/log_service.dart';
 import '../theme/ui_tokens.dart';
 import '../widgets/ui/ui_focusable.dart';
+import '../strings.dart';
 
 class LogsScreen extends StatefulWidget {
   const LogsScreen({super.key});
@@ -75,7 +76,7 @@ class _LogsScreenState extends State<LogsScreen> {
         .replaceFirst('_', ' ')
         .replaceAllMapped(
           RegExp(r'(\d{2})-(\d{2})-(\d{2})$'),
-          (m) => '${m[1]}:${m[2]}:${m[3]}',
+          (m) => LogsStrings.sessionTime(m[1], m[2], m[3]),
         );
   }
 
@@ -101,14 +102,14 @@ class _LogsScreenState extends State<LogsScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: wide ? const Text('Logs') : null,
+        title: wide ? const Text(LogsStrings.title) : null,
         actions: [
           if (_selectedLogFile == null)
             UiFocusZoom(
               child: IconButton(
                 onPressed: LogService.clear,
                 icon: const Icon(Icons.delete_outline),
-                tooltip: 'Clear current session logs',
+                tooltip: LogsStrings.clearSessionTooltip,
               ),
             ),
           if (_selectedLogContent != null)
@@ -117,18 +118,18 @@ class _LogsScreenState extends State<LogsScreen> {
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: _selectedLogContent!));
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Copied to clipboard')),
+                    const SnackBar(content: Text(LogsStrings.copiedToClipboard)),
                   );
                 },
                 icon: const Icon(Icons.copy),
-                tooltip: 'Copy log to clipboard',
+                tooltip: LogsStrings.copyTooltip,
               ),
             ),
           UiFocusZoom(
             child: IconButton(
               onPressed: _refreshFileList,
               icon: const Icon(Icons.refresh),
-              tooltip: 'Refresh file list',
+              tooltip: LogsStrings.refreshTooltip,
             ),
           ),
         ],
@@ -152,7 +153,7 @@ class _LogsScreenState extends State<LogsScreen> {
                     children: [
                       // Live session entry
                       _FileListTile(
-                        label: 'Current session',
+                        label: LogsStrings.currentSession,
                         icon: Icons.circle,
                         iconColor: Colors.greenAccent,
                         selected: _selectedLogFile == null,
@@ -165,7 +166,7 @@ class _LogsScreenState extends State<LogsScreen> {
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
                           child: Text(
-                            'No saved logs',
+                            LogsStrings.noSavedLogs,
                             style: TextStyle(color: secondary, fontSize: 12),
                           ),
                         )
@@ -319,7 +320,7 @@ class _LiveViewState extends State<_LiveView> {
     if (widget.entries.isEmpty) {
       return Center(
         child: Text(
-          'No logs yet.',
+          LogsStrings.noLogsYet,
           style: TextStyle(color: widget.secondary),
         ),
       );
@@ -332,7 +333,7 @@ class _LiveViewState extends State<_LiveView> {
         final e = widget.entries[index];
         final ts = e.timestamp
             .toIso8601String()
-            .replaceFirst('T', ' ')
+            .replaceRange(10, 11, ' ')
             .substring(0, 23);
         final color = widget.levelColor(e.level);
 
@@ -344,13 +345,13 @@ class _LiveViewState extends State<_LiveView> {
             TextSpan(
               style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
               children: [
-                TextSpan(text: '$ts ', style: TextStyle(color: widget.secondary)),
+                TextSpan(text: LogsStrings.entryTime(ts), style: TextStyle(color: widget.secondary)),
                 TextSpan(
-                  text: '[${e.level.name.toUpperCase().padRight(5)}] ',
+                  text: LogsStrings.entryLevel(e.level.name.toUpperCase().padRight(5)),
                   style: TextStyle(color: color, fontWeight: FontWeight.bold),
                 ),
                 TextSpan(
-                  text: '${e.source}: ',
+                  text: LogsStrings.entrySource(e.source),
                   style: TextStyle(color: color, fontWeight: FontWeight.w600),
                 ),
                 TextSpan(text: e.message, style: TextStyle(color: color)),
@@ -374,7 +375,7 @@ class _FileView extends StatelessWidget {
     if (content.isEmpty) {
       return Center(
         child: Text(
-          'Empty log file.',
+          LogsStrings.emptyLogFile,
           style: TextStyle(color: secondary),
         ),
       );

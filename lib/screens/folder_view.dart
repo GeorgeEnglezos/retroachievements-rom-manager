@@ -48,6 +48,7 @@ import '../widgets/require_credentials.dart';
 import '../widgets/rom_list_view.dart';
 import '../theme/ui_tokens.dart';
 import '../widgets/ui/ui_focusable.dart';
+import '../strings.dart';
 
 class _GroupHeader {
   final Color color;
@@ -86,6 +87,7 @@ class _FolderViewState extends State<FolderView> {
   final PlaylistStore _playlistStore = PlaylistStore();
   late final Library _lib = widget.library ?? Library.instance;
   final Map<String, SystemData> _systemData = {};
+  late int _seenClearCount = _lib.clearCount;
   List<Playlist> _playlists = [];
   Map<String, Set<String>> _membership = {};
   bool _loading = true;
@@ -193,9 +195,26 @@ class _FolderViewState extends State<FolderView> {
   @override
   void initState() {
     super.initState();
+    _lib.addListener(_onLibraryChanged);
     _loadPersisted();
     _loadPlaylists();
     _loadSortPref();
+  }
+
+  @override
+  void dispose() {
+    _lib.removeListener(_onLibraryChanged);
+    super.dispose();
+  }
+
+  // Only a wipe reloads: this view saves to the library itself mid-fetch, so
+  // reloading on every save would swap the ROM list out from under the fetch.
+  // Without it, the stale _systemData would be saved straight back after a wipe.
+  void _onLibraryChanged() {
+    if (_lib.clearCount == _seenClearCount) return;
+    _seenClearCount = _lib.clearCount;
+    _systemData.clear();
+    _loadPersisted();
   }
 
   Future<void> _loadSortPref() async {
@@ -398,9 +417,7 @@ class _FolderViewState extends State<FolderView> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Unknown console for this folder. Set it in Settings → System mapping.',
-          ),
+          content: Text(FolderStrings.unknownConsoleMapping),
         ),
       );
       return;
@@ -422,14 +439,13 @@ class _FolderViewState extends State<FolderView> {
     if (!ConsoleMap.isRaSupported(consoleId) &&
         (metadataProvider == null || !metadataProvider.supports(consoleId))) {
       if (!mounted) return;
-      final name = ConsoleMap.nameFor(consoleId) ?? 'This system';
+      final name = ConsoleMap.nameFor(consoleId) ?? FolderStrings.thisSystem;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             metadataProvider == null
-                ? "$name isn't on RetroAchievements. Add a metadata source in "
-                      'Settings to fetch game info.'
-                : "$name isn't supported by the selected metadata source.",
+                ? FolderStrings.notOnRetroAchievements(name)
+                : FolderStrings.unsupportedByMetadataSource(name),
           ),
         ),
       );
@@ -440,7 +456,7 @@ class _FolderViewState extends State<FolderView> {
     if (plan.progress && !plan.match && _roms.every((r) => r.gameId == null)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No matched games to sync.')),
+        const SnackBar(content: Text(FolderStrings.noMatchedGamesToSync)),
       );
       return;
     }
@@ -576,7 +592,7 @@ class _FolderViewState extends State<FolderView> {
         LogService.error('FolderView/fetchSingle', 'game ${rom.gameId}: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to sync progress: $e')),
+            SnackBar(content: Text(FolderStrings.syncProgressFailed(e))),
           );
         }
       }
@@ -597,8 +613,8 @@ class _FolderViewState extends State<FolderView> {
         SnackBar(
           content: Text(
             name != null
-                ? '$name is not supported by RetroAchievements.'
-                : 'Unknown console for this folder.',
+                ? FolderStrings.notSupportedByRetroAchievements(name)
+                : FolderStrings.unknownConsole,
           ),
         ),
       );
@@ -674,10 +690,10 @@ class _FolderViewState extends State<FolderView> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Excluded $n file${n == 1 ? '' : 's'}. Manage in Settings.',
+          FolderStrings.excludedFiles(n),
         ),
         action: SnackBarAction(
-          label: 'Undo',
+          label: FolderStrings.undo,
           onPressed: () async {
             for (final path in paths) {
               await ScanSettings.removeExcludedFile(path);
@@ -740,7 +756,7 @@ class _FolderViewState extends State<FolderView> {
     for (final item in _groupedRows()) {
       if (item is _GroupHeader) {
         current = RomGroup(
-          label: '⧉ ${item.count} COPIES',
+          label: FolderStrings.copies(item.count),
           color: item.color,
           rows: [],
         );
@@ -792,7 +808,7 @@ class _FolderViewState extends State<FolderView> {
       players: rom.numPlayersCasual ?? 0,
       setCreated: rom.setCreated,
     );
-    return score == null ? '-' : score.round().toString();
+    return score == null ? CommonStrings.noValue : score.round().toString();
   }
 
   @override
@@ -808,8 +824,8 @@ class _FolderViewState extends State<FolderView> {
         key: const Key('toolbar_toggle'),
         icon: Icon(_toolbarVisible ? Icons.expand_less : Icons.tune),
         tooltip: _toolbarVisible
-            ? 'Hide search & filters'
-            : 'Show search & filters',
+            ? FolderStrings.hideSearchAndFilters
+            : FolderStrings.showSearchAndFilters,
         onPressed: () => setState(() => _toolbarVisible = !_toolbarVisible),
       ),
     );
@@ -891,7 +907,7 @@ class _FolderViewState extends State<FolderView> {
                         crossAxisCount: cols,
                         crossAxisSpacing: 10,
                         mainAxisSpacing: 10,
-                        mainAxisExtent: tileW + kGridTextBlock,
+                        mainAxisExtent: tileW + gridTextBlock,
                       ),
                       onDeleteRow: (r) async {
                         var any = false;
@@ -950,7 +966,7 @@ class _FolderViewState extends State<FolderView> {
                           UiFocusZoom(
                             child: IconButton(
                               icon: const Icon(Icons.arrow_back),
-                              tooltip: 'Back',
+                              tooltip: FolderStrings.backTooltip,
                               onPressed: () => Navigator.of(context).maybePop(),
                             ),
                           ),
