@@ -255,7 +255,7 @@ void main() {
       await tester.pumpWidget(host(rom));
       // The chip and the numbers share one GameMetaRow.
       final row = find.ancestor(
-        of: find.text('🔥 HOT'),
+        of: find.text('HOT'),
         matching: find.byType(GameMetaRow),
       );
       expect(row, findsOneWidget);
@@ -281,7 +281,7 @@ void main() {
       );
       expect(find.text('44/120'), findsOneWidget);
       expect(find.textContaining('SNES'), findsOneWidget); // console shown
-      expect(find.text('🔥 HOT'), findsNothing); // no chips in lean mode
+      expect(find.text('HOT'), findsNothing); // no chips in lean mode
     });
   });
 
@@ -327,7 +327,7 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(host(game()));
-      expect(find.text('🔥 HOT'), findsOneWidget); // playView all-on
+      expect(find.text('HOT'), findsOneWidget); // playView all-on
       expect(find.text('512.0 KB'), findsOneWidget);
     });
 
@@ -337,7 +337,7 @@ void main() {
       appModeListenable.value = AppMode.gaming;
       playViewListenable.value = const PlayView(); // hot on, size off
       await tester.pumpWidget(host(game()));
-      expect(find.text('🔥 HOT'), findsOneWidget);
+      expect(find.text('HOT'), findsOneWidget);
       expect(find.text('512.0 KB'), findsNothing);
     });
   });

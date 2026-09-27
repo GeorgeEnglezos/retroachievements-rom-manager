@@ -969,35 +969,26 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
   /// game, a progression step on the way there, or a missable one. Null for
   /// standard achievements. The win condition borrows the same accent as the
   /// "Beaten" badge shown elsewhere so the two read as one idea.
-  ({
-    String label,
-    String mark,
-    IconData? icon,
-    String? emoji,
-    Color color,
-    double ring
-  })? _typeMarker(Achievement a) {
+  ({String label, String mark, IconData icon, Color color, double ring})?
+      _typeMarker(Achievement a) {
     final label = achievementTypeLabel(a.type);
     if (label == null) return null;
     final ui = context.ui;
     // The win condition finishes the game: gold (the app's mastery/completion
-    // accent), a crown, and a thicker ring so it clearly outranks the
-    // progression steps, which get a lighter flag. No Material crown glyph
-    // exists, so the crown is an emoji (gold in both themes). Missable is a
-    // caution, not a rank, so it takes the danger red.
+    // accent), a trophy, and a thicker ring so it clearly outranks the
+    // progression steps, which get a lighter flag. Missable is a caution, not
+    // a rank, so it takes the danger red.
     return switch (a.type) {
       'win_condition' => (
           label: label,
           mark: GameStrings.markStar,
-          emoji: '👑',
-          icon: null,
+          icon: Icons.emoji_events,
           color: ui.warning,
           ring: 3,
         ),
       'missable' => (
           label: label,
           mark: GameStrings.markWarning,
-          emoji: null,
           icon: Icons.warning_amber_rounded,
           color: kDangerColor,
           ring: 2,
@@ -1005,7 +996,6 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
       _ => (
           label: label,
           mark: GameStrings.markStar,
-          emoji: null,
           icon: Icons.flag_outlined,
           color: ui.accent,
           ring: 2,
@@ -1111,9 +1101,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
                 shape: BoxShape.circle,
                 border: Border.all(color: marker.color, width: 1),
               ),
-              child: marker.emoji != null
-                  ? Text(marker.emoji!, style: const TextStyle(fontSize: 11))
-                  : Icon(marker.icon, size: 12, color: marker.color),
+              child: Icon(marker.icon, size: 12, color: marker.color),
             ),
           ),
         ],

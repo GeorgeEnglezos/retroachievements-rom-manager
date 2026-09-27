@@ -23,7 +23,7 @@ class PlayView {
   /// The "N ACH" badge, the earned/total read and the progress bar.
   final bool achievementCount;
 
-  /// The "🔥 HOT" badge.
+  /// The "HOT" badge.
   final bool hot;
 
   /// The "NO ACH" badge.

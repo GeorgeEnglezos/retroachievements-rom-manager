@@ -90,10 +90,10 @@ void main() {
       playViewListenable.value = const PlayView(
           hot: false, achievementCount: false, fileTags: false);
       await tester.pumpWidget(harness());
-      expect(find.text('🔥 HOT'), findsOneWidget);
+      expect(find.text('HOT'), findsOneWidget);
       expect(find.text('12 ACH'), findsOneWidget);
       expect(find.text('NO ACH'), findsOneWidget);
-      expect(find.text('⧉ DUP'), findsOneWidget);
+      expect(find.text('DUP'), findsOneWidget);
       expect(find.byType(RomTagBadge), findsWidgets);
     });
 
@@ -115,7 +115,7 @@ void main() {
       playViewListenable.value =
           const PlayView(noAchievements: true, fileTags: true);
       await tester.pumpWidget(harness());
-      expect(find.text('🔥 HOT'), findsOneWidget);
+      expect(find.text('HOT'), findsOneWidget);
       expect(find.text('12 ACH'), findsOneWidget);
       expect(find.text('NO ACH'), findsOneWidget);
       expect(find.text('no-dup'), findsOneWidget);

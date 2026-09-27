@@ -443,7 +443,7 @@ abstract final class FolderStrings {
   static const undo = 'Undo';
 
   // -- Duplicates
-  static String copies(int count) => '⧉ $count COPIES';
+  static String copies(int count) => '$count COPIES';
 
   // -- Toolbar
   static const hideSearchAndFilters = 'Hide search & filters';
@@ -583,7 +583,6 @@ abstract final class LogsStrings {
 abstract final class GameStrings {
   // Achievement type marks.
   static const markStar = '★';
-  static const markCrown = '👑';
   static const markWarning = '⚠';
   // -- Achievement types
   static const winCondition = 'Win condition';
@@ -654,9 +653,9 @@ abstract final class GameStrings {
   static String progressCount(int earned, int total) => '$earned / $total';
 
   // -- Badges
-  static const dupBadge = '⧉ DUP';
+  static const dupBadge = 'DUP';
   static const dupTooltip = 'Another copy of this game is in this folder.';
-  static const hotBadge = '🔥 HOT';
+  static const hotBadge = 'HOT';
   static String hotTooltip(int? players) =>
       'Hot on RetroAchievements: '
       '$players players have earned achievements in this set ';
