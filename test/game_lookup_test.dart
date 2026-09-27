@@ -456,5 +456,64 @@ void main() {
           info: _info(), progress: progress(), library: lib);
       expect((await lib.load(sysDir.path)).games.single.progress, isNull);
     });
+
+    group('refreshGameDetail', () {
+      test('applies the live detail to the rom and persists it', () async {
+        final filePath = await seedDeferred();
+        final rom = RomResult(filePath: filePath, fileName: 'dashrunner.md')
+          ..status = RomStatus.supported
+          ..gameId = 7;
+        final ra = _FakeRa();
+
+        final ok = await refreshGameDetail(rom, library: lib, service: ra);
+
+        expect(ok, isTrue);
+        expect(ra.fetched, [7]);
+        expect(rom.boxArt, '/Images/box.png');
+        expect(rom.earnedAchievements, 5);
+        final stored = (await Library(baseDir: dataDir).load(sysDir.path))
+            .games
+            .single;
+        expect(stored.gameInfo!.imageBoxArt, '/Images/box.png');
+      });
+
+      test('makes no call for an unmatched rom', () async {
+        final rom = RomResult(filePath: 'x.md', fileName: 'x.md')
+          ..status = RomStatus.unsupported;
+        final ra = _FakeRa();
+
+        expect(await refreshGameDetail(rom, library: lib, service: ra), isFalse);
+        expect(ra.fetched, isEmpty);
+      });
+
+      test('a failed call leaves the rom untouched and reports false',
+          () async {
+        final rom = RomResult(filePath: 'x.md', fileName: 'x.md')
+          ..status = RomStatus.supported
+          ..gameId = 7;
+        final ra = _FakeRa()..throwDetail = true;
+
+        expect(await refreshGameDetail(rom, library: lib, service: ra), isFalse);
+        expect(rom.boxArt, isNull);
+      });
+    });
   });
+}
+
+class _FakeRa extends RaService {
+  _FakeRa() : super(username: 'u', apiKey: 'k');
+
+  final fetched = <int>[];
+  bool throwDetail = false;
+
+  @override
+  Future<(GameInfo, UserProgress)> getGameInfoAndUserProgress(
+      int gameId) async {
+    fetched.add(gameId);
+    if (throwDetail) throw Exception('network down');
+    return (
+      _info(),
+      UserProgress(gameId: gameId, earnedAchievements: 5, earnedHardcore: 2),
+    );
+  }
 }
