@@ -22,7 +22,7 @@ void main() {
         }),
       ),
     ));
-    expect(find.text('💿 3'), findsOneWidget);
+    expect(find.text('disks: 3'), findsOneWidget);
     expect(find.text('none-1'), findsOneWidget); // count < 2 → null
     expect(find.text('none-null'), findsOneWidget);
   });

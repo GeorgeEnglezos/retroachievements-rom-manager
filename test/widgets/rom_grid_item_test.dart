@@ -54,7 +54,7 @@ void main() {
       ),
     );
 
-    expect(find.text('💿 2'), findsOneWidget); // disc badge
+    expect(find.text('disks: 2'), findsOneWidget); // disc badge
     await tester.tap(find.byType(RomGridItem));
     await tester.pump();
     expect(opened, true);
