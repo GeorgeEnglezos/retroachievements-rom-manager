@@ -70,9 +70,9 @@ Widget? achBadge(RomResult rom, UiTokens ui) =>
         color: ui.accentGames,
       );
 
-/// "disks: N": this listing collapses N discs of a multi-disc game. For a
+/// Disc icon + N: this listing collapses N discs of a multi-disc game. For a
 /// Switch title the N files are its base, updates and DLC, not discs, so it
-/// reads as a file count instead. [fileName] is the collapsed row's
+/// reads as a plain file count instead. [fileName] is the collapsed row's
 /// representative file.
 Widget? discBadge(int? count, UiTokens ui, {String? fileName}) {
   if (count == null || count < 2) return null;

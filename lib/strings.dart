@@ -596,7 +596,6 @@ abstract final class GameStrings {
   static const favorited = 'Favorited';
   static const favorite = 'Favorite';
   static const unverifiedMatch = 'Unverified name match';
-  static String disc(int number) => 'Disc $number';
   static String fileOfInstalled(int index, int total) =>
       'File $index of $total · installed '
       'content, the base game is what boots';
@@ -669,7 +668,7 @@ abstract final class GameStrings {
   static String switchFilesTooltip(int count) =>
       '$count files: base game, updates and DLC. '
       'Only the base game boots.';
-  static String discsBadge(int count) => 'disks: $count';
+  static String discsBadge(int count) => '$count';
   static String discsTooltip(int count) => '$count-disc game';
 }
 

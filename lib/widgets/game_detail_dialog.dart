@@ -730,7 +730,7 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
         ? switchPartLabels([for (final d in _discs) d.fileName])
         : [
             for (var i = 0; i < _discs.length; i++)
-              GameStrings.disc(discNumber(_discs[i].fileName) ?? i + 1),
+              (discNumber(_discs[i].fileName) ?? i + 1).toString(),
           ];
     return Padding(
       padding: const EdgeInsets.only(top: 12),
@@ -744,7 +744,11 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
               onChanged: _selectDisc,
               segments: [
                 for (var i = 0; i < _discs.length; i++)
-                  (value: i, label: labels[i], icon: null),
+                  (
+                    value: i,
+                    label: labels[i],
+                    icon: _switchTitle ? null : Icons.album,
+                  ),
               ],
             ),
           ),
