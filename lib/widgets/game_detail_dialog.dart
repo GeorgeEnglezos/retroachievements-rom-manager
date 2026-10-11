@@ -502,15 +502,28 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
           children: [
             Expanded(
               flex: 5,
-              child: _panel(
+              // Actions pinned under the scrolling details, so Play is never
+              // below the fold.
+              child: UiCard(
                 key: const Key('gameDetailPanel'),
+                padding: EdgeInsets.zero,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    ..._artSection(),
-                    _buildInfo(context, withProgress: false),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            ..._artSection(),
+                            _buildInfo(context, withProgress: false),
+                          ],
+                        ),
+                      ),
+                    ),
                     const Divider(height: 1),
+                    const SizedBox(height: 8),
                     _buildActions(),
                   ],
                 ),
@@ -1157,11 +1170,11 @@ class _MasteryPulse extends StatefulWidget {
 class _MasteryPulseState extends State<_MasteryPulse>
     with SingleTickerProviderStateMixin {
   late final _controller = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 700));
+      vsync: this, duration: UiMotion.slow);
   late final _scale = TweenSequence([
     TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.06), weight: 1),
     TweenSequenceItem(tween: Tween(begin: 1.06, end: 1.0), weight: 2),
-  ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+  ]).animate(CurvedAnimation(parent: _controller, curve: UiMotion.curve));
 
   @override
   void didChangeDependencies() {
