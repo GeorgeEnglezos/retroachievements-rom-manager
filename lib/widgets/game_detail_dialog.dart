@@ -855,7 +855,14 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
               ),
         ),
         const SizedBox(height: 8),
-        RomProgress(rom: rom, barHeight: 8, labelSize: 13, labelWeight: FontWeight.w600),
+        _MasteryPulse(
+          // Keyed per disc so switching to a finished one replays it.
+          key: ValueKey(rom.filePath),
+          play: RomProgress.hasProgress(rom) &&
+              rom.earnedAchievements! >= rom.achievementCount!,
+          child: RomProgress(
+              rom: rom, barHeight: 8, labelSize: 13, labelWeight: FontWeight.w600),
+        ),
         if (RomProgress.masteryHint(rom) case final hint?)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -1133,4 +1140,56 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
 
 
   String _fmt(int? n) => n == null ? '0' : compactCount(n);
+}
+
+/// A one-shot scale pulse over a finished set's progress, played once when the
+/// dialog opens on it. Skipped when the platform asks for no animations.
+class _MasteryPulse extends StatefulWidget {
+  final bool play;
+  final Widget child;
+
+  const _MasteryPulse({super.key, required this.play, required this.child});
+
+  @override
+  State<_MasteryPulse> createState() => _MasteryPulseState();
+}
+
+class _MasteryPulseState extends State<_MasteryPulse>
+    with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 700));
+  late final _scale = TweenSequence([
+    TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.06), weight: 1),
+    TweenSequenceItem(tween: Tween(begin: 1.06, end: 1.0), weight: 2),
+  ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // MediaQuery isn't readable in initState; start here, once.
+    if (!_controller.isAnimating && !_controller.isCompleted) _maybePlay();
+  }
+
+  // A refresh that finishes the set while the dialog is open pulses too.
+  @override
+  void didUpdateWidget(_MasteryPulse old) {
+    super.didUpdateWidget(old);
+    if (!old.play) _maybePlay();
+  }
+
+  void _maybePlay() {
+    if (widget.play && !MediaQuery.disableAnimationsOf(context)) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      ScaleTransition(scale: _scale, alignment: Alignment.centerLeft, child: widget.child);
 }

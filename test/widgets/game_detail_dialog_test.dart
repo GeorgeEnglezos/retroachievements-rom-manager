@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:rarm/models/rom_result.dart';
 import 'package:rarm/models/scraped_game.dart';
 import 'package:rarm/widgets/game_detail_dialog.dart';
+import 'package:rarm/widgets/rom_progress.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/fixtures.dart';
@@ -233,5 +234,32 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const Key('gameAchievementsPanel')), findsNothing);
+  });
+
+  testWidgets('mastery pulse plays when a refresh completes the set',
+      (tester) async {
+    final rom = RomResult(filePath: 'snes/zeta.sfc', fileName: 'zeta.sfc')
+      ..status = RomStatus.supported
+      ..gameTitle = 'Zeta Trek'
+      ..achievementCount = 50
+      ..earnedAchievements = 49;
+    Widget dialog() => MaterialApp(home: GameDetailDialog(rom: rom));
+    double scale() => tester
+        .widget<ScaleTransition>(find
+            .ancestor(
+                of: find.byType(RomProgress),
+                matching: find.byType(ScaleTransition))
+            .first)
+        .scale
+        .value;
+
+    await tester.pumpWidget(dialog());
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(scale(), 1.0); // 49/50: no pulse
+
+    rom.earnedAchievements = 50; // a fetch finished the set
+    await tester.pumpWidget(dialog());
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(scale(), greaterThan(1.0));
   });
 }

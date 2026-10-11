@@ -62,40 +62,31 @@ class RomProgress extends StatelessWidget {
     return GameStrings.achievementsToGo(remaining);
   }
 
+  /// The progress label and colour.
+  /// The RA award is authoritative when present: it distinguishes a hardcore
+  /// mastery from a softcore completion, and marks "beaten" (game finished but
+  /// not every achievement earned). Falls back to the count when absent.
+  static (String, Color) _labelAndColor(RomResult rom, UiTokens ui) {
+    final earned = rom.earnedAchievements ?? 0;
+    final total = rom.achievementCount ?? 0;
+    return switch (rom.highestAward ?? RaAward.none) {
+      RaAward.mastered => (GameStrings.mastered, ui.warning),
+      RaAward.completed => (GameStrings.completed, ui.warning),
+      RaAward.beatenHardcore ||
+      RaAward.beatenSoftcore => (GameStrings.beaten, ui.accentGames),
+      RaAward.none when total > 0 && earned >= total =>
+        (GameStrings.mastered, ui.warning),
+      RaAward.none when earned == 0 => (GameStrings.notStarted, ui.muted),
+      RaAward.none => (GameStrings.progressCount(earned, total), ui.supported),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final ui = context.ui;
-    final earned = rom.earnedAchievements ?? 0;
-    final total = rom.achievementCount ?? 0;
-    final fraction = achievementFraction(earned, total);
-
-    // The RA award is authoritative when present: it distinguishes a hardcore
-    // mastery from a softcore completion, and marks "beaten" (game finished but
-    // not every achievement earned). Falls back to the count when absent.
-    final String label;
-    final Color color;
-    switch (rom.highestAward ?? RaAward.none) {
-      case RaAward.mastered:
-        label = GameStrings.mastered;
-        color = ui.warning;
-      case RaAward.completed:
-        label = GameStrings.completed;
-        color = ui.warning;
-      case RaAward.beatenHardcore || RaAward.beatenSoftcore:
-        label = GameStrings.beaten;
-        color = ui.accentGames;
-      case RaAward.none:
-        if (total > 0 && earned >= total) {
-          label = GameStrings.mastered;
-          color = ui.warning;
-        } else if (earned == 0) {
-          label = GameStrings.notStarted;
-          color = ui.muted;
-        } else {
-          label = GameStrings.progressCount(earned, total);
-          color = ui.supported;
-        }
-    }
+    final fraction = achievementFraction(
+        rom.earnedAchievements ?? 0, rom.achievementCount ?? 0);
+    final (label, color) = _labelAndColor(rom, ui);
 
     final barColor = colorOverride ?? color;
     final bar = UiProgressBar(
