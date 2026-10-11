@@ -472,8 +472,8 @@ class RomActions {
       ),
     );
     if (open != true) return;
-    if (!await FileActions.openUrl(
-        FileActions.raSupportedListUrl(rom.consoleId))) {
+    if (!await FileActions.openUrl(FileActions.raSupportedListUrl(
+        rom.consoleId ?? rom.hashConsoleId))) {
       messenger.showSnackBar(
           const SnackBar(content: Text(GameActionStrings.browserFailed)));
     }
