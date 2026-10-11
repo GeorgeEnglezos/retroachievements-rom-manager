@@ -584,26 +584,9 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
           if (rom.consoleName != null)
             Text(rom.consoleName!,
                 style: Theme.of(context).textTheme.bodySmall),
-          if (rom.lowConfidenceMatch)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.help_outline, size: 14, color: context.ui.muted),
-                  const SizedBox(width: 4),
-                  Text(GameStrings.unverifiedMatch,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: context.ui.muted)),
-                ],
-              ),
-            ),
           if (_multiDisc) _buildDiscSwitcher(context),
-          // Full RA stats/progress only for hash-matched games. Third-party
-          // metadataOnly rows show the meta rows without the achievement UI;
-          // local-only rows show neither.
+          // Full RA stats/progress only for hash-matched games; imported
+          // (scraped) data shows the meta rows alone.
           if (rom.status == RomStatus.supported) ...[
             const SizedBox(height: 16),
             _buildStats(context),
@@ -613,9 +596,6 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
               const Divider(height: 28),
               _buildProgressSection(context),
             ],
-          ] else if (rom.status == RomStatus.metadataOnly) ...[
-            const SizedBox(height: 16),
-            _buildMetaRows(context),
           ] else if (widget.scraped != null) ...[
             const SizedBox(height: 16),
             _buildMetaRows(context),

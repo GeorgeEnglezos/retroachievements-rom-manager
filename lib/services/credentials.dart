@@ -1,5 +1,4 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'metadata/metadata_provider.dart';
 import 'pref_keys.dart';
 import 'secret_store.dart';
 
@@ -45,12 +44,3 @@ Future<(String, String)?> savedCredentials() async {
   if (username.isEmpty || apiKey.isEmpty) return null;
   return (username, apiKey);
 }
-
-/// The third-party metadata provider for RA-unsupported (display-only) systems.
-///
-/// Currently always null: RA is the only data source. Every third-party API we
-/// evaluated (ScreenScraper, IGDB, RAWG, Wikidata) was unworkable for an
-/// open-source, backend-less, user-facing app. The [MetadataProvider] interface
-/// and the fetch pipeline are kept intact, so a viable provider only needs
-/// building here; no other wiring changes.
-Future<MetadataProvider?> savedMetadataProvider() async => null;

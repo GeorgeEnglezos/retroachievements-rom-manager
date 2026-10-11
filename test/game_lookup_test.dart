@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:rarm/models/game_entry.dart';
-import 'package:rarm/models/game_metadata.dart';
 import 'package:rarm/models/rom_result.dart';
 import 'package:rarm/models/system_data.dart';
 import 'package:rarm/models/user_progress.dart';
@@ -42,40 +41,6 @@ void main() {
       final rom = RomResult(filePath: 'C:/g/x.md', fileName: 'x.md');
       applyGameInfo(rom, null);
       expect(rom.status, RomStatus.unsupported);
-    });
-  });
-
-  group('applyMetadata', () {
-    test('copies fields and sets metadataOnly', () {
-      final rom = RomResult(filePath: 'ps3/r.iso', fileName: 'r.iso');
-      applyMetadata(
-          rom,
-          const GameMetadata(
-            providerId: 'ss',
-            title: 'Racer',
-            publisher: 'Acme',
-            genre: 'Racing',
-            imageUrl: 'https://cdn/r.png',
-            matchConfidence: 0.9,
-          ));
-      expect(rom.status, RomStatus.metadataOnly);
-      expect(rom.gameTitle, 'Racer');
-      expect(rom.publisher, 'Acme');
-      expect(rom.imageUrl, 'https://cdn/r.png');
-      expect(rom.lowConfidenceMatch, isFalse);
-    });
-
-    test('flags a low-confidence match', () {
-      final rom = RomResult(filePath: 'ps3/r.iso', fileName: 'r.iso');
-      applyMetadata(rom,
-          const GameMetadata(providerId: 'ss', title: 'Racer', matchConfidence: 0.4));
-      expect(rom.lowConfidenceMatch, isTrue);
-    });
-
-    test('null metadata leaves the row local-only', () {
-      final rom = RomResult(filePath: 'ps3/r.iso', fileName: 'r.iso');
-      applyMetadata(rom, null);
-      expect(rom.status, RomStatus.localOnly);
     });
   });
 
@@ -162,7 +127,7 @@ void main() {
       expect(rom.consoleName, 'My Folder');
     });
 
-    test('display-only entry with metadata resolves metadataOnly', () {
+    test('a display-only entry resolves localOnly', () {
       final e = GameEntry(
         filePath: 'ps3/racer.iso',
         fileName: 'racer.iso',
@@ -174,27 +139,6 @@ void main() {
         lastScanned: DateTime(2026, 7, 1),
         gameInfo: null,
         progress: null,
-        metadata: const GameMetadata(providerId: 'ss', title: 'Racer'),
-      );
-      final rom = romFromEntry(e, consoleId: -3); // PS3
-      expect(rom.status, RomStatus.metadataOnly);
-      expect(rom.gameTitle, 'Racer');
-      expect(rom.consoleName, 'PlayStation 3');
-    });
-
-    test('stale metadata from a removed provider falls back to localOnly', () {
-      final e = GameEntry(
-        filePath: 'ps3/racer.iso',
-        fileName: 'racer.iso',
-        fileSize: 1,
-        md5: null,
-        gameId: null,
-        matched: false,
-        noMatch: false,
-        lastScanned: DateTime(2026, 7, 1),
-        gameInfo: null,
-        progress: null,
-        metadata: const GameMetadata(providerId: 'wikidata', title: 'Racer'),
       );
       final rom = romFromEntry(e, consoleId: -3); // PS3
       expect(rom.status, RomStatus.localOnly);

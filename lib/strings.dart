@@ -426,10 +426,7 @@ abstract final class FolderStrings {
       'Unknown console for this folder. Set it in Settings → System mapping.';
   static const thisSystem = 'This system';
   static String notOnRetroAchievements(String name) =>
-      "$name isn't on RetroAchievements. Add a metadata source in "
-      'Settings to fetch game info.';
-  static String unsupportedByMetadataSource(String name) =>
-      "$name isn't supported by the selected metadata source.";
+      "$name isn't on RetroAchievements, so there is nothing to fetch.";
   static const noMatchedGamesToSync = 'No matched games to sync.';
   static String syncProgressFailed(Object error) =>
       'Failed to sync progress: $error';
@@ -603,7 +600,6 @@ abstract final class GameStrings {
   static const achievementsLoadFailed = "Couldn't load achievements";
   static const favorited = 'Favorited';
   static const favorite = 'Favorite';
-  static const unverifiedMatch = 'Unverified name match';
   static String fileOfInstalled(int index, int total) =>
       'File $index of $total · installed '
       'content, the base game is what boots';

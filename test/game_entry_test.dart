@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rarm/models/game_entry.dart';
-import 'package:rarm/models/game_metadata.dart';
 import 'package:rarm/services/ra_service.dart';
 import 'package:rarm/models/user_progress.dart';
 
@@ -108,34 +107,9 @@ void main() {
     expect(entry.hashConsoleId, isNull);
   });
 
-  test('third-party metadata round-trips through JSON', () {
-    final entry = GameEntry(
-      filePath: 'ps3/racer.iso',
-      fileName: 'racer.iso',
-      fileSize: 1,
-      md5: null,
-      gameId: null,
-      matched: false,
-      noMatch: false,
-      lastScanned: DateTime.parse('2026-07-01T10:00:00.000'),
-      gameInfo: null,
-      progress: null,
-      metadata: const GameMetadata(
-        providerId: 'screenscraper',
-        title: 'Racer',
-        publisher: 'Acme',
-        imageUrl: 'https://cdn.example.com/r.png',
-        matchConfidence: 0.9,
-      ),
-    );
-    final restored = GameEntry.fromJson(entry.toJson());
-    expect(restored.metadata!.title, 'Racer');
-    expect(restored.metadata!.providerId, 'screenscraper');
-    expect(restored.metadata!.imageUrl, 'https://cdn.example.com/r.png');
-  });
-
-  test('metadata is null on legacy JSON without the field', () {
+  test('a legacy metadata blob is ignored on read and dropped on write', () {
     final restored = GameEntry.fromJson({
+      'metadata': {'providerId': 'old', 'title': 'Old Racer'},
       'filePath': 'x',
       'fileName': 'x',
       'fileSize': 1,
@@ -145,7 +119,7 @@ void main() {
       'noMatch': true,
       'lastScanned': '2026-06-13T10:00:00.000',
     });
-    expect(restored.metadata, isNull);
+    expect(restored.toJson().containsKey('metadata'), isFalse);
   });
 
   test('hashConsoleId is null on legacy JSON without the field', () {

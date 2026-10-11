@@ -14,9 +14,6 @@ import 'game_lookup.dart';
 import 'incremental_scan.dart';
 import 'library.dart';
 import 'log_service.dart';
-import 'metadata/metadata_provider.dart';
-import 'metadata_cache.dart';
-import 'metadata_fetch.dart';
 import 'ra_cache.dart';
 import 'ra_service.dart';
 import 'rom_file_lister.dart';
@@ -79,8 +76,6 @@ Future<FolderRunResult> runFolderFetch({
   required Map<int, (GameInfo, UserProgress)> detailCache,
   RaService? service,
   int? consoleId,
-  MetadataProvider? metadataProvider,
-  MetadataCache? metadataCache,
   Map<int, CompletedGame>? progressByGameId,
   String logContext = 'fetchRun',
   void Function(GameEntry entry)? onEntry,
@@ -145,44 +140,8 @@ Future<FolderRunResult> runFolderFetch({
 
   if (!plan.match) return finish();
 
-  // Display-only console: no RA hash exists. Fetch metadata by name when a
-  // provider is configured, otherwise record size only.
+  // Display-only console: no RA hash exists, so record size only.
   if (folderConsoleId == null || !ConsoleMap.isRaSupported(folderConsoleId)) {
-    if (folderConsoleId != null &&
-        metadataProvider != null &&
-        metadataProvider.supports(folderConsoleId)) {
-      // "Only unfetched" here means "has no metadata yet"; a no-match leaves
-      // the entry bare, so it is retried next time.
-      final targets = [
-        for (final f in files)
-          if (plan.matchReFetchAll || entryByPath[f.path]?.metadata == null)
-            f.path,
-      ];
-      onTargets?.call(targets.length);
-
-      await runMetadataFetch(
-        files: targets,
-        consoleId: folderConsoleId,
-        provider: metadataProvider,
-        cache: metadataCache ?? MetadataCache(),
-        isCancelled: () => run.cancelled,
-        onResult: (path, meta) {
-          // GameEntry.copyWith cannot null a field out, and wiping a previous
-          // match on a transient miss would be wrong anyway: skip no-matches.
-          if (meta != null) {
-            final prev = entryByPath[path] ??
-                GameEntry.unscanned(path, fileSize: sizeByPath[path]);
-            final updated =
-                prev.copyWith(lastScanned: DateTime.now(), metadata: meta);
-            entryByPath[path] = updated;
-            onEntry?.call(updated);
-          }
-          run.tick();
-        },
-      );
-      return finish();
-    }
-
     final consoleName = ConsoleMap.nameFor(folderConsoleId);
     LogService.warning(
         logContext,

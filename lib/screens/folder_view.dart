@@ -9,11 +9,9 @@ import '../services/duplicate_finder.dart';
 import '../services/fetch_engine.dart';
 import '../services/fetch_pipeline.dart';
 import '../services/fetch_run.dart';
-import '../services/credentials.dart';
 import '../services/scan_run.dart';
 import '../services/game_lookup.dart';
 import '../services/log_service.dart';
-import '../services/metadata_cache.dart';
 import '../services/ra_cache.dart';
 import '../services/ra_service.dart';
 import '../services/scan_settings.dart';
@@ -93,9 +91,6 @@ class _FolderViewState extends State<FolderView> {
   bool _loading = true;
   // False for a single non-RA folder; hides the fetch/hash Actions button.
   bool _raSupported = true;
-  // True when a display-only folder can still fetch metadata via a configured
-  // third-party provider; keeps the Actions button available for it.
-  bool _metadataFetchable = false;
   FolderSort _folderSort = FolderSort.alphabetical;
   bool _sortAscending = true;
   bool _gridView = false;
@@ -280,17 +275,6 @@ class _FolderViewState extends State<FolderView> {
       (path) => ConsoleMap.isRaSupported(consoleIdByPath[path]),
     );
 
-    // A display-only folder is still fetchable if a third-party metadata
-    // provider is configured and supports its console.
-    if (!_raSupported) {
-      final provider = await savedMetadataProvider();
-      _metadataFetchable =
-          provider != null &&
-          widget.folderPaths.any((path) {
-            final id = consoleIdByPath[path];
-            return id != null && provider.supports(id);
-          });
-    }
 
     // Each game's stale-hash check uses its own folder's current console, so a
     // mixed-console view ("All games") doesn't judge every game by one console
@@ -342,7 +326,6 @@ class _FolderViewState extends State<FolderView> {
           noMatch: r.status == RomStatus.unsupported,
           lastScanned: DateTime.now(),
           hashConsoleId: r.hashConsoleId,
-          metadata: r.metadata,
           gameInfo: _romToGameInfo(r),
           progress: r.earnedAchievements == null
               ? null
@@ -434,20 +417,15 @@ class _FolderViewState extends State<FolderView> {
     }
     if (!mounted) return;
 
-    final metadataProvider = await savedMetadataProvider();
-
     // Nothing here is fetchable. Say why, rather than starting a run that does
     // no work and ends without a word.
-    if (!ConsoleMap.isRaSupported(consoleId) &&
-        (metadataProvider == null || !metadataProvider.supports(consoleId))) {
+    if (!ConsoleMap.isRaSupported(consoleId)) {
       if (!mounted) return;
       final name = ConsoleMap.nameFor(consoleId) ?? FolderStrings.thisSystem;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            metadataProvider == null
-                ? FolderStrings.notOnRetroAchievements(name)
-                : FolderStrings.unsupportedByMetadataSource(name),
+            FolderStrings.notOnRetroAchievements(name),
           ),
         ),
       );
@@ -501,8 +479,6 @@ class _FolderViewState extends State<FolderView> {
           detailCache: detailCache,
           service: service,
           consoleId: widget.consoleId,
-          metadataProvider: metadataProvider,
-          metadataCache: MetadataCache(),
           progressByGameId: progressByGameId,
           logContext: 'FolderView/fetch',
           onTargets: run.addTotal,
@@ -994,7 +970,7 @@ class _FolderViewState extends State<FolderView> {
             )
           : content,
       floatingActionButton:
-          widget.showActions && (_raSupported || _metadataFetchable)
+          widget.showActions && _raSupported
           ? FetchFab(onPressed: _showTaskDialog)
           : null,
     );

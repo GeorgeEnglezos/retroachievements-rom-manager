@@ -24,13 +24,6 @@ void main() {
     expect(row.showChevron, isFalse);
   });
 
-  test('fromRom uses a metadataOnly cover url as the row image', () {
-    final rom = RomResult(filePath: 'ps3/racer.iso', fileName: 'racer.iso')
-      ..status = RomStatus.metadataOnly
-      ..imageUrl = 'https://cdn/cover.png';
-    expect(RomRow.fromRom(rom).imageIcon, 'https://cdn/cover.png');
-  });
-
   test('fromTreemap is a deletable file row when path is a file', () {
     final item = TreemapItem('Game.gba', 1000, path: r'C:\ROMs\GBA\Game.gba');
     final row = RomRow.fromTreemap(item, fraction: 0.5, isFolder: false);

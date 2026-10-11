@@ -27,7 +27,7 @@ void main() {
     expect(find.text('none-null'), findsOneWidget);
   });
 
-  testWidgets('noAchBadge renders for unsupported/localOnly/metadataOnly',
+  testWidgets('noAchBadge renders for unsupported/localOnly',
       (tester) async {
     RomResult rom(RomStatus s) =>
         RomResult(filePath: 'a', fileName: 'a')..status = s;
@@ -36,13 +36,12 @@ void main() {
         body: Column(children: [
           noAchBadge(rom(RomStatus.unsupported)) ?? const Text('none-1'),
           noAchBadge(rom(RomStatus.localOnly)) ?? const Text('none-2'),
-          noAchBadge(rom(RomStatus.metadataOnly)) ?? const Text('none-3'),
           noAchBadge(rom(RomStatus.supported)) ?? const Text('none-supported'),
           noAchBadge(rom(RomStatus.notFetched)) ?? const Text('none-fetched'),
         ]),
       ),
     ));
-    expect(find.text('NO ACH'), findsNWidgets(3));
+    expect(find.text('NO ACH'), findsNWidgets(2));
     expect(find.text('none-supported'), findsOneWidget);
     expect(find.text('none-fetched'), findsOneWidget);
   });
@@ -128,7 +127,6 @@ void main() {
         RomResult(filePath: 'a', fileName: 'a')..status = s;
     expect(romStatusText(rom(RomStatus.supported)), isNull);
     expect(romStatusText(rom(RomStatus.localOnly)), isNull);
-    expect(romStatusText(rom(RomStatus.metadataOnly)), isNull);
     expect(romStatusText(rom(RomStatus.error)..errorMessage = 'boom'), 'boom');
     expect(romStatusText(rom(RomStatus.error)), statusLabel(RomStatus.error));
     expect(romStatusText(rom(RomStatus.unsupported)),

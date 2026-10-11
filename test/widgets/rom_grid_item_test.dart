@@ -12,7 +12,6 @@ import 'package:rarm/services/scraper/scraped_store.dart';
 import 'package:rarm/theme/ui_theme.dart';
 import 'package:rarm/theme/ui_tokens.dart';
 import 'package:rarm/widgets/game_cover.dart';
-import 'package:rarm/widgets/ra_image.dart';
 import 'package:rarm/widgets/rom_grid_item.dart';
 import 'package:rarm/widgets/rom_list_view.dart' show gridTextBlock;
 import 'package:rarm/widgets/rom_thumb.dart';
@@ -157,23 +156,6 @@ void main() {
         (tester.widget<Image>(find.byType(Image)).image as ResizeImage)
             .imageProvider;
     expect((provider as FileImage).file.path, art.path);
-  });
-
-  testWidgets('metadataOnly rom renders its third-party cover', (tester) async {
-    final rom = RomResult(filePath: 'ps3/racer.iso', fileName: 'racer.iso')
-      ..status = RomStatus.metadataOnly
-      ..gameTitle = 'Racer'
-      ..imageUrl = 'https://cdn.screenscraper.fr/box.png';
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: _cell(RomGridItem(rom: rom, store: PlaylistStore())),
-        ),
-      ),
-    );
-    // The absolute cover URL is used as-is (not prefixed with the RA host).
-    final img = tester.widget<RaImage>(find.byType(RaImage));
-    expect(img.url, 'https://cdn.screenscraper.fr/box.png');
   });
 
   group('play-mode listing settings', () {

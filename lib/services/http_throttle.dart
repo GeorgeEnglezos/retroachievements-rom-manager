@@ -1,6 +1,6 @@
 import 'package:http/http.dart' as http;
 
-/// One serialized, rate-limited GET shared by every metadata provider.
+/// One serialized, rate-limited GET for the RetroAchievements API.
 ///
 /// Spaces requests out by [minGap], backs off on HTTP 429 (honoring a
 /// `Retry-After` header when present), and serializes concurrent callers so a

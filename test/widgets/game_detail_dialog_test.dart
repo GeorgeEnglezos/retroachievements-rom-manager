@@ -73,24 +73,9 @@ void main() {
     expect(find.text('Players'), findsNothing);
   });
 
-  testWidgets('metadataOnly dialog shows meta rows but no achievement stats',
-      (tester) async {
-    final rom = RomResult(filePath: 'ps3/racer.iso', fileName: 'racer.iso')
-      ..status = RomStatus.metadataOnly
-      ..gameTitle = 'Some Racer'
-      ..consoleName = 'PlayStation 3'
-      ..publisher = 'Acme';
-    await tester.pumpWidget(MaterialApp(home: GameDetailDialog(rom: rom)));
-    await tester.pump();
-
-    expect(find.text('Publisher'), findsOneWidget); // meta row shown
-    expect(find.text('Achievements'), findsNothing); // achievement UI hidden
-    expect(find.text('Players'), findsNothing);
-  });
-
   testWidgets('scraped values fill RA gaps in the meta rows', (tester) async {
     final rom = RomResult(filePath: 'ps3/racer.iso', fileName: 'racer.iso')
-      ..status = RomStatus.metadataOnly
+      ..status = RomStatus.localOnly
       ..gameTitle = 'Some Racer'
       ..publisher = ''; // empty RA field must fall through to scraped
     const scraped = ScrapedGame(
@@ -118,7 +103,7 @@ void main() {
     final art = File(p.join(dir.path, 'shot.png'))..writeAsBytesSync(kTinyPng);
 
     final rom = RomResult(filePath: 'ps3/racer.iso', fileName: 'racer.iso')
-      ..status = RomStatus.metadataOnly
+      ..status = RomStatus.unsupported
       ..gameTitle = 'Some Racer';
     await tester.pumpWidget(MaterialApp(
       home: GameDetailDialog(
@@ -136,17 +121,6 @@ void main() {
     await tester.pump(); // start the dialog route
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(InteractiveViewer), findsOneWidget);
-  });
-
-  testWidgets('low-confidence match shows an unverified indicator',
-      (tester) async {
-    final rom = RomResult(filePath: 'ps3/racer.iso', fileName: 'racer.iso')
-      ..status = RomStatus.metadataOnly
-      ..gameTitle = 'Some Racer'
-      ..lowConfidenceMatch = true;
-    await tester.pumpWidget(MaterialApp(home: GameDetailDialog(rom: rom)));
-    await tester.pump();
-    expect(find.text('Unverified name match'), findsOneWidget);
   });
 
   testWidgets('wide window splits the dialog into two panels', (tester) async {
@@ -228,7 +202,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     final rom = RomResult(filePath: 'ps3/racer.iso', fileName: 'racer.iso')
-      ..status = RomStatus.metadataOnly
+      ..status = RomStatus.localOnly
       ..gameTitle = 'Some Racer';
     await tester.pumpWidget(MaterialApp(home: GameDetailDialog(rom: rom)));
     await tester.pump();

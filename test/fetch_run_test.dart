@@ -4,13 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:rarm/models/fetch_plan.dart';
 import 'package:rarm/models/game_entry.dart';
-import 'package:rarm/models/game_metadata.dart';
 import 'package:rarm/models/system_data.dart';
 import 'package:rarm/models/user_progress.dart';
 import 'package:rarm/services/fetch_run.dart';
 import 'package:rarm/services/library.dart';
-import 'package:rarm/services/metadata/metadata_provider.dart';
-import 'package:rarm/services/metadata_cache.dart';
 import 'package:rarm/services/ra_cache.dart';
 import 'package:rarm/services/ra_service.dart';
 import 'package:rarm/services/scan_progress.dart';
@@ -61,28 +58,8 @@ class _FakeRa extends RaService {
   }
 }
 
-class _FakeProvider implements MetadataProvider {
-  int lookups = 0;
-
-  @override
-  String get id => 'fake';
-
-  @override
-  String get label => 'Fake';
-
-  @override
-  bool supports(int consoleId) => true;
-
-  @override
-  Future<GameMetadata?> lookup(
-      {required String name, required int consoleId}) async {
-    lookups++;
-    return GameMetadata(providerId: id, title: name);
-  }
-}
-
 // Display-only consoles live in ConsoleMap.displayNames under negative ids, so
-// isRaSupported is false for them and the runner takes the metadata branch.
+// isRaSupported is false for them and the runner records size only.
 const _displayOnlyConsoleId = -3; // PlayStation 3
 
 void main() {
@@ -90,7 +67,6 @@ void main() {
 
   late Directory romDir;
   late Directory dataDir;
-  late Directory metadataDir;
   late Directory cacheDir;
   late Library library;
 
@@ -99,7 +75,6 @@ void main() {
     ScanProgress.instance.stop();
     romDir = Directory.systemTemp.createTempSync('fr_roms');
     dataDir = Directory.systemTemp.createTempSync('fr_data');
-    metadataDir = Directory.systemTemp.createTempSync('fr_metadata');
     cacheDir = Directory.systemTemp.createTempSync('fr_cache');
     library = Library(baseDir: dataDir);
   });
@@ -108,7 +83,6 @@ void main() {
     ScanProgress.instance.stop();
     romDir.deleteSync(recursive: true);
     dataDir.deleteSync(recursive: true);
-    metadataDir.deleteSync(recursive: true);
     cacheDir.deleteSync(recursive: true);
   });
 
@@ -604,28 +578,7 @@ void main() {
   });
 
   group('display-only consoles', () {
-    test('fetches metadata when a provider supports the console', () async {
-      rom('one.iso');
-      final provider = _FakeProvider();
-
-      final result = await runFolderFetch(
-        folderPath: romDir.path,
-        plan: const FetchPlan(scope: FetchScope.all, match: true),
-        extensions: const {'iso'},
-        library: library,
-        run: ScanRun()..start(),
-        raCache: RaCache(baseDir: cacheDir),
-        detailCache: {},
-        consoleId: _displayOnlyConsoleId,
-        metadataProvider: provider,
-        metadataCache: MetadataCache(baseDir: metadataDir),
-      );
-
-      expect(provider.lookups, 1);
-      expect(result.saved.games.single.metadata, isNotNull);
-    });
-
-    test('records size only when no provider is configured', () async {
+    test('records size only for a display-only console', () async {
       rom('one.iso');
 
       final result = await runFolderFetch(
@@ -641,7 +594,6 @@ void main() {
 
       final game = result.saved.games.single;
       expect(game.matched, isFalse);
-      expect(game.metadata, isNull);
       expect(game.fileSize, greaterThan(0));
       // The sweep names this folder instead of passing over it in silence.
       expect(result.skipReason, isNotNull);
@@ -682,43 +634,5 @@ void main() {
       expect(result.skipReason, isNull);
     });
 
-    test('skips entries that already have metadata unless re-fetching all',
-        () async {
-      rom('one.iso');
-      final provider = _FakeProvider();
-      // Each call gets its own on-disk cache dir: MetadataCache persists hits
-      // to disk, and a shared cache would short-circuit the third (re-fetch
-      // all) call before it ever reaches the runner's target selection, which
-      // is what this test is actually checking.
-      final cacheDirs = <Directory>[];
-      Future<void> fetch({bool all = false}) {
-        final cacheDir = Directory.systemTemp.createTempSync('fr_metadata');
-        cacheDirs.add(cacheDir);
-        return runFolderFetch(
-          folderPath: romDir.path,
-          plan: FetchPlan(
-              scope: FetchScope.all, match: true, matchReFetchAll: all),
-          extensions: const {'iso'},
-          library: library,
-          run: ScanRun()..start(),
-          raCache: RaCache(baseDir: cacheDir),
-          detailCache: {},
-          consoleId: _displayOnlyConsoleId,
-          metadataProvider: provider,
-          metadataCache: MetadataCache(baseDir: cacheDir),
-        );
-      }
-
-      await fetch();
-      expect(provider.lookups, 1);
-      await fetch();
-      expect(provider.lookups, 1); // skipped
-      await fetch(all: true);
-      expect(provider.lookups, 2);
-
-      for (final d in cacheDirs) {
-        d.deleteSync(recursive: true);
-      }
-    });
   });
 }

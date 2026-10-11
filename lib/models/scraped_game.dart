@@ -1,5 +1,5 @@
 /// One game's imported (Skraper / gamelist.xml) metadata, matched to a local
-/// ROM by absolute file path. Separate from RA's [GameMetadata]/[GameInfo]:
+/// ROM by absolute file path. Separate from RA's [GameInfo]:
 /// this only fills RA's gaps and supplies extra local images (reference-in-place:
 /// [images] values are absolute paths on disk, rendered with Image.file).
 class ScrapedGame {
