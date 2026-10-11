@@ -1,9 +1,15 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import '../../theme/ui_tokens.dart';
 
 /// The slight zoom every focusable surface plays on highlight. Game tiles pass
 /// a bigger scale of their own; everything else shares this.
 const double uiFocusZoom = 1.02;
+
+/// Zoom cap for wide rows ([FocusFlourish.jump]): a percentage zoom on a
+/// full-width row pushes its edges past the screen, so rows mostly hop.
+const double uiRowZoom = 1.006;
 
 /// Slight highlight zoom for controls that already own a focus node: the raw
 /// Material buttons, text fields, list tiles and nav rows that never went
@@ -36,8 +42,8 @@ class _UiFocusZoomState extends State<UiFocusZoom> {
       onExit: (_) => setState(() => _hovered = false),
       child: AnimatedScale(
         scale: _focused || _hovered ? widget.scale : 1.0,
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOut,
+        duration: UiMotion.fast,
+        curve: UiMotion.curve,
         child: widget.child,
       ),
     ),
@@ -147,8 +153,8 @@ class _UiFocusableState extends State<UiFocusable>
     final ctl = AnimationController(
       vsync: this,
       duration: widget.flourish == FocusFlourish.jump
-          ? const Duration(milliseconds: 260)
-          : const Duration(milliseconds: 520),
+          ? UiMotion.medium
+          : UiMotion.slow,
     );
     _flourishCtl = ctl;
     if (widget.flourish == FocusFlourish.tilt) {
@@ -218,7 +224,10 @@ class _UiFocusableState extends State<UiFocusable>
   Widget build(BuildContext context) {
     final ui = context.ui;
     final enabled = widget.onPressed != null;
-    final scale = _lit ? widget.focusScale : 1.0;
+    final lift = widget.flourish == FocusFlourish.jump
+        ? math.min(widget.focusScale, uiRowZoom)
+        : widget.focusScale;
+    final scale = _lit ? lift : 1.0;
     // Only a real pop (the game tiles) earns the drop shadow; under the
     // default slight zoom it just smears a halo behind every button and row.
     final hasLift = widget.focusScale >= 1.05;
@@ -235,8 +244,8 @@ class _UiFocusableState extends State<UiFocusable>
             child: IgnorePointer(
               child: AnimatedOpacity(
                 opacity: _lit ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 140),
-                curve: Curves.easeOut,
+                duration: UiMotion.fast,
+                curve: UiMotion.curve,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: widget.borderRadius,
@@ -272,8 +281,8 @@ class _UiFocusableState extends State<UiFocusable>
       },
       child: AnimatedScale(
         scale: scale,
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOut,
+        duration: UiMotion.fast,
+        curve: UiMotion.curve,
         child: _flourishCtl == null
             ? content
             : AnimatedBuilder(

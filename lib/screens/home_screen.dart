@@ -1383,7 +1383,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return ConsoleCard(
         onTap: onTap,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        focusScale: 1.12,
+        focusScale: uiTilePop,
         // Built under ConsoleCard's light theme so the labels come out dark.
         child: Builder(
           builder: (context) => Row(

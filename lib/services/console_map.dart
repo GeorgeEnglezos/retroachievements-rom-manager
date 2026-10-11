@@ -102,6 +102,29 @@ class ConsoleMap {
     27: 'Arcade',
   };
 
+  /// Neutral grey for unmapped systems.
+  static const int fallbackAccent = 0xFF9E9E9E;
+
+  /// Manufacturer -> ARGB accent, so every system from one maker shares a
+  /// color. Mid-tones so a thin bar reads on light cards and dark grounds.
+  static const Map<String, int> _accent = {
+    'Nintendo': 0xFFE60012,
+    'Sega': 0xFF17A2E0,
+    'Sony': 0xFF003791,
+    'Microsoft': 0xFF107C10,
+    'Atari': 0xFFE65100,
+    'NEC / Hudson': 0xFF8E24AA,
+    'SNK': 0xFFC0A030,
+    'Panasonic': 0xFF8D6E63,
+    'Bandai': 0xFF00ACC1,
+    'Arcade': 0xFFD81B60,
+  };
+
+  /// ARGB accent for a console id's manufacturer, [fallbackAccent] when the
+  /// maker is unknown. An int, not a Color, so this file stays Flutter-free.
+  static int accentFor(int? id) =>
+      _accent[manufacturerForId(id)] ?? fallbackAccent;
+
   /// Manufacturers in sort order (unknown/Other sorts last).
   static const List<String> _manufacturerOrder = [
     'Nintendo', 'Sega', 'Sony', 'Microsoft', 'Atari',

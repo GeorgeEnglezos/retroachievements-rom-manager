@@ -142,4 +142,22 @@ void main() {
       expect(ConsoleMap.manufacturerSortKey(12), lessThan(last));
     });
   });
+
+  test('accentFor: one color per maker, unknown falls back', () {
+    // Two Nintendo systems share a color; Nintendo and Sony differ.
+    expect(ConsoleMap.accentFor(3), ConsoleMap.accentFor(7));
+    expect(ConsoleMap.accentFor(12), ConsoleMap.accentFor(21));
+    expect(ConsoleMap.accentFor(3), isNot(ConsoleMap.accentFor(12)));
+    // Every maker has its own color.
+    for (final id in [
+      ...ConsoleMap.consoleNames.keys,
+      ...ConsoleMap.displayNames.keys,
+    ]) {
+      if (ConsoleMap.manufacturerForId(id) == 'Other') continue;
+      expect(ConsoleMap.accentFor(id), isNot(ConsoleMap.fallbackAccent),
+          reason: 'console $id');
+    }
+    expect(ConsoleMap.accentFor(null), ConsoleMap.fallbackAccent);
+    expect(ConsoleMap.accentFor(9999), ConsoleMap.fallbackAccent);
+  });
 }

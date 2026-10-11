@@ -8,6 +8,7 @@ import '../models/rom_result.dart';
 import '../models/rom_row.dart';
 import '../services/file_actions.dart';
 import '../services/disc_formats.dart';
+import '../services/display_name.dart';
 import '../services/game_lookup.dart';
 import '../services/library.dart';
 import '../services/playlist_store.dart';
@@ -17,7 +18,7 @@ import '../services/scraper/scraped_store.dart';
 import '../services/storage_scanner.dart';
 import '../services/storage_treemap.dart' show TreemapItem;
 import '../theme/ui_tokens.dart';
-import '../widgets/folder_card.dart' show ConsoleLogo;
+import '../widgets/folder_card.dart' show ConsoleLogoPlate;
 import '../widgets/game_detail_dialog.dart';
 import '../widgets/ui/ui_button.dart';
 import '../widgets/ui/ui_panel.dart';
@@ -69,6 +70,7 @@ class _StorageScreenState extends State<StorageScreen> {
     // Re-read after a scan writes new summaries, or a filter changes.
     _lib.addListener(_onIndexChanged);
     settingsChanged.addListener(_onFiltersChanged);
+    nameModeListenable.addListener(_onNameModeChanged);
     _load();
   }
 
@@ -76,6 +78,7 @@ class _StorageScreenState extends State<StorageScreen> {
   void dispose() {
     _lib.removeListener(_onIndexChanged);
     settingsChanged.removeListener(_onFiltersChanged);
+    nameModeListenable.removeListener(_onNameModeChanged);
     _filterDebounce?.cancel();
     super.dispose();
   }
@@ -86,6 +89,15 @@ class _StorageScreenState extends State<StorageScreen> {
     if (!mounted || _stack.length > 1) return;
     _load();
   }
+
+  // System rows show the display name, which the Settings tab can switch.
+  void _onNameModeChanged() => setState(() {});
+
+  // A system folder's label, matching its Library tile.
+  String _systemName(String path) => displayNameFor(
+      mode: nameModeListenable.value,
+      consoleId: _consoleIds[path],
+      folderPaths: [path]);
 
   Timer? _filterDebounce;
   bool _filtersDirty = false;
@@ -176,7 +188,8 @@ class _StorageScreenState extends State<StorageScreen> {
       if (!mounted) return;
       setState(() {
         _drilling = false;
-        _stack.add(_Level(item.label.toUpperCase(), kids));
+        final title = _stack.length == 1 ? _systemName(item.path!) : item.label;
+        _stack.add(_Level(title.toUpperCase(), kids));
       });
     } else {
       setState(() => _drilling = false);
@@ -268,7 +281,7 @@ class _StorageScreenState extends State<StorageScreen> {
       for (final MapEntry(key: path, value: a) in _discAdvice.entries)
         if (DiscFormats.compressTargetFor(_consoleIds[path]) case final t?)
           StorageStrings.compressionRow(
-                p.basename(path),
+                _systemName(path),
                 a.games,
                 formatBytes(a.bytes),
                 t == DiscTarget.chd ? StorageStrings.chd : StorageStrings.rvz,
@@ -300,10 +313,7 @@ class _StorageScreenState extends State<StorageScreen> {
   Widget _leadingFor(TreemapItem it,
       {required bool isRoot, required bool isFile}) {
     if (isRoot && it.path != null) {
-      return Padding(
-        padding: const EdgeInsets.all(4),
-        child: ConsoleLogo(consoleId: _consoleIds[it.path]),
-      );
+      return Center(child: ConsoleLogoPlate(consoleId: _consoleIds[it.path]));
     }
     if (isFile) {
       final rom = _fileRoms[it.path];
@@ -343,6 +353,7 @@ class _StorageScreenState extends State<StorageScreen> {
       rows.add(RomRow.fromTreemap(it,
           fraction: it.bytes / denom,
           isFolder: !isFile,
+          title: isRoot && it.path != null ? _systemName(it.path!) : null,
           onTap: it.path == null
               ? null
               : (isFile ? () => _openFile(it.path!) : () => _drill(it))));

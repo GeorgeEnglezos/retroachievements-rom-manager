@@ -95,7 +95,7 @@ class RomGridItem extends StatelessWidget {
       return UiFocusable(
         onPressed: () => _onTap(context),
         borderRadius: ui.roundMd, // matches GameCover's framed-art corners
-        focusScale: 1.16, // square tile: zoom + tilt
+        focusScale: uiTilePop, // square tile: zoom + tilt
         flourish: FocusFlourish.tilt,
         showShadow: false, // blurred lift shadow reads as a muddy halo here
         child: GestureDetector(
@@ -133,7 +133,7 @@ class RomGridItem extends StatelessWidget {
       child: UiCard(
         padding: EdgeInsets.zero,
         color: isFavorite ? ui.favoriteFill : null,
-        focusScale: 1.16, // square tile: zoom + tilt
+        focusScale: uiTilePop, // square tile: zoom + tilt
         flourish: FocusFlourish.tilt,
         showShadow: false, // blurred lift shadow reads as a muddy halo here
         onTap: () => _onTap(context),

@@ -120,16 +120,16 @@ class _SetupWizardState extends State<SetupWizard> {
   void _next() {
     if (_step >= _lastStep) return;
     _pageCtrl.nextPage(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
+      duration: UiMotion.medium,
+      curve: UiMotion.curve,
     );
   }
 
   void _back() {
     if (_step == 0) return;
     _pageCtrl.previousPage(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
+      duration: UiMotion.medium,
+      curve: UiMotion.curve,
     );
   }
 

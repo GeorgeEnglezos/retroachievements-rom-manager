@@ -64,12 +64,15 @@ class RomRow {
         scoreLabel: scoreLabel,
       );
 
+  /// [title] overrides the item's folder/file name (system rows show the
+  /// display name instead).
   factory RomRow.fromTreemap(TreemapItem item,
           {required double fraction,
           required bool isFolder,
+          String? title,
           VoidCallback? onTap}) =>
       RomRow(
-        title: item.label,
+        title: title ?? item.label,
         filePath: isFolder ? null : item.path,
         sizeBytes: item.bytes,
         sizeFraction: fraction,

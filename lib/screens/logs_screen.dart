@@ -307,8 +307,8 @@ class _LiveViewState extends State<_LiveView> {
         if (_scroll.hasClients) {
           _scroll.animateTo(
             _scroll.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
+            duration: UiMotion.medium,
+            curve: UiMotion.curve,
           );
         }
       });

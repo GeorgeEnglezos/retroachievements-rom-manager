@@ -56,7 +56,7 @@ class _ButtonState extends State<UiButton> {
         onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
         onTap: widget.onPressed,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 60),
+          duration: UiMotion.fast,
           transform: Matrix4.translationValues(
             pressed ? ui.controlShadow.dx : 0,
             pressed ? ui.controlShadow.dy : 0,

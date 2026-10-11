@@ -176,8 +176,8 @@ class _CoverTileState extends State<CoverTile> {
     if (f) {
       Scrollable.ensureVisible(context,
           alignment: 0.5,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut);
+          duration: UiMotion.medium,
+          curve: UiMotion.curve);
     }
     if (f != _focused) setState(() => _focused = f);
   }
@@ -202,9 +202,9 @@ class _CoverTileState extends State<CoverTile> {
           }),
         },
         child: AnimatedScale(
-          scale: _focused ? 1.16 : 1.0,
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
+          scale: _focused ? uiTilePop : 1.0,
+          duration: UiMotion.fast,
+          curve: UiMotion.curve,
           child: RomGridItem(
             rom: widget.rom,
             store: _store,
