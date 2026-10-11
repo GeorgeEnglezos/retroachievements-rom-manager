@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../models/game_metadata.dart';
+import 'atomic_write.dart';
 import 'log_service.dart';
 
 /// Offline name->metadata cache for third-party providers, so rescans of
@@ -65,7 +66,7 @@ class MetadataCache {
     (_mem[key] ??= {})[cleanedName] = meta;
     try {
       final f = await _file(key);
-      await f.writeAsString(jsonEncode({
+      await writeAtomic(f, jsonEncode({
         for (final e in _mem[key]!.entries) e.key: e.value.toJson(),
       }));
     } catch (e) {

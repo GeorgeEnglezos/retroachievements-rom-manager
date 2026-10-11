@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'atomic_write.dart';
 import 'log_service.dart';
 import 'ra_service.dart';
 
@@ -110,7 +111,7 @@ class RaCache {
     final f = await _file(consoleId);
     final now = DateTime.now();
     _fetchedAt[consoleId] = now;
-    await f.writeAsString(jsonEncode({
+    await writeAtomic(f, jsonEncode({
       'fetchedAt': now.toIso8601String(),
       'games': [for (final e in entries) e.toJson()],
     }));

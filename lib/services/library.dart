@@ -8,6 +8,7 @@ import '../models/game_entry.dart';
 import '../models/home_index.dart' show SystemSummary, SearchIndexEntry;
 import '../models/system_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'atomic_write.dart';
 import 'file_actions.dart';
 import 'home_index_builder.dart';
 import 'log_service.dart';
@@ -85,7 +86,7 @@ class Library extends ChangeNotifier {
         // Migration: legacy files lack systemId, adopt the filename stem.
         if (data.systemId.isEmpty) {
           data = data.copyWith(systemId: p.basenameWithoutExtension(f.path));
-          await f.writeAsString(jsonEncode(data.toJson()));
+          await writeAtomic(f, jsonEncode(data.toJson()));
         }
         _byId[data.systemId] = data;
       } catch (e) {
@@ -124,7 +125,7 @@ class Library extends ChangeNotifier {
       _byId[d.systemId] = d;
       final file =
           File(p.join((await _systemsDir()).path, '${d.systemId}.json'));
-      await file.writeAsString(jsonEncode(d.toJson()));
+      await writeAtomic(file, jsonEncode(d.toJson()));
       notifyListeners();
       return d;
     });
@@ -159,7 +160,7 @@ class Library extends ChangeNotifier {
         _byId[nd.systemId] = nd;
         final file =
             File(p.join((await _systemsDir()).path, '${nd.systemId}.json'));
-        await file.writeAsString(jsonEncode(nd.toJson()));
+        await writeAtomic(file, jsonEncode(nd.toJson()));
         changed = true;
       }
       if (changed) notifyListeners();

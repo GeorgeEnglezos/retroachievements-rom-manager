@@ -12,38 +12,57 @@ bool _isAutoManaged(String playlistId) =>
 
 /// Asks for a new playlist name; null on cancel or empty input.
 Future<String?> _promptPlaylistName(BuildContext context) async {
-  final controller = TextEditingController();
-  try {
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text(PlaylistStrings.newPlaylistTitle),
-        content: UiFocusZoom(
-          child: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(hintText: PlaylistStrings.playlistNameHint),
+  final name = await showDialog<String>(
+    context: context,
+    builder: (_) => const _NewPlaylistDialog(),
+  );
+  return (name == null || name.isEmpty) ? null : name;
+}
+
+/// Owns its controller so it outlives the close animation, which still
+/// renders the TextField after the dialog's future completes.
+class _NewPlaylistDialog extends StatefulWidget {
+  const _NewPlaylistDialog();
+
+  @override
+  State<_NewPlaylistDialog> createState() => _NewPlaylistDialogState();
+}
+
+class _NewPlaylistDialogState extends State<_NewPlaylistDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text(PlaylistStrings.newPlaylistTitle),
+      content: UiFocusZoom(
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: PlaylistStrings.playlistNameHint),
+        ),
+      ),
+      actions: [
+        UiFocusZoom(
+          child: TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(PlaylistStrings.cancel),
           ),
         ),
-        actions: [
-          UiFocusZoom(
-            child: TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text(PlaylistStrings.cancel),
-            ),
+        UiFocusZoom(
+          child: TextButton(
+            onPressed: () => Navigator.pop(context, _controller.text.trim()),
+            child: const Text(PlaylistStrings.create),
           ),
-          UiFocusZoom(
-            child: TextButton(
-              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-              child: const Text(PlaylistStrings.create),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
-    return (name == null || name.isEmpty) ? null : name;
-  } finally {
-    controller.dispose();
   }
 }
 

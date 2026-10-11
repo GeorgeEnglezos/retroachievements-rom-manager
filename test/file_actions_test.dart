@@ -17,6 +17,38 @@ void main() {
       expect(File(missing).existsSync(), isFalse);
       expect(await FileActions.moveToRecycleBin(missing), isTrue);
     });
+
+    test('a curly-quoted filename stays out of the PowerShell script', () {
+      // PowerShell reads ‘ ’ as string delimiters, so this name would close
+      // the literal and run the rest as code if it were interpolated.
+      final path = p.windows
+          .join(r'C:\Roms', "Zorbo‘s Quest’); Remove-Item C:\\x; ('.zip");
+      final cmd = FileActions.recycleBinCommand(path);
+      expect(cmd.env.values.single, path);
+      expect(cmd.args.join(' '), isNot(contains('Zorbo')));
+      expect(cmd.args.last, contains(r'$env:' + cmd.env.keys.single));
+    });
+  });
+
+  group('shellStartCommand', () {
+    test('paths with & and %NAME% stay out of the script', () {
+      final exe = p.windows.join(r'C:\Emus\Zip&Zap', 'zz.exe');
+      final rom = p.windows.join(r'C:\Roms\%USERNAME%', 'Blip & Blop.iso');
+      final cmd = FileActions.shellStartCommand(
+          exe, FileActions.windowsArgs(['--fullscreen', rom]),
+          workdir: p.windows.dirname(exe));
+      final script = cmd.args.join(' ');
+      expect(script, isNot(contains('Zip')));
+      expect(script, isNot(contains('Blip')));
+      expect(cmd.env.values,
+          containsAll([exe, '--fullscreen "$rom"', p.windows.dirname(exe)]));
+    });
+
+    test('windowsArgs quotes only what CommandLineToArgvW would split', () {
+      expect(FileActions.windowsArgs(['a&b', '', r'C:\x y\']),
+          r'a&b "" "C:\x y\\"');
+      expect(FileActions.windowsArgs([r'say "hi"\']), r'"say \"hi\"\\"');
+    });
   });
 
   group('isConsoleExe', () {
