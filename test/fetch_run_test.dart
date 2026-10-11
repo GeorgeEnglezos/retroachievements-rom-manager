@@ -600,10 +600,13 @@ void main() {
     });
 
     test('an unmapped folder reports why it was skipped', () async {
-      rom('one.iso');
+      // A fixed name: the temp dir's random suffix can contain a console
+      // alias (e.g. '2600') and map the folder by accident.
+      final unmapped = Directory(p.join(romDir.path, 'unmapped'))..createSync();
+      File(p.join(unmapped.path, 'one.iso')).writeAsBytesSync([1, 2, 3]);
 
       final result = await runFolderFetch(
-        folderPath: romDir.path,
+        folderPath: unmapped.path,
         plan: const FetchPlan(scope: FetchScope.all, match: true),
         extensions: const {'iso'},
         library: library,
