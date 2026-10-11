@@ -560,6 +560,14 @@ abstract final class StorageStrings {
   static const allSystems = 'ALL SYSTEMS';
   static const noScannedSizes = 'NO SCANNED SIZES YET. SCAN A FOLDER FIRST';
   static const back = 'BACK';
+  static const compressionTitle = 'COMPRESSION ADVISOR';
+  static const noUncompressedDiscs = 'No uncompressed disc images found.';
+  static const chd = 'CHD';
+  static const rvz = 'RVZ';
+  static String compressionRow(
+          String system, int games, String size, String target, String saving) =>
+      '$system: $games ${games == 1 ? 'game' : 'games'}, $size. Convert to $target to save about $saving.';
+  static const wiiRvzNote = ' Wii RVZ hashes only with DolphinTool (desktop).';
 }
 
 /// Logs screen.

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'disc_formats.dart';
 import 'scan_settings.dart';
 import 'storage_treemap.dart';
 
@@ -44,7 +45,7 @@ Future<List<TreemapItem>> childSizes((String, StorageFilter) args) async {
       if (entity is File) {
         if (!filter.allowsFile(entity.path, dirPath)) continue;
         items.add(TreemapItem(name, await _fileLength(entity),
-            path: entity.path));
+            path: entity.path, isFile: true));
       } else if (entity is Directory) {
         if (filter.isDirIgnored(entity.path)) continue;
         final size = await _dirSize(entity, filter);
@@ -66,6 +67,54 @@ Future<Map<String, int>> systemSizes((List<String>, StorageFilter) args) async {
   final out = <String, int>{};
   for (final path in paths) {
     out[path] = await _dirSize(Directory(path), filter);
+  }
+  return out;
+}
+
+/// Uncompressed disc images per system path in [args].$1 (path to RA console
+/// id), for the compression advisor. In a folder holding a .cue/.gdi sheet, the
+/// sheet stands for its track files, so `games` counts each such set once.
+/// Systems with no [DiscTarget] or no raw images are left out. Top-level so it
+/// can run in `compute`.
+Future<Map<String, ({int games, int bytes})>> uncompressedDiscs(
+    (Map<String, int?>, StorageFilter) args) async {
+  final (systems, filter) = args;
+  final out = <String, ({int games, int bytes})>{};
+  for (final MapEntry(key: path, value: consoleId) in systems.entries) {
+    final target = DiscFormats.compressTargetFor(consoleId);
+    if (target == null) continue;
+    var games = 0, bytes = 0;
+    // Tracks only count as games in folders with no sheet to stand for them.
+    final sheetDirs = <String>{};
+    final tracksPerDir = <String, int>{};
+    try {
+      await for (final entity
+          in Directory(path).list(recursive: true, followLinks: false)) {
+        if (entity is! File ||
+            !filter.allowsFile(entity.path, path) ||
+            !DiscFormats.isUncompressedDisc(entity.path, target)) {
+          continue;
+        }
+        bytes += await _fileLength(entity);
+        if (DiscFormats.isTrackFile(entity.path)) {
+          tracksPerDir.update(entity.parent.path, (n) => n + 1,
+              ifAbsent: () => 1);
+        } else {
+          games++;
+          if (DiscFormats.isCueSheet(entity.path)) {
+            sheetDirs.add(entity.parent.path);
+          }
+        }
+      }
+    } on FileSystemException {
+      // Unreadable or missing folder: keep whatever was counted.
+    }
+    // ponytail: a sheet hides every track in its folder, so a loose .bin next
+    // to another game's .cue goes uncounted; parse the sheets if that matters.
+    for (final MapEntry(key: dir, value: n) in tracksPerDir.entries) {
+      if (!sheetDirs.contains(dir)) games += n;
+    }
+    if (games > 0) out[path] = (games: games, bytes: bytes);
   }
   return out;
 }

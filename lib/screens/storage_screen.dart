@@ -1,5 +1,4 @@
 import 'dart:async' show Timer;
-import 'dart:io' show FileSystemEntity;
 
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
@@ -8,6 +7,7 @@ import '../models/folder_stats.dart' show formatBytes;
 import '../models/rom_result.dart';
 import '../models/rom_row.dart';
 import '../services/file_actions.dart';
+import '../services/disc_formats.dart';
 import '../services/game_lookup.dart';
 import '../services/library.dart';
 import '../services/playlist_store.dart';
@@ -55,6 +55,8 @@ class _StorageScreenState extends State<StorageScreen> {
   final List<_Level> _stack = [];
   // Console id per root-level system path → its bundled logo (left gutter).
   Map<String, int?> _consoleIds = {};
+  // Root-level system path → its uncompressed disc images (advice only).
+  Map<String, ({int games, int bytes})> _discAdvice = {};
   // Resolved game per file path → its RA icon in the left gutter. Null value =
   // looked up, no match.
   final Map<String, RomResult?> _fileRoms = {};
@@ -127,22 +129,29 @@ class _StorageScreenState extends State<StorageScreen> {
   Future<void> _load() async {
     final summaries = await _lib.summaries();
     final filter = await _filter();
+    final consoleIds = <String, int?>{
+      for (final s in summaries)
+        s.systemPath: await ScanSettings.consoleIdForFolder(s.systemPath),
+    };
     // Measure filtered on-disk size per system (off the UI isolate) so totals
     // match the drill-down, not just the matched-ROM bytes in each summary.
-    final sizes = await compute<(List<String>, StorageFilter), Map<String, int>>(
-        systemSizes, ([for (final s in summaries) s.systemPath], filter));
-    final items = <TreemapItem>[];
-    final consoleIds = <String, int?>{};
-    for (final s in summaries) {
-      items.add(TreemapItem(
-          p.basename(s.systemPath), sizes[s.systemPath] ?? 0,
-          path: s.systemPath));
-      consoleIds[s.systemPath] =
-          await ScanSettings.consoleIdForFolder(s.systemPath);
-    }
+    // The disc advisor walks in a second isolate at the same time.
+    final (sizes, advice) = await (
+      compute<(List<String>, StorageFilter), Map<String, int>>(
+          systemSizes, ([for (final s in summaries) s.systemPath], filter)),
+      compute<(Map<String, int?>, StorageFilter),
+              Map<String, ({int games, int bytes})>>(
+          uncompressedDiscs, (consoleIds, filter)),
+    ).wait;
+    final items = [
+      for (final s in summaries)
+        TreemapItem(p.basename(s.systemPath), sizes[s.systemPath] ?? 0,
+            path: s.systemPath),
+    ];
     if (!mounted) return;
     setState(() {
       _consoleIds = consoleIds;
+      _discAdvice = advice;
       _stack
         ..clear()
         ..add(_Level(StorageStrings.allSystems, items));
@@ -160,9 +169,7 @@ class _StorageScreenState extends State<StorageScreen> {
       // Resolve each file's game (cheap in-memory lookup) so its icon is ready
       // before the level appears; the drilling overlay covers the wait.
       for (final k in kids) {
-        if (k.path != null &&
-            _isFile(k.path) &&
-            !_fileRoms.containsKey(k.path)) {
+        if (k.path != null && k.isFile && !_fileRoms.containsKey(k.path)) {
           _fileRoms[k.path!] = await resolveRom(k.path!, library: _lib);
         }
       }
@@ -253,8 +260,39 @@ class _StorageScreenState extends State<StorageScreen> {
     );
   }
 
-  bool _isFile(String? path) =>
-      path != null && FileSystemEntity.isFileSync(path);
+  // Per system: how many raw disc images, their size, and the rough saving if
+  // converted. Advice only; nothing is converted here.
+  Widget _compressionAdvisor() {
+    final ui = context.ui;
+    final lines = <String>[
+      for (final MapEntry(key: path, value: a) in _discAdvice.entries)
+        if (DiscFormats.compressTargetFor(_consoleIds[path]) case final t?)
+          StorageStrings.compressionRow(
+                p.basename(path),
+                a.games,
+                formatBytes(a.bytes),
+                t == DiscTarget.chd ? StorageStrings.chd : StorageStrings.rvz,
+                formatBytes(t.estimatedSaving(a.bytes)),
+              ) +
+              (_consoleIds[path] == DiscFormats.wiiConsoleId
+                  ? StorageStrings.wiiRvzNote
+                  : ''),
+    ];
+    // Scrolls inside the panel so a long list never squeezes the rows below.
+    return UiPanel(
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(StorageStrings.compressionTitle, style: ui.labelCaps),
+            const SizedBox(height: 6),
+            if (lines.isEmpty) const Text(StorageStrings.noUncompressedDiscs),
+            for (final line in lines) Text(line),
+          ],
+        ),
+      ),
+    );
+  }
 
   // The row's thumbnail: console logo for a root system folder, the matched
   // game's RA icon for a file, and a plain glyph for everything else, so every
@@ -301,7 +339,7 @@ class _StorageScreenState extends State<StorageScreen> {
     final rows = <RomRow>[];
     final leadings = <Widget>[];
     for (final it in level.items) {
-      final isFile = _isFile(it.path);
+      final isFile = it.isFile;
       rows.add(RomRow.fromTreemap(it,
           fraction: it.bytes / denom,
           isFolder: !isFile,
@@ -313,7 +351,7 @@ class _StorageScreenState extends State<StorageScreen> {
 
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(
+      child: LayoutBuilder(builder: (context, box) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
@@ -332,6 +370,14 @@ class _StorageScreenState extends State<StorageScreen> {
               ),
             ],
           ),
+          if (isRoot) ...[
+            const SizedBox(height: 12),
+            // Capped so short (landscape phone) screens keep room for the list.
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: box.maxHeight / 3),
+              child: _compressionAdvisor(),
+            ),
+          ],
           const SizedBox(height: 12),
           Expanded(
             child: Stack(
@@ -359,7 +405,7 @@ class _StorageScreenState extends State<StorageScreen> {
             ),
           ),
         ],
-      ),
+      )),
     );
   }
 }

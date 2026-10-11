@@ -118,4 +118,58 @@ void main() {
 
     expect(items.map((i) => i.label), ['rom.nes']);
   });
+
+  test('childSizes marks files, not folders, as files', () async {
+    await File('${root.path}/rom.nes').writeAsBytes(List.filled(10, 0));
+    final sub = await Directory('${root.path}/sub').create();
+    await File('${sub.path}/a.bin').writeAsBytes(List.filled(10, 0));
+
+    final items = await childSizes((root.path, _filter()));
+    final byName = {for (final i in items) i.label: i.isFile};
+
+    expect(byName, {'rom.nes': true, 'sub': false});
+  });
+
+  group('uncompressedDiscs', () {
+    final discFilter = _filter(ext: {'cue', 'bin', 'iso', 'chd', 'rvz'});
+
+    test('a cue sheet with its tracks counts as one game', () async {
+      final ps = await Directory('${root.path}/ps').create();
+      final game = await Directory('${ps.path}/Made Up Quest').create();
+      await File('${game.path}/Made Up Quest.cue').writeAsBytes([1]);
+      await File('${game.path}/Made Up Quest (Track 1).bin')
+          .writeAsBytes(List.filled(100, 0));
+      await File('${game.path}/Made Up Quest (Track 2).bin')
+          .writeAsBytes(List.filled(50, 0));
+      await File('${ps.path}/Other Thing.iso').writeAsBytes(List.filled(20, 0));
+      await File('${ps.path}/Done Already.chd').writeAsBytes(List.filled(9, 0));
+
+      final out = await uncompressedDiscs(({ps.path: 12}, discFilter));
+
+      expect(out[ps.path], (games: 2, bytes: 171));
+    });
+
+    test('loose bin tracks without a sheet each count', () async {
+      final ps = await Directory('${root.path}/ps').create();
+      await File('${ps.path}/Lone A.bin').writeAsBytes(List.filled(5, 0));
+      await File('${ps.path}/Lone B.bin').writeAsBytes(List.filled(5, 0));
+
+      final out = await uncompressedDiscs(({ps.path: 12}, discFilter));
+
+      expect(out[ps.path], (games: 2, bytes: 10));
+    });
+
+    test('systems without a target or raw images are left out', () async {
+      final carts = await Directory('${root.path}/carts').create();
+      await File('${carts.path}/Fake Cart.bin').writeAsBytes([1]);
+      final done = await Directory('${root.path}/done').create();
+      await File('${done.path}/Packed.rvz').writeAsBytes([1]);
+
+      final out = await uncompressedDiscs(
+          ({carts.path: 7, done.path: 16, '${root.path}/gone': 12},
+              discFilter));
+
+      expect(out, isEmpty);
+    });
+  });
 }

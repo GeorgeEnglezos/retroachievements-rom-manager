@@ -1,5 +1,22 @@
 import 'package:path/path.dart' as p;
 
+/// Compressed disc format the Storage advisor recommends. Both still hash here:
+/// CHD via libchdr in `raw_hash`, RVZ via `rvz_reader` (Wii RVZ falls back to
+/// DolphinTool).
+enum DiscTarget {
+  // ponytail: fixed saving ratio per format; real savings vary per game
+  // (padding, scrubbing). Sample-compress a file if the estimate needs to be
+  // accurate.
+  chd(0.4),
+  rvz(0.5);
+
+  const DiscTarget(this.savingFraction);
+  final double savingFraction;
+
+  /// Rough bytes saved by converting [bytes] of raw images to this format.
+  int estimatedSaving(int bytes) => (bytes * savingFraction).round();
+}
+
 /// GC/Wii disc extensions by hashability: rcheevos reads raw discs only;
 /// compressed containers need DiscDecompressor first.
 class DiscFormats {
@@ -38,4 +55,42 @@ class DiscFormats {
   /// excluded because GameCube RVZ hashes on-device.
   static bool requiresDolphinTool(String path) =>
       needsDolphinTool(path) && !hasOnDeviceReader(path);
+
+  /// CD/DVD systems (RA console ids) whose raw images can become CHD: Sega CD,
+  /// PlayStation, PS2, Saturn, Dreamcast, PSP, 3DO, PC-FX, Neo Geo CD,
+  /// PC Engine CD, Jaguar CD.
+  static const _chdConsoles = {9, 12, 21, 39, 40, 41, 43, 49, 56, 76, 77};
+
+  /// RA console id for the Wii, whose RVZ only DolphinTool can hash.
+  static const wiiConsoleId = 19;
+
+  /// GameCube and Wii.
+  static const _rvzConsoles = {16, wiiConsoleId};
+
+  static const _rawCdExts = {'iso', 'bin', 'cue', 'gdi', 'img'};
+  static const _sheetExts = {'cue', 'gdi'};
+  static const _trackExts = {'bin', 'img'};
+  static const _rawGcWiiExts = {'iso', 'gcm', 'wbfs'};
+
+  /// The format worth converting [consoleId]'s raw discs to, or null when the
+  /// system has none (cartridges, unknown).
+  static DiscTarget? compressTargetFor(int? consoleId) =>
+      _chdConsoles.contains(consoleId)
+          ? DiscTarget.chd
+          : _rvzConsoles.contains(consoleId)
+              ? DiscTarget.rvz
+              : null;
+
+  /// True when [path] is an uncompressed image that could become [target].
+  /// NKit is skipped: RA can't hash it before or after conversion.
+  static bool isUncompressedDisc(String path, DiscTarget target) =>
+      !isNkit(path) &&
+      (target == DiscTarget.chd ? _rawCdExts : _rawGcWiiExts)
+          .contains(_ext(path));
+
+  /// True for a .cue/.gdi sheet, which stands for its track files.
+  static bool isCueSheet(String path) => _sheetExts.contains(_ext(path));
+
+  /// True for a raw track (.bin/.img) that a sheet may reference.
+  static bool isTrackFile(String path) => _trackExts.contains(_ext(path));
 }
