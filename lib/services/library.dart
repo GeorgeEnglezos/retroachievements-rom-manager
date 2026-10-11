@@ -14,6 +14,7 @@ import 'home_index_builder.dart';
 import 'log_service.dart';
 import 'pref_keys.dart';
 import 'scan_settings.dart';
+import 'scraper/rom_path_key.dart';
 
 /// Single source of truth for scanned data: all systems in memory, home grid
 /// and search derived from it, one `systems/<systemId>.json` per system.
@@ -59,15 +60,13 @@ class Library extends ChangeNotifier {
     return _systemsDirCache = dir;
   }
 
-  String _norm(String path) => p.normalize(path).toLowerCase();
-
   String _idForPath(String path) =>
-      sha1.convert(utf8.encode(_norm(path))).toString();
+      sha1.convert(utf8.encode(romPathKey(path))).toString();
 
   SystemData? _findByPath(String path) {
-    final norm = _norm(path);
+    final norm = romPathKey(path);
     for (final d in _byId.values) {
-      if (_norm(d.systemPath) == norm) return d;
+      if (romPathKey(d.systemPath) == norm) return d;
     }
     return null;
   }
@@ -147,13 +146,13 @@ class Library extends ChangeNotifier {
   /// overlapping system roots (parent + subfolder) can both list one file.
   Future<void> removeGame(String path) async {
     await init();
-    final norm = _norm(path);
+    final norm = romPathKey(path);
     return _locked(() async {
       var changed = false;
       for (final d in _byId.values.toList()) {
         final games = [
           for (final g in d.games)
-            if (_norm(g.filePath) != norm) g
+            if (romPathKey(g.filePath) != norm) g
         ];
         if (games.length == d.games.length) continue;
         final nd = d.copyWith(games: games);
@@ -206,7 +205,7 @@ class Library extends ChangeNotifier {
     return _ScanFilters(
       (await ScanSettings.excludedFiles()).map((e) => e.toLowerCase()).toSet(),
       (await ScanSettings.ignoredFolders()).map((e) => e.toLowerCase()).toSet(),
-      root == null || root.isEmpty ? null : _norm(root),
+      root == null || root.isEmpty ? null : romPathKey(root),
     );
   }
 
@@ -217,7 +216,7 @@ class Library extends ChangeNotifier {
   bool _hidden(String systemPath, _ScanFilters f) =>
       isSystemMissing(systemPath) ||
       ScanSettings.isFolderIgnored(systemPath, f.ignored) ||
-      (f.root != null && _norm(p.dirname(systemPath)) != f.root);
+      (f.root != null && romPathKey(p.dirname(systemPath)) != f.root);
 
   /// Home-grid summaries, computed from in-memory system data. The single
   /// source of truth for "which systems exist": ignored, missing, out-of-root,
@@ -276,7 +275,7 @@ class Library extends ChangeNotifier {
     // Snapshot: a save during the awaits would otherwise mutate _byId mid-loop.
     for (final d in _byId.values.toList()) {
       try {
-        if (!await Directory(d.systemPath).exists()) gone.add(_norm(d.systemPath));
+        if (!await Directory(d.systemPath).exists()) gone.add(romPathKey(d.systemPath));
       } catch (e) {
         // A drive that errors on stat counts as present: hiding a system on a
         // transient IO error loses more than showing a stale one.
@@ -294,7 +293,7 @@ class Library extends ChangeNotifier {
   /// Whether [systemPath]'s folder was gone at the last [refreshMissingSystems].
   /// False before the first one: nothing is assumed missing until checked.
   bool isSystemMissing(String systemPath) =>
-      _missingSystemPaths.contains(_norm(systemPath));
+      _missingSystemPaths.contains(romPathKey(systemPath));
 
   /// Every scanned system whose folder is not on disk right now. Snapshotted
   /// off [_byId] first, so a concurrent save can't mutate it mid-loop.
@@ -333,7 +332,7 @@ class Library extends ChangeNotifier {
       final gone = await _goneSystems();
       for (final d in gone) {
         _byId.remove(d.systemId);
-        _missingSystemPaths.remove(_norm(d.systemPath));
+        _missingSystemPaths.remove(romPathKey(d.systemPath));
         final file = File(p.join(dir.path, '${d.systemId}.json'));
         if (await file.exists()) await file.delete();
       }

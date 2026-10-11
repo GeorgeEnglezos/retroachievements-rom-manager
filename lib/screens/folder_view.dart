@@ -245,6 +245,10 @@ class _FolderViewState extends State<FolderView> {
     if (mounted) setState(() {});
   }
 
+  // The system folder holding [path], or null when none of this view's do.
+  String? _systemFolderOf(String path) =>
+      widget.folderPaths.where((s) => p.isWithin(s, path)).firstOrNull;
+
   // Passed-in id (combined views) or resolved from the folder name/override.
   Future<int?> _resolveConsoleId() async =>
       widget.consoleId ??
@@ -292,10 +296,8 @@ class _FolderViewState extends State<FolderView> {
     // mixed-console view ("All games") doesn't judge every game by one console
     // and mislabel other systems' unsupported games as not-fetched.
     int? consoleForFile(String path) {
-      for (final sysPath in widget.folderPaths) {
-        if (p.isWithin(sysPath, path)) return consoleIdByPath[sysPath];
-      }
-      return widget.consoleId;
+      final sysPath = _systemFolderOf(path);
+      return sysPath == null ? widget.consoleId : consoleIdByPath[sysPath];
     }
 
     final roms = <RomResult>[];
@@ -596,11 +598,8 @@ class _FolderViewState extends State<FolderView> {
           );
         }
       }
-      final sysPathEarly = widget.folderPaths.firstWhere(
-        (s) => p.isWithin(s, rom.filePath),
-        orElse: () => widget.folderPaths.first,
-      );
-      await _persistSystem(sysPathEarly);
+      await _persistSystem(
+          _systemFolderOf(rom.filePath) ?? widget.folderPaths.first);
       return;
     }
 
@@ -667,11 +666,8 @@ class _FolderViewState extends State<FolderView> {
     );
 
     await engine.run([rom.filePath]);
-    final sysPath = widget.folderPaths.firstWhere(
-      (s) => p.isWithin(s, rom.filePath),
-      orElse: () => widget.folderPaths.first,
-    );
-    await _persistSystem(sysPath);
+    await _persistSystem(
+        _systemFolderOf(rom.filePath) ?? widget.folderPaths.first);
   }
 
   // Every file a listing row stands for: all discs of a group, else the one
@@ -897,7 +893,7 @@ class _FolderViewState extends State<FolderView> {
                       rows: _filter.onlyDuplicates ? const [] : _listingRows(),
                       groups: _filter.onlyDuplicates ? _buildDupGroups() : null,
                       display: _filter.onlyDuplicates
-                          ? RowDisplay.roms.copyWith(showDupBadge: false)
+                          ? RowDisplay.groupedRoms
                           : RowDisplay.roms,
                       store: _playlistStore,
                       enableSelection: true,

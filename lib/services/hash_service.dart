@@ -10,6 +10,7 @@ import 'package:raw_hash/raw_hash.dart';
 import 'disc_decompressor.dart';
 import 'disc_formats.dart';
 import 'disc_reader.dart';
+import 'rom_name.dart';
 
 // Extensions that can live inside a zip and be hashed by rcheevos.
 const _romExtensions = {
@@ -155,7 +156,7 @@ class HashService {
 
     for (final entry in archive) {
       if (!entry.isFile) continue;
-      final ext = p.extension(entry.name).toLowerCase().replaceFirst('.', '');
+      final ext = bareExtension(entry.name);
       if (!_romExtensions.contains(ext)) continue;
 
       // Temp file keeps the extension; rcheevos picks the algorithm from it.

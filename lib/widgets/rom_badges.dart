@@ -95,3 +95,11 @@ Widget? discBadge(int? count, UiTokens ui, {String? fileName}) {
 List<Widget> tagBadges(String fileName) => playView.fileTags
     ? [for (final tag in romTags(fileName)) RomTagBadge(tag: tag)]
     : const [];
+
+/// The fetch status line under a ROM, or null where there is none to report:
+/// the error message for errors, the plain status label otherwise.
+String? romStatusText(RomResult rom) => switch (rom.status) {
+  RomStatus.supported || RomStatus.localOnly || RomStatus.metadataOnly => null,
+  RomStatus.error => rom.errorMessage ?? statusLabel(rom.status),
+  final s => statusLabel(s),
+};

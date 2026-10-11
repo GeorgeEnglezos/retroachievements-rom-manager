@@ -20,7 +20,7 @@ import 'row_display.dart';
 import '../strings.dart';
 
 /// A single list-row tile that renders any [RomRow], gating each visual element
-/// on the [RowDisplay] flag set. Decoupled from [RomResult] (it reads a
+/// on the [RowDisplay] preset. Decoupled from [RomResult] (it reads a
 /// [RomRow]) so the storage screen can reuse the same tile.
 ///
 /// The row is three lines at most: title with its chips beside it, one mono
@@ -157,7 +157,7 @@ class RomRowTile extends StatelessWidget {
             ),
           );
 
-    if (display.showSizeBar && row.sizeFraction != null) {
+    if (display.isStorage && row.sizeFraction != null) {
       content = Stack(
         children: [
           Positioned.fill(
@@ -178,7 +178,7 @@ class RomRowTile extends StatelessWidget {
   }
 
   Widget _tileContent(BuildContext context, UiTokens ui, Color? fg) {
-    final chips = display.showChips ? _chips(ui) : <Widget>[];
+    final chips = _chips(ui);
     final subtitle = _buildSubtitle(context, ui, fg);
     final title = Text(
       row.title,
@@ -222,14 +222,14 @@ class RomRowTile extends StatelessWidget {
               style: ui.mono.copyWith(fontSize: 13, color: fg),
             ),
           ],
-          if (display.showSizeBar && row.sizeLabel != null) ...[
+          if (display.isStorage && row.sizeLabel != null) ...[
             const SizedBox(width: 8),
             Text(
               row.sizeLabel!,
               style: ui.mono.copyWith(fontSize: 12, color: fg),
             ),
           ],
-          if (display.showChevron && row.showChevron) ...[
+          if (display.isStorage && row.showChevron) ...[
             const SizedBox(width: 4),
             Icon(Icons.chevron_right, size: 18, color: fg ?? ui.text),
           ],
@@ -245,13 +245,13 @@ class RomRowTile extends StatelessWidget {
       base = SizedBox(width: _art, height: _art, child: leading);
     } else if (rom == null) {
       base = const SizedBox.shrink();
-    } else if (!display.showBoxArt) {
+    } else if (display.isStorage) {
       base = romStatusIcon(rom);
     } else {
       base = RomThumb(rom: rom, size: _art, raArt: row.imageIcon);
     }
 
-    if (!display.showSelection || !isSelectMode) return base;
+    if (!isSelectMode) return base;
     return SizedBox(
       width: _art,
       height: _art,
@@ -289,7 +289,7 @@ class RomRowTile extends StatelessWidget {
     // per-row bar: the row is too tight for a bar + label, and the earned/total
     // read in the meta line already carries how far in the game is.
     if (MediaQuery.sizeOf(context).shortestSide < kBreakCompact) return null;
-    if (!display.showProgress ||
+    if (display.isStorage ||
         !playView.achievementCount ||
         row.rom == null ||
         row.earnedAchievements == null) {
@@ -351,7 +351,7 @@ class RomRowTile extends StatelessWidget {
 
     final rom = row.rom!;
     // Size lives in the subtitle for ROM rows only; the storage screen draws its
-    // own via display.showSizeBar, which play mode never touches.
+    // own size column, which play mode never touches.
     final sizeLabel = gamingMode ? null : row.sizeLabel;
 
     // localOnly renders like a supported row minus RA data: filename title,
@@ -376,18 +376,12 @@ class RomRowTile extends StatelessWidget {
       );
     }
 
-    final statusText = switch (rom.status) {
-      RomStatus.supported ||
-      RomStatus.localOnly ||
-      RomStatus.metadataOnly =>
-        null,
-      // The row has the width for the fix, not just the diagnosis.
-      RomStatus.unsupportedFormat => DiscFormats.isNkit(rom.filePath)
-          ? FolderStrings.nkitUnsupported
-          : FolderStrings.compressedDiscNeedsDolphin,
-      RomStatus.error => rom.errorMessage ?? statusLabel(rom.status),
-      final s => statusLabel(s),
-    };
+    // The row has the width for the fix, not just the diagnosis.
+    final statusText = rom.status != RomStatus.unsupportedFormat
+        ? romStatusText(rom)
+        : DiscFormats.isNkit(rom.filePath)
+        ? FolderStrings.nkitUnsupported
+        : FolderStrings.compressedDiscNeedsDolphin;
     // Repair hints are no use in play mode, which hides every fix.
     if (statusText == null || gamingMode) return null;
     return _metaLine(
@@ -403,7 +397,7 @@ class RomRowTile extends StatelessWidget {
   }
 
   List<Widget> _chips(UiTokens ui) {
-    if (!display.showChips || row.rom == null) return [];
+    if (display.isStorage || row.rom == null) return [];
     final rom = row.rom!;
     return [
       ?discBadge(row.discCount, ui, fileName: rom.fileName),

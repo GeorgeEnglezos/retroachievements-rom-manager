@@ -2,6 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rarm/services/rom_name.dart';
 
 void main() {
+  test('bareExtension lowercases and drops the dot', () {
+    expect(bareExtension('a/Game.ISO'), 'iso');
+    expect(bareExtension('Game.nkit.iso'), 'iso');
+    expect(bareExtension('noext'), '');
+  });
+
   group('cleanRomName', () {
     test('drops the extension', () {
       expect(cleanRomName('Some Game.iso'), 'Some Game');

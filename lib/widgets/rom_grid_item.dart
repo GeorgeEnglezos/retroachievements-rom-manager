@@ -255,14 +255,7 @@ class RomGridItem extends StatelessWidget {
   String? _subline(UiTokens ui) {
     if (gamingMode) return null;
     final size = rom.fileSizeLabel;
-    final status = switch (rom.status) {
-      RomStatus.supported ||
-      RomStatus.localOnly ||
-      RomStatus.metadataOnly =>
-        null,
-      RomStatus.error => rom.errorMessage ?? statusLabel(rom.status),
-      final s => statusLabel(s),
-    };
+    final status = romStatusText(rom);
     final parts = [?status, ?size];
     return parts.isEmpty ? null : parts.join(CommonStrings.dotSepWide);
   }

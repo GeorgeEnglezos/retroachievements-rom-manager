@@ -122,4 +122,16 @@ void main() {
       expect(find.byType(RomTagBadge), findsWidgets);
     });
   });
+
+  test('romStatusText: null when fetched, error message, else the label', () {
+    RomResult rom(RomStatus s) =>
+        RomResult(filePath: 'a', fileName: 'a')..status = s;
+    expect(romStatusText(rom(RomStatus.supported)), isNull);
+    expect(romStatusText(rom(RomStatus.localOnly)), isNull);
+    expect(romStatusText(rom(RomStatus.metadataOnly)), isNull);
+    expect(romStatusText(rom(RomStatus.error)..errorMessage = 'boom'), 'boom');
+    expect(romStatusText(rom(RomStatus.error)), statusLabel(RomStatus.error));
+    expect(romStatusText(rom(RomStatus.unsupported)),
+        statusLabel(RomStatus.unsupported));
+  });
 }

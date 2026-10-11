@@ -1,5 +1,9 @@
 import 'package:path/path.dart' as p;
 
+/// [path]'s extension, lowercased and without the dot (`'iso'`), or `''`.
+String bareExtension(String path) =>
+    p.extension(path).replaceFirst('.', '').toLowerCase();
+
 /// Below this score a name match is flagged in the UI so the user can correct it.
 const double kLowConfidenceThreshold = 0.6;
 

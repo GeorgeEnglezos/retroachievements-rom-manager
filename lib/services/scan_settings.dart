@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'console_map.dart';
+import 'rom_name.dart';
 
 /// Default extension allowlist (everything RA may recognise).
 const kDefaultRomExtensions = <String>{
@@ -15,7 +16,11 @@ const kDefaultRomExtensions = <String>{
   'adf', 'rom', 'j64', 'jag', '32x', 'min', 'zip', '7z',
   // NKit uses `.nkit.iso`/`.nkit.gcm`, covered by 'iso'/'gcm'; no 'nkit' ext.
   'gcm', 'rvz', 'wbfs', 'wia', 'gcz', 'ciso',
-  // Display-only consoles (no RA support): Switch, 3DS, Wii U, PS3/4/Vita, Xbox.
+  ..._displayOnlyExtensions,
+};
+
+/// Display-only consoles (no RA support): Switch, 3DS, Wii U, PS3/4/Vita, Xbox.
+const _displayOnlyExtensions = <String>{
   'nsp', 'xci', 'nsz', 'xcz', // Switch
   '3ds', 'cia', 'cci', 'cxi', '3dsx', // 3DS
   'wux', 'wud', 'wua', 'rpx', // Wii U
@@ -28,12 +33,7 @@ const kDefaultRomExtensions = <String>{
 /// switch to a one-time migration flag if that's ever needed.
 const _alwaysScanExtensions = <String>{
   'gcm', 'rvz', 'wbfs', 'wia', 'gcz', 'ciso', 'min', '7z',
-  // Display-only consoles; keep in sync with kDefaultRomExtensions above.
-  'nsp', 'xci', 'nsz', 'xcz',
-  '3ds', 'cia', 'cci', 'cxi', '3dsx',
-  'wux', 'wud', 'wua', 'rpx',
-  'pkg', 'vpk',
-  'xbe', 'xex', 'god',
+  ..._displayOnlyExtensions,
 };
 
 /// Bumped whenever a scan filter is saved. Screens that keep a cached copy
@@ -210,8 +210,7 @@ class ScanSettings {
 
   /// True when [path]'s extension is in the [enabled] allowlist.
   static bool hasEnabledExtension(String path, Set<String> enabled) {
-    final ext = p.extension(path).replaceFirst('.', '').toLowerCase();
-    return enabled.contains(ext);
+    return enabled.contains(bareExtension(path));
   }
 
   /// True when a folder's name matches one of [ignoredLower] (already lowercased).

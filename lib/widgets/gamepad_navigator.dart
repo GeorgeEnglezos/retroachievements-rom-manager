@@ -10,11 +10,6 @@ import '../services/log_service.dart';
 import '../theme/ui_tokens.dart';
 import '../strings.dart';
 
-// Flip to true, rebuild, and press every button to read what your controller
-// actually sends into the Logs tab — the way to check a pad the SDL mapping
-// database doesn't know. Left off so normal runs don't spam the log.
-const bool _logRawInput = false;
-
 const _initialRepeatDelay = Duration(milliseconds: 400);
 const _repeatInterval = Duration(milliseconds: 110);
 
@@ -93,7 +88,6 @@ class _GamepadNavigatorState extends State<GamepadNavigator> {
   }
 
   void _onEvent(NormalizedGamepadEvent e) {
-    if (_logRawInput) LogService.debug('Gamepad', e.toString());
     final button = e.button;
     if (button != null) {
       final action = _mapper.onButton(button, e.value);

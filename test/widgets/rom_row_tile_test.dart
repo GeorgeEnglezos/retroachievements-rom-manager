@@ -168,7 +168,7 @@ void main() {
             child: SingleChildScrollView(
               child: RomRowTile(
                 row: RomRow.fromRom(r),
-                display: const RowDisplay(),
+                display: RowDisplay.roms,
                 store: PlaylistStore(),
               ),
             ),
@@ -202,7 +202,7 @@ void main() {
         ..status = RomStatus.localOnly;
       await tester.pumpWidget(host(RomRowTile(
         row: RomRow.fromRom(r),
-        display: const RowDisplay(),
+        display: RowDisplay.roms,
         store: PlaylistStore(),
       )));
 
@@ -213,14 +213,14 @@ void main() {
       expect((provider as FileImage).file.path, artPath);
     });
 
-    testWidgets('showBoxArt off suppresses the scraped thumbnail',
+    testWidgets('storage display suppresses the scraped thumbnail',
         (tester) async {
       seedArt('ps3/noart.iso', 'tile_thumb_off');
       final r = RomResult(filePath: 'ps3/noart.iso', fileName: 'noart.iso')
         ..status = RomStatus.localOnly;
       await tester.pumpWidget(host(RomRowTile(
         row: RomRow.fromRom(r),
-        display: const RowDisplay(showBoxArt: false),
+        display: RowDisplay.storage,
         store: PlaylistStore(),
       )));
 

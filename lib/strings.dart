@@ -786,8 +786,8 @@ abstract final class SettingsStrings {
   static const accountTitle = 'Account';
   static const accountHelp =
       'Web API key from retroachievements.org → Settings → Applications → Web API Key.';
-  static const usernameLabel = 'Username';
-  static const apiKeyLabel = 'Web API key';
+  static const usernameLabel = WizardStrings.usernameLabel;
+  static const apiKeyLabel = WizardStrings.apiKeyLabel;
 
   // -- Library folder
   static const libraryFolderTitle = 'Library folder';
