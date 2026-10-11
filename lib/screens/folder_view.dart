@@ -17,6 +17,7 @@ import '../services/ra_service.dart';
 import '../services/scan_settings.dart';
 import '../services/app_mode.dart';
 import '../services/console_map.dart';
+import '../services/file_actions.dart';
 import '../services/library.dart';
 import '../services/play_view.dart';
 import '../services/playlist_store.dart';
@@ -392,6 +393,19 @@ class _FolderViewState extends State<FolderView> {
       if (!mounted) return;
     }
     await _runFetch(plan);
+  }
+
+  // This console's game list on RetroAchievements, in the browser.
+  Future<void> _openRaSystemGames() async {
+    final consoleId = await _resolveConsoleId();
+    if (!mounted) return;
+    if (consoleId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(FolderStrings.unknownConsoleMapping)),
+      );
+      return;
+    }
+    await FileActions.openUrl(FileActions.raSupportedListUrl(consoleId));
   }
 
   // One shared run across every folder this view covers. The runner owns
@@ -801,6 +815,18 @@ class _FolderViewState extends State<FolderView> {
         onPressed: () => setState(() => _toolbarVisible = !_toolbarVisible),
       ),
     );
+    // Only for a single-console RA view: a non-RA folder has no RA page, and
+    // the mixed All games view (no actions) has no one console.
+    final raSystemButton = widget.showActions && _raSupported && !_loading
+        ? UiFocusZoom(
+            child: IconButton(
+              key: const Key('ra_system_games'),
+              icon: const Icon(Icons.open_in_new),
+              tooltip: FolderStrings.openRaSystemGames,
+              onPressed: _openRaSystemGames,
+            ),
+          )
+        : null;
     final content = _loading
         ? const Center(child: CircularProgressIndicator())
         : Column(
@@ -913,7 +939,7 @@ class _FolderViewState extends State<FolderView> {
           : AppBar(
               backgroundColor: ui.surface,
               title: Text(widget.title),
-              actions: [toggle],
+              actions: [?raSystemButton, toggle],
             ),
       body: landscapePhone
           ? SafeArea(
@@ -942,6 +968,7 @@ class _FolderViewState extends State<FolderView> {
                               onPressed: () => Navigator.of(context).maybePop(),
                             ),
                           ),
+                          ?raSystemButton,
                           toggle,
                           Divider(
                             height: 8,

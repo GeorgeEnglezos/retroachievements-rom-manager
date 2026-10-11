@@ -442,6 +442,11 @@ abstract final class FolderStrings {
   // -- Duplicates
   static String copies(int count) => '$count COPIES';
 
+  // -- Collection gaps
+  static const openRaSystemGames = "This system's games on RetroAchievements";
+  static String achievementCount(int n) =>
+      '$n achievement${n == 1 ? '' : 's'}';
+
   // -- Toolbar
   static const hideSearchAndFilters = 'Hide search & filters';
   static const showSearchAndFilters = 'Show search & filters';

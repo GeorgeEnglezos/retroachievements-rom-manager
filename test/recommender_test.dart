@@ -76,4 +76,5 @@ void main() {
     final r = Recommender.build(games, limit: 5);
     expect(r.popularUnplayed.length, 5);
   });
+
 }
