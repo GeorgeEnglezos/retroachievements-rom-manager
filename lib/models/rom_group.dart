@@ -4,7 +4,7 @@ import 'rom_row.dart';
 
 /// One section in a grouped listing: a header label and its rows. Used by
 /// folder's grouped-duplicates view and playlist's by-system view. [color] is
-/// an optional accent stripe (duplicate groups).
+/// an optional accent stripe (duplicate groups, per-system accents).
 class RomGroup {
   final String label;
   final List<RomRow> rows;

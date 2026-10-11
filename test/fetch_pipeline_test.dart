@@ -118,8 +118,6 @@ void main() {
           filePath: 'C:/g/dashrunner.md',
           md5: md5,
           gameId: gameId,
-          matched: gameId != null,
-          noMatch: md5 != null && gameId == null,
         );
 
     Future<void> apply(RomResult r, FetchResult f, _FakeRa ra) =>

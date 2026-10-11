@@ -54,7 +54,11 @@ class DiscDecompressor {
         '-f', 'iso'],
     );
     final err = StringBuffer();
-    proc.stderr.transform(utf8.decoder).listen(err.write);
+    // Tool output isn't guaranteed UTF-8; a strict decoder's error would be
+    // unhandled and take the isolate down.
+    proc.stderr
+        .transform(const Utf8Decoder(allowMalformed: true))
+        .listen(err.write, onError: (_) {});
     proc.stdout.drain<void>();
 
     var timedOut = false;

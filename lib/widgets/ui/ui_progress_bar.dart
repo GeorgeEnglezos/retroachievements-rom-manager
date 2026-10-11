@@ -32,8 +32,8 @@ class UiProgressBar extends StatelessWidget {
           alignment: Alignment.centerLeft,
           child: TweenAnimationBuilder<double>(
             tween: Tween(begin: 0, end: clamped),
-            duration: const Duration(milliseconds: 550),
-            curve: Curves.easeOutBack,
+            duration: UiMotion.slow,
+            curve: UiMotion.curve,
             builder: (context, t, _) => FractionallySizedBox(
               widthFactor: t.clamp(0.0, 1.0),
               child: DecoratedBox(

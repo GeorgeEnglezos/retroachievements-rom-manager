@@ -502,15 +502,28 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
           children: [
             Expanded(
               flex: 5,
-              child: _panel(
+              // Actions pinned under the scrolling details, so Play is never
+              // below the fold.
+              child: UiCard(
                 key: const Key('gameDetailPanel'),
+                padding: EdgeInsets.zero,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    ..._artSection(),
-                    _buildInfo(context, withProgress: false),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            ..._artSection(),
+                            _buildInfo(context, withProgress: false),
+                          ],
+                        ),
+                      ),
+                    ),
                     const Divider(height: 1),
+                    const SizedBox(height: 8),
                     _buildActions(),
                   ],
                 ),
@@ -571,26 +584,9 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
           if (rom.consoleName != null)
             Text(rom.consoleName!,
                 style: Theme.of(context).textTheme.bodySmall),
-          if (rom.lowConfidenceMatch)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.help_outline, size: 14, color: context.ui.muted),
-                  const SizedBox(width: 4),
-                  Text(GameStrings.unverifiedMatch,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: context.ui.muted)),
-                ],
-              ),
-            ),
           if (_multiDisc) _buildDiscSwitcher(context),
-          // Full RA stats/progress only for hash-matched games. Third-party
-          // metadataOnly rows show the meta rows without the achievement UI;
-          // local-only rows show neither.
+          // Full RA stats/progress only for hash-matched games; imported
+          // (scraped) data shows the meta rows alone.
           if (rom.status == RomStatus.supported) ...[
             const SizedBox(height: 16),
             _buildStats(context),
@@ -600,9 +596,6 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
               const Divider(height: 28),
               _buildProgressSection(context),
             ],
-          ] else if (rom.status == RomStatus.metadataOnly) ...[
-            const SizedBox(height: 16),
-            _buildMetaRows(context),
           ] else if (widget.scraped != null) ...[
             const SizedBox(height: 16),
             _buildMetaRows(context),
@@ -855,7 +848,14 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
               ),
         ),
         const SizedBox(height: 8),
-        RomProgress(rom: rom, barHeight: 8, labelSize: 13, labelWeight: FontWeight.w600),
+        _MasteryPulse(
+          // Keyed per disc so switching to a finished one replays it.
+          key: ValueKey(rom.filePath),
+          play: RomProgress.hasProgress(rom) &&
+              rom.earnedAchievements! >= rom.achievementCount!,
+          child: RomProgress(
+              rom: rom, barHeight: 8, labelSize: 13, labelWeight: FontWeight.w600),
+        ),
         if (RomProgress.masteryHint(rom) case final hint?)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -1133,4 +1133,56 @@ class _GameDetailDialogState extends State<GameDetailDialog> {
 
 
   String _fmt(int? n) => n == null ? '0' : compactCount(n);
+}
+
+/// A one-shot scale pulse over a finished set's progress, played once when the
+/// dialog opens on it. Skipped when the platform asks for no animations.
+class _MasteryPulse extends StatefulWidget {
+  final bool play;
+  final Widget child;
+
+  const _MasteryPulse({super.key, required this.play, required this.child});
+
+  @override
+  State<_MasteryPulse> createState() => _MasteryPulseState();
+}
+
+class _MasteryPulseState extends State<_MasteryPulse>
+    with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+      vsync: this, duration: UiMotion.slow);
+  late final _scale = TweenSequence([
+    TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.06), weight: 1),
+    TweenSequenceItem(tween: Tween(begin: 1.06, end: 1.0), weight: 2),
+  ]).animate(CurvedAnimation(parent: _controller, curve: UiMotion.curve));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // MediaQuery isn't readable in initState; start here, once.
+    if (!_controller.isAnimating && !_controller.isCompleted) _maybePlay();
+  }
+
+  // A refresh that finishes the set while the dialog is open pulses too.
+  @override
+  void didUpdateWidget(_MasteryPulse old) {
+    super.didUpdateWidget(old);
+    if (!old.play) _maybePlay();
+  }
+
+  void _maybePlay() {
+    if (widget.play && !MediaQuery.disableAnimationsOf(context)) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      ScaleTransition(scale: _scale, alignment: Alignment.centerLeft, child: widget.child);
 }

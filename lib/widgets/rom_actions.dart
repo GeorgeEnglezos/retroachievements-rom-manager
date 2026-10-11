@@ -48,8 +48,6 @@ Widget romStatusIcon(RomResult rom) => switch (rom.status) {
         const Icon(Icons.report_gmailerrorred, color: Colors.blueGrey),
       RomStatus.localOnly =>
         const Icon(Icons.videogame_asset, color: Colors.grey),
-      RomStatus.metadataOnly =>
-        const Icon(Icons.videogame_asset, color: Colors.blueAccent),
     };
 
 /// Context menu + action handling for a ROM tile, shared by both tiles.
@@ -472,8 +470,8 @@ class RomActions {
       ),
     );
     if (open != true) return;
-    if (!await FileActions.openUrl(
-        FileActions.raSupportedListUrl(rom.consoleId))) {
+    if (!await FileActions.openUrl(FileActions.raSupportedListUrl(
+        rom.consoleId ?? rom.hashConsoleId))) {
       messenger.showSnackBar(
           const SnackBar(content: Text(GameActionStrings.browserFailed)));
     }

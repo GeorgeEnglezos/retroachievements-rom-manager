@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:rarm/models/rom_result.dart';
 import 'package:rarm/models/scraped_game.dart';
 import 'package:rarm/widgets/game_detail_dialog.dart';
+import 'package:rarm/widgets/rom_progress.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../support/fixtures.dart';
@@ -72,24 +73,9 @@ void main() {
     expect(find.text('Players'), findsNothing);
   });
 
-  testWidgets('metadataOnly dialog shows meta rows but no achievement stats',
-      (tester) async {
-    final rom = RomResult(filePath: 'ps3/racer.iso', fileName: 'racer.iso')
-      ..status = RomStatus.metadataOnly
-      ..gameTitle = 'Some Racer'
-      ..consoleName = 'PlayStation 3'
-      ..publisher = 'Acme';
-    await tester.pumpWidget(MaterialApp(home: GameDetailDialog(rom: rom)));
-    await tester.pump();
-
-    expect(find.text('Publisher'), findsOneWidget); // meta row shown
-    expect(find.text('Achievements'), findsNothing); // achievement UI hidden
-    expect(find.text('Players'), findsNothing);
-  });
-
   testWidgets('scraped values fill RA gaps in the meta rows', (tester) async {
     final rom = RomResult(filePath: 'ps3/racer.iso', fileName: 'racer.iso')
-      ..status = RomStatus.metadataOnly
+      ..status = RomStatus.localOnly
       ..gameTitle = 'Some Racer'
       ..publisher = ''; // empty RA field must fall through to scraped
     const scraped = ScrapedGame(
@@ -117,7 +103,7 @@ void main() {
     final art = File(p.join(dir.path, 'shot.png'))..writeAsBytesSync(kTinyPng);
 
     final rom = RomResult(filePath: 'ps3/racer.iso', fileName: 'racer.iso')
-      ..status = RomStatus.metadataOnly
+      ..status = RomStatus.unsupported
       ..gameTitle = 'Some Racer';
     await tester.pumpWidget(MaterialApp(
       home: GameDetailDialog(
@@ -135,17 +121,6 @@ void main() {
     await tester.pump(); // start the dialog route
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(InteractiveViewer), findsOneWidget);
-  });
-
-  testWidgets('low-confidence match shows an unverified indicator',
-      (tester) async {
-    final rom = RomResult(filePath: 'ps3/racer.iso', fileName: 'racer.iso')
-      ..status = RomStatus.metadataOnly
-      ..gameTitle = 'Some Racer'
-      ..lowConfidenceMatch = true;
-    await tester.pumpWidget(MaterialApp(home: GameDetailDialog(rom: rom)));
-    await tester.pump();
-    expect(find.text('Unverified name match'), findsOneWidget);
   });
 
   testWidgets('wide window splits the dialog into two panels', (tester) async {
@@ -227,11 +202,38 @@ void main() {
     addTearDown(tester.view.reset);
 
     final rom = RomResult(filePath: 'ps3/racer.iso', fileName: 'racer.iso')
-      ..status = RomStatus.metadataOnly
+      ..status = RomStatus.localOnly
       ..gameTitle = 'Some Racer';
     await tester.pumpWidget(MaterialApp(home: GameDetailDialog(rom: rom)));
     await tester.pump();
 
     expect(find.byKey(const Key('gameAchievementsPanel')), findsNothing);
+  });
+
+  testWidgets('mastery pulse plays when a refresh completes the set',
+      (tester) async {
+    final rom = RomResult(filePath: 'snes/zeta.sfc', fileName: 'zeta.sfc')
+      ..status = RomStatus.supported
+      ..gameTitle = 'Zeta Trek'
+      ..achievementCount = 50
+      ..earnedAchievements = 49;
+    Widget dialog() => MaterialApp(home: GameDetailDialog(rom: rom));
+    double scale() => tester
+        .widget<ScaleTransition>(find
+            .ancestor(
+                of: find.byType(RomProgress),
+                matching: find.byType(ScaleTransition))
+            .first)
+        .scale
+        .value;
+
+    await tester.pumpWidget(dialog());
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(scale(), 1.0); // 49/50: no pulse
+
+    rom.earnedAchievements = 50; // a fetch finished the set
+    await tester.pumpWidget(dialog());
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(scale(), greaterThan(1.0));
   });
 }

@@ -881,7 +881,6 @@ class _HomeScreenState extends State<HomeScreen> {
       // Sweep-wide caches: one game list per console, one detail per game.
       final raCache = RaCache();
       final detailCache = <int, (GameInfo, UserProgress)>{};
-      final metadataProvider = await savedMetadataProvider();
 
       // One completion sweep for the whole run: ceil(playedGames/500) requests
       // no matter how many folders or ROMs follow, shared with every folder
@@ -923,7 +922,6 @@ class _HomeScreenState extends State<HomeScreen> {
           raCache: raCache,
           detailCache: detailCache,
           service: service,
-          metadataProvider: metadataProvider,
           progressByGameId: progressByGameId,
           logContext: 'HomeScreen/scan',
           onEntry: (_) {
@@ -1383,7 +1381,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return ConsoleCard(
         onTap: onTap,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        focusScale: 1.12,
+        focusScale: uiTilePop,
         // Built under ConsoleCard's light theme so the labels come out dark.
         child: Builder(
           builder: (context) => Row(

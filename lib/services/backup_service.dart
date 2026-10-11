@@ -48,9 +48,9 @@ class BackupService {
   }
 
   /// Restores a backup zip from [inPath], replacing current data and settings.
-  /// Throws [FormatException] if the zip holds no prefs snapshot, before
-  /// anything on disk is touched. The app should be restarted afterwards so
-  /// in-memory caches reload.
+  /// Throws [FormatException] if the zip holds no valid prefs snapshot. Any
+  /// failure leaves current data untouched. The app should be restarted
+  /// afterwards so in-memory caches reload.
   Future<void> restore(String inPath) async {
     final base = await _base();
     final basePath = base.path;
@@ -80,9 +80,12 @@ class BackupService {
     }
   }
 
-  /// Extracts [inPath] over [basePath], replacing what is there, and returns
-  /// the prefs snapshot. Throws before deleting anything if the zip has none.
-  static String _unzip(String inPath, String basePath) {
+  /// Extracts [inPath] into a sibling staging dir, then swaps it in over
+  /// [basePath] and returns the decoded prefs snapshot. A missing or
+  /// malformed snapshot, or a failed extract, throws before [basePath] is
+  /// touched.
+  static Map<String, dynamic> _unzip(String inPath, String basePath) {
+    final staging = _freshDir('$basePath.restore');
     final input = InputFileStream(inPath);
     try {
       final archive = ZipDecoder().decodeStream(input);
@@ -92,23 +95,19 @@ class BackupService {
       if (snapshotEntry == null) {
         throw const FormatException('Not a RARM backup: no prefs.json');
       }
-      final snapshot = utf8.decode(snapshotEntry.readBytes() ?? const []);
-
-      // Replace, don't merge: a system or cached file the backup doesn't know
-      // about would otherwise survive as a ghost alongside the restored data.
-      final base = Directory(basePath);
-      if (base.existsSync()) {
-        for (final entity in base.listSync(followLinks: false)) {
-          if (_keptDirs.contains(p.basename(entity.path))) continue;
-          entity.deleteSync(recursive: true);
-        }
+      final snapshot =
+          jsonDecode(utf8.decode(snapshotEntry.readBytes() ?? const []));
+      if (snapshot is! Map<String, dynamic>) {
+        throw const FormatException('Not a RARM backup: bad prefs.json');
       }
 
       for (final entry in archive) {
         if (!entry.isFile || entry.name == _prefsEntry) continue;
-        final out = File(p.normalize(p.join(basePath, entry.name)));
+        final out = File(p.normalize(p.join(staging.path, entry.name)));
         // Zip Slip guard: a name like `data/../../x` normalises outside base.
-        if (!p.isWithin(basePath, out.path)) continue;
+        if (!p.isWithin(staging.path, out.path)) continue;
+        final top = p.split(p.relative(out.path, from: staging.path)).first;
+        if (_keptDirs.contains(top)) continue;
         out.parent.createSync(recursive: true);
         final sink = OutputFileStream(out.path);
         try {
@@ -117,16 +116,61 @@ class BackupService {
           sink.closeSync();
         }
       }
+      _swapIn(staging.path, basePath);
       return snapshot;
     } finally {
       input.closeSync();
+      if (staging.existsSync()) staging.deleteSync(recursive: true);
     }
+  }
+
+  /// Replaces [basePath]'s contents (bar [_keptDirs]) with [stagingPath]'s.
+  /// Replace, don't merge: a file the backup doesn't know about would
+  /// otherwise survive as a ghost. Same-volume renames, rolled back if one
+  /// fails so the old data comes back whole.
+  static void _swapIn(String stagingPath, String basePath) {
+    final old = _freshDir('$basePath.old');
+    final base = Directory(basePath)..createSync(recursive: true);
+    final movedOut = <String>[];
+    final movedIn = <String>[];
+    try {
+      for (final e in base.listSync(followLinks: false)) {
+        final name = p.basename(e.path);
+        if (_keptDirs.contains(name)) continue;
+        e.renameSync(p.join(old.path, name));
+        movedOut.add(name);
+      }
+      for (final e in Directory(stagingPath).listSync(followLinks: false)) {
+        final name = p.basename(e.path);
+        e.renameSync(p.join(basePath, name));
+        movedIn.add(name);
+      }
+    } catch (_) {
+      for (final name in movedIn) {
+        _entity(p.join(basePath, name)).renameSync(p.join(stagingPath, name));
+      }
+      for (final name in movedOut) {
+        _entity(p.join(old.path, name)).renameSync(p.join(basePath, name));
+      }
+      old.deleteSync(recursive: true);
+      rethrow;
+    }
+    old.deleteSync(recursive: true);
+  }
+
+  static FileSystemEntity _entity(String path) =>
+      FileSystemEntity.isDirectorySync(path) ? Directory(path) : File(path);
+
+  /// An empty dir at [path], clearing leftovers of an interrupted restore.
+  static Directory _freshDir(String path) {
+    final d = Directory(path);
+    if (d.existsSync()) d.deleteSync(recursive: true);
+    return d..createSync(recursive: true);
   }
 
   /// Replaces every pref with the snapshot's, keeping the API key: it was
   /// never in the backup, so applying one must not sign the user out.
-  Future<void> _restorePrefs(String json) async {
-    final map = jsonDecode(json) as Map<String, dynamic>;
+  Future<void> _restorePrefs(Map<String, dynamic> map) async {
     final prefs = await SharedPreferences.getInstance();
     final apiKey = prefs.getString(PrefKeys.raApiKey);
     await prefs.clear();

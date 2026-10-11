@@ -1,9 +1,10 @@
 import 'package:path/path.dart' as p;
 
-/// Below this score a name match is flagged in the UI so the user can correct it.
-const double kLowConfidenceThreshold = 0.6;
+/// [path]'s extension, lowercased and without the dot (`'iso'`), or `''`.
+String bareExtension(String path) =>
+    p.extension(path).replaceFirst('.', '').toLowerCase();
 
-/// Reduces a ROM filename to a bare game title for name-based metadata matching.
+/// Reduces a ROM filename to a bare game title.
 /// Drops the extension, strips `(...)`/`[...]` tags (region, revision, disc),
 /// and collapses `_`/`.`/whitespace separators.
 String cleanRomName(String fileName) {

@@ -426,10 +426,7 @@ abstract final class FolderStrings {
       'Unknown console for this folder. Set it in Settings → System mapping.';
   static const thisSystem = 'This system';
   static String notOnRetroAchievements(String name) =>
-      "$name isn't on RetroAchievements. Add a metadata source in "
-      'Settings to fetch game info.';
-  static String unsupportedByMetadataSource(String name) =>
-      "$name isn't supported by the selected metadata source.";
+      "$name isn't on RetroAchievements, so there is nothing to fetch.";
   static const noMatchedGamesToSync = 'No matched games to sync.';
   static String syncProgressFailed(Object error) =>
       'Failed to sync progress: $error';
@@ -444,6 +441,11 @@ abstract final class FolderStrings {
 
   // -- Duplicates
   static String copies(int count) => '$count COPIES';
+
+  // -- Collection gaps
+  static const openRaSystemGames = "This system's games on RetroAchievements";
+  static String achievementCount(int n) =>
+      '$n achievement${n == 1 ? '' : 's'}';
 
   // -- Toolbar
   static const hideSearchAndFilters = 'Hide search & filters';
@@ -560,6 +562,14 @@ abstract final class StorageStrings {
   static const allSystems = 'ALL SYSTEMS';
   static const noScannedSizes = 'NO SCANNED SIZES YET. SCAN A FOLDER FIRST';
   static const back = 'BACK';
+  static const compressionTitle = 'COMPRESSION ADVISOR';
+  static const noUncompressedDiscs = 'No uncompressed disc images found.';
+  static const chd = 'CHD';
+  static const rvz = 'RVZ';
+  static String compressionRow(
+          String system, int games, String size, String target, String saving) =>
+      '$system: $games ${games == 1 ? 'game' : 'games'}, $size. Convert to $target to save about $saving.';
+  static const wiiRvzNote = ' Wii RVZ hashes only with DolphinTool (desktop).';
 }
 
 /// Logs screen.
@@ -595,7 +605,6 @@ abstract final class GameStrings {
   static const achievementsLoadFailed = "Couldn't load achievements";
   static const favorited = 'Favorited';
   static const favorite = 'Favorite';
-  static const unverifiedMatch = 'Unverified name match';
   static String fileOfInstalled(int index, int total) =>
       'File $index of $total · installed '
       'content, the base game is what boots';
@@ -778,8 +787,8 @@ abstract final class SettingsStrings {
   static const accountTitle = 'Account';
   static const accountHelp =
       'Web API key from retroachievements.org → Settings → Applications → Web API Key.';
-  static const usernameLabel = 'Username';
-  static const apiKeyLabel = 'Web API key';
+  static const usernameLabel = WizardStrings.usernameLabel;
+  static const apiKeyLabel = WizardStrings.apiKeyLabel;
 
   // -- Library folder
   static const libraryFolderTitle = 'Library folder';

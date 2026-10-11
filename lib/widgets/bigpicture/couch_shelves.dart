@@ -4,7 +4,8 @@ import '../../models/folder_stats.dart' show compactCount;
 import '../../models/rom_result.dart';
 import '../../services/couch_rows.dart';
 import '../../theme/ui_tokens.dart';
-import '../folder_card.dart' show ConsoleLogo;
+import '../../services/display_name.dart';
+import '../folder_card.dart' show ConsoleAccentBar, ConsoleLogo;
 import '../rom_thumb.dart';
 import '../ui/console_card.dart';
 import '../ui/ui_card.dart';
@@ -103,9 +104,14 @@ class _ConsoleBrowserState extends State<ConsoleBrowser> {
         }
         final idx = i - 1;
         final row = widget.rows[idx];
+        final consoleId = row.games.isEmpty ? null : row.games.first.consoleId;
         return _ConsoleTile(
-          name: row.title,
-          consoleId: row.games.isEmpty ? null : row.games.first.consoleId,
+          // Same label as the Library tile for this system.
+          name: displayNameFor(
+              mode: nameModeListenable.value,
+              consoleId: consoleId,
+              folderPaths: [row.title]),
+          consoleId: consoleId,
           gameCount: row.games.length,
           selected: idx == _selected,
           onSelect: () => setState(() => _selected = idx),
@@ -142,7 +148,7 @@ class _ConsoleTile extends StatelessWidget {
       onTap: onSelect,
       borderColor: selected ? ui.accent : null,
       padding: const EdgeInsets.all(12),
-      focusScale: 1.12,
+      focusScale: uiTilePop,
       child: Builder(
         builder: (context) => Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -158,7 +164,9 @@ class _ConsoleTile extends StatelessWidget {
                 textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 2),
+            const SizedBox(height: 4),
+            ConsoleAccentBar(consoleId: consoleId),
+            const SizedBox(height: 4),
             Text(HomeStrings.gameCount(gameCount),
                 style: Theme.of(context).textTheme.bodySmall),
           ],

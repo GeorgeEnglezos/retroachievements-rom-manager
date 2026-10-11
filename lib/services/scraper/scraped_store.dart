@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../../models/scraped_game.dart';
+import '../atomic_write.dart';
 import '../log_service.dart';
 import 'rom_path_key.dart';
 
@@ -70,7 +71,7 @@ class ScrapedStore extends ChangeNotifier {
     }
     try {
       final f = await _file();
-      await f.writeAsString(
+      await writeAtomic(f,
           jsonEncode({for (final e in _mem.entries) e.key: e.value.toJson()}));
     } catch (e) {
       LogService.error('ScrapedStore', 'write failed', err: e);

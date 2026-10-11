@@ -2,8 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../services/console_image.dart';
+import '../widgets/folder_card.dart' show ConsoleLogoPlate;
 import '../services/cull_deck_builder.dart';
+import '../services/display_name.dart';
 import '../services/cull_store.dart';
 import '../services/library.dart';
 import '../services/playlist_store.dart';
@@ -177,7 +178,6 @@ class _CullConsoleRow extends StatelessWidget {
     final ui = context.ui;
     final total = row.cards.length;
     final complete = total > 0 && row.done >= total;
-    final tint = ConsoleImage.tintedLogos.contains(row.consoleId);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: UiCard(
@@ -188,26 +188,23 @@ class _CullConsoleRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
-              SizedBox(
-                width: 48,
-                height: 48,
-                child: Image.asset(
-                  ConsoleImage.assetOrGeneric(row.consoleId),
-                  fit: BoxFit.contain,
-                  color: tint ? ui.text : null,
-                  colorBlendMode: tint ? BlendMode.srcIn : null,
-                  errorBuilder: (_, _, _) =>
-                      Icon(Icons.videogame_asset, color: ui.muted),
-                ),
-              ),
+              ConsoleLogoPlate(consoleId: row.consoleId),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(row.name,
-                        style: ui.display.copyWith(fontSize: 15)),
+                    // Same label as the Library tile for this system.
+                    ValueListenableBuilder(
+                      valueListenable: nameModeListenable,
+                      builder: (_, mode, _) => Text(
+                          displayNameFor(
+                              mode: mode,
+                              consoleId: row.consoleId,
+                              folderPaths: [row.systemPath]),
+                          style: ui.display.copyWith(fontSize: 15)),
+                    ),
                     const SizedBox(height: 4),
                     Text(CullStrings.decidedCount(row.done, total),
                         style: ui.body.copyWith(fontSize: 12, color: ui.muted)),

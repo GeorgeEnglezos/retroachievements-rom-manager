@@ -47,13 +47,12 @@ Widget? hotBadge(RomResult rom) => !isHotGame(rom) || !playView.hot
       );
 
 /// "NO ACH": the game has no achievements: either its hash matched nothing on
-/// RA, or the whole console isn't on RA (localOnly / metadataOnly).
+/// RA, or the whole console isn't on RA (localOnly).
 Widget? noAchBadge(RomResult rom) {
   if (!playView.noAchievements) return null;
   final tooltip = switch (rom.status) {
     RomStatus.unsupported => GameStrings.noAchGameTooltip,
-    RomStatus.localOnly ||
-    RomStatus.metadataOnly => GameStrings.noAchConsoleTooltip,
+    RomStatus.localOnly => GameStrings.noAchConsoleTooltip,
     _ => null,
   };
   return tooltip == null
@@ -95,3 +94,11 @@ Widget? discBadge(int? count, UiTokens ui, {String? fileName}) {
 List<Widget> tagBadges(String fileName) => playView.fileTags
     ? [for (final tag in romTags(fileName)) RomTagBadge(tag: tag)]
     : const [];
+
+/// The fetch status line under a ROM, or null where there is none to report:
+/// the error message for errors, the plain status label otherwise.
+String? romStatusText(RomResult rom) => switch (rom.status) {
+  RomStatus.supported || RomStatus.localOnly => null,
+  RomStatus.error => rom.errorMessage ?? statusLabel(rom.status),
+  final s => statusLabel(s),
+};

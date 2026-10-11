@@ -110,6 +110,7 @@ class _PlaylistViewState extends State<PlaylistView> {
       for (final name in names)
         RomGroup(
           label: name,
+          color: Color(ConsoleMap.accentFor(grouped[name]!.first.consoleId)),
           rows: grouped[name]!.map(RomRow.fromRom).toList(),
         ),
     ];

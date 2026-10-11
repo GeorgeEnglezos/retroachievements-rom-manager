@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive_io.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:rarm/services/backup_service.dart';
@@ -125,5 +126,26 @@ void main() {
     // Nothing was touched on the way to the rejection.
     expect(File(p.join(dst.path, 'data', 'systems', 'keep.json')).existsSync(),
         isTrue);
+  });
+
+  test('a backup with a malformed prefs.json leaves current data intact',
+      () async {
+    _seed(dst, 'data/systems/keep.json', 'mine');
+    final encoder = ZipFileEncoder()..create(zip);
+    encoder.addArchiveFile(
+        ArchiveFile.string('data/systems/intruder.json', 'from zip'));
+    encoder.addArchiveFile(ArchiveFile.string('prefs.json', '{not json'));
+    await encoder.close();
+    SharedPreferences.setMockInitialValues({PrefKeys.raUsername: 'alice'});
+
+    await expectLater(BackupService(baseDir: dst).restore(zip),
+        throwsA(isA<FormatException>()));
+
+    final systems = p.join(dst.path, 'data', 'systems');
+    expect(File(p.join(systems, 'keep.json')).readAsStringSync(), 'mine');
+    expect(File(p.join(systems, 'intruder.json')).existsSync(), isFalse);
+    expect(Directory('${dst.path}.restore').existsSync(), isFalse);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString(PrefKeys.raUsername), 'alice');
   });
 }

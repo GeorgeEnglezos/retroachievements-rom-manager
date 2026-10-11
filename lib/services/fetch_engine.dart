@@ -5,15 +5,12 @@ class FetchResult {
   final String filePath;
   final String? md5;
   final int? gameId;
-  final bool matched;
-  final bool noMatch;
-  FetchResult({
-    required this.filePath,
-    required this.md5,
-    required this.gameId,
-    required this.matched,
-    required this.noMatch,
-  });
+  FetchResult({required this.filePath, this.md5, this.gameId});
+
+  bool get matched => gameId != null;
+
+  /// Hashed, but RA knows no game for the hash.
+  bool get noMatch => md5 != null && gameId == null;
 }
 
 typedef HashFn = Future<String?> Function(String filePath);
@@ -44,31 +41,17 @@ class FetchEngine {
       try {
         final md5 = await hash(path);
         if (md5 == null) {
-          await onResult(_result(path, null, null, false, false));
+          await onResult(FetchResult(filePath: path));
           continue;
         }
 
         final gameId = await lookupGameId(md5);
-        if (gameId == null) {
-          await onResult(_result(path, md5, null, false, true));
-        } else {
-          await onResult(_result(path, md5, gameId, true, false));
-        }
+        await onResult(FetchResult(filePath: path, md5: md5, gameId: gameId));
       } catch (e, st) {
         LogService.error('FetchEngine',
             'Error on ${p.basename(path)}: $e', err: st);
-        await onResult(_result(path, null, null, false, false));
+        await onResult(FetchResult(filePath: path));
       }
     }
   }
-
-  FetchResult _result(
-          String path, String? md5, int? gameId, bool matched, bool noMatch) =>
-      FetchResult(
-        filePath: path,
-        md5: md5,
-        gameId: gameId,
-        matched: matched,
-        noMatch: noMatch,
-      );
 }

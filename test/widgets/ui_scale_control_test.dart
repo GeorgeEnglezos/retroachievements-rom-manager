@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:rarm/services/ui_scale.dart';
+import 'package:rarm/strings.dart';
 import 'package:rarm/theme/ui_theme.dart';
 import 'package:rarm/theme/ui_tokens.dart';
 import 'package:rarm/widgets/ui_scale_control.dart';
@@ -25,7 +26,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(uiScaleListenable.value, greaterThan(1.0));
-    expect(find.text(uiScaleLabel(uiScaleSteps[3])), findsOneWidget);
+    expect(find.text(ThemeStrings.uiScale(uiScaleSteps[3])), findsOneWidget);
   });
 
   testWidgets('plus is disabled at the maximum', (tester) async {

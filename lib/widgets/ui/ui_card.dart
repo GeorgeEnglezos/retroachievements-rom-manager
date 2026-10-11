@@ -49,7 +49,7 @@ class _CardState extends State<UiCard> {
     final ui = context.ui;
     final pressed = _pressed && widget.onTap != null;
     final body = AnimatedContainer(
-      duration: const Duration(milliseconds: 60),
+      duration: UiMotion.fast,
       transform: Matrix4.translationValues(
         pressed ? ui.cardShadow.dx : 0,
         pressed ? ui.cardShadow.dy : 0,
@@ -80,7 +80,10 @@ class _CardState extends State<UiCard> {
       // would paint its background and ink splashes on whatever Material sits
       // further up (the Scaffold), behind this card. Flutter asserts on that.
       // A transparent Material here paints nothing and gives them one to use.
-      child: Material(type: MaterialType.transparency, child: widget.child),
+      child: Material(
+        type: MaterialType.transparency,
+        child: widget.child,
+      ),
     );
     if (widget.onTap == null) return body;
     // Pointer taps + press animation on the GestureDetector; focus/hover

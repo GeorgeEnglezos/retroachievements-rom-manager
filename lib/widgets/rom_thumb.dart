@@ -31,9 +31,7 @@ class RomThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final matched = rom.status == RomStatus.supported ||
-        rom.status == RomStatus.metadataOnly;
-    if (matched && raArt != null) {
+    if (rom.status == RomStatus.supported && raArt != null) {
       return RaImage(
         url: raImageUrl(raArt!),
         width: size,

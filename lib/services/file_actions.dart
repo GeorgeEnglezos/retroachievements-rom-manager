@@ -39,14 +39,10 @@ class FileActions {
     try {
       if (Platform.isWindows) {
         // Dart's arg quoting produces "/select,path", which explorer's custom
-        // parser rejects. PowerShell's --% passes /select,"path" verbatim.
+        // parser rejects, so the raw /select,"path" goes through [shellStartCommand].
         final winPath = path.replaceAll('/', '\\');
-        await Process.run('powershell', [
-          '-NoProfile',
-          '-Command',
-          '& explorer.exe --% /select,"$winPath"',
-        ]);
-        return true;
+        return await _runShellStart(
+            shellStartCommand('explorer.exe', '/select,"$winPath"'));
       }
       if (Platform.isMacOS) {
         await Process.run('open', ['-R', path]);
@@ -65,6 +61,22 @@ class FileActions {
     }
   }
 
+  /// The Windows PowerShell call that recycles [path]. The path travels in an
+  /// environment variable, never in the script text: PowerShell treats
+  /// ' and the curly quotes ‘ ’ ‚ ‛ alike, so no escaping is safe.
+  static ({List<String> args, Map<String, String> env}) recycleBinCommand(
+          String path) =>
+      (
+        args: [
+          '-NoProfile',
+          '-Command',
+          'Add-Type -AssemblyName Microsoft.VisualBasic; '
+              '[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile('
+              r"$env:RARM_RECYCLE_PATH,'OnlyErrorDialogs','SendToRecycleBin')",
+        ],
+        env: {'RARM_RECYCLE_PATH': path},
+      );
+
   /// Moves the file to the platform trash. True only when the file is gone.
   static Future<bool> moveToRecycleBin(String path) async {
     try {
@@ -77,14 +89,9 @@ class FileActions {
       }
       ProcessResult result;
       if (Platform.isWindows) {
-        // Double single-quotes to escape them inside the PowerShell string.
-        final escaped = path.replaceAll("'", "''");
-        final script =
-            "Add-Type -AssemblyName Microsoft.VisualBasic; "
-            "[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile("
-            "'$escaped','OnlyErrorDialogs','SendToRecycleBin')";
-        result = await Process.run(
-            'powershell', ['-NoProfile', '-Command', script]);
+        final cmd = recycleBinCommand(path);
+        result = await Process.run('powershell', cmd.args,
+            environment: cmd.env);
       } else if (Platform.isMacOS) {
         // POSIX path -> Finder alias; backslash/quote escaped for AppleScript.
         final escaped = path.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
@@ -114,7 +121,9 @@ class FileActions {
   static Future<bool> launchWithDefaultApp(String path) async {
     try {
       if (Platform.isWindows) {
-        await Process.run('cmd', ['/c', 'start', '', path]);
+        // Not `cmd /c start`: cmd re-parses the line, so a `&` in a name
+        // splits it into a second command.
+        await Process.run('explorer.exe', [path]);
         return true;
       }
       if (Platform.isMacOS) {
@@ -204,33 +213,75 @@ class FileActions {
   /// Windows: launches a console-subsystem program detached but *with* a
   /// console. [ProcessStartMode.detached] gives the child no console at all,
   /// which kills such a program during runtime startup, before it can log a
-  /// word (Ryujinx is one; every GUI emulator is unaffected). `start` hands it
-  /// its own console and still detaches. The empty argument is the window
-  /// title, which `start` otherwise takes from the first quoted argument.
-  // ponytail: cmd re-parses what Dart passes it, so an argument holding `&`
-  // with no spaces (Dart only quotes when spaces are present) would split the
-  // command. Pass the tokens through environment variables, as
-  // [resolveShortcuts] does, if a ROM name ever trips it.
+  /// word (Ryujinx is one; every GUI emulator is unaffected). A shell start
+  /// hands it its own console and still detaches.
   static Future<bool> _startWithConsole(
       String program, List<String> args, String? workdir) async {
-    // `start` reports a missing program in its own dialog and still exits 0,
-    // so the caller would never see the failure. Check it here instead.
     if (!File(program).existsSync()) {
       LogService.error(
           'FileActions/launchWithTemplate', 'Emulator not found: $program');
       return false;
     }
-    await Process.start(
-        'cmd',
-        [
-          '/c', 'start', '',
-          if (workdir != null) ...['/d', workdir],
-          program,
-          ...args,
-        ],
-        mode: ProcessStartMode.detached);
-    return true;
+    return _runShellStart(
+        shellStartCommand(program, windowsArgs(args), workdir: workdir));
   }
+
+  /// The PowerShell call that shell-starts [program] with the raw command
+  /// line [arguments]. Every value travels in an environment variable, never
+  /// in the script text or through cmd, so `&`, `%NAME%` and quote
+  /// characters in a path stay literal.
+  static ({List<String> args, Map<String, String> env}) shellStartCommand(
+          String program, String arguments, {String? workdir}) =>
+      (
+        args: [
+          '-NoProfile',
+          '-Command',
+          r'$i = New-Object System.Diagnostics.ProcessStartInfo '
+              r'$env:RARM_PROG, $env:RARM_ARGS; '
+              r'$i.UseShellExecute = $true; '
+              r'if ($env:RARM_DIR) { $i.WorkingDirectory = $env:RARM_DIR }; '
+              r'[System.Diagnostics.Process]::Start($i) | Out-Null',
+        ],
+        env: {
+          'RARM_PROG': program,
+          // An empty value would unset the variable; the script reads it as
+          // $null either way, which ProcessStartInfo takes as no arguments.
+          if (arguments.isNotEmpty) 'RARM_ARGS': arguments,
+          'RARM_DIR': ?workdir,
+        },
+      );
+
+  static Future<bool> _runShellStart(
+      ({List<String> args, Map<String, String> env}) cmd) async {
+    final result =
+        await Process.run('powershell', cmd.args, environment: cmd.env);
+    if (result.exitCode == 0) return true;
+    LogService.error('FileActions/shellStart',
+        'exit=${result.exitCode} for ${cmd.env['RARM_PROG']}: ${result.stderr}');
+    return false;
+  }
+
+  /// Joins [args] into a Windows command line that CommandLineToArgvW splits
+  /// back into the same list: quoted when needed, backslashes doubled only
+  /// where they precede a quote.
+  static String windowsArgs(List<String> args) => args.map((a) {
+        if (a.isNotEmpty && !a.contains(RegExp(r'[\s"]'))) return a;
+        final b = StringBuffer('"');
+        var slashes = 0;
+        for (final c in a.split('')) {
+          if (c == r'\') {
+            slashes++;
+            continue;
+          }
+          b.write(r'\' * (c == '"' ? slashes * 2 + 1 : slashes));
+          slashes = 0;
+          b.write(c);
+        }
+        b
+          ..write(r'\' * (slashes * 2))
+          ..write('"');
+        return b.toString();
+      }).join(' ');
 
   /// Whether [exePath] is a Windows console-subsystem program, read from the
   /// PE header's Subsystem field (2 = GUI, 3 = console). False for anything
@@ -244,7 +295,7 @@ class FileActions {
       if (dos.length < 0x40 || dos[0] != 0x4D || dos[1] != 0x5A) return false;
       final peOffset = ByteData.sublistView(dos).getUint32(0x3c, Endian.little);
       file.setPositionSync(peOffset);
-      // 'PE  ' + 20-byte COFF header, then Subsystem 0x44 into the optional
+      // 'PE\0\0' + 20-byte COFF header, then Subsystem 0x44 into the optional
       // header; same offset for PE32 and PE32+.
       final header = file.readSync(0x5e);
       if (header.length < 0x5e) return false;

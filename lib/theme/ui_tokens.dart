@@ -1,5 +1,23 @@
 import 'package:flutter/material.dart';
 
+/// Motion: one duration per kind of change and one curve, so every effect in
+/// the app moves at the same pace. Timers and debounces are not motion.
+abstract final class UiMotion {
+  /// Hover, press and focus feedback.
+  static const fast = Duration(milliseconds: 140);
+
+  /// Scrolls, page changes, flips and short one-shot flourishes.
+  static const medium = Duration(milliseconds: 250);
+
+  /// Longer one-shots: progress fills, the tile tilt, the mastery pulse.
+  static const slow = Duration(milliseconds: 450);
+
+  static const Curve curve = Curves.easeOutCubic;
+}
+
+/// The focus/hover zoom of a square game or console tile.
+const double uiTilePop = 1.12;
+
 /// App-wide layout breakpoints (logical px). One source of truth so the shell
 /// chrome, content grids and dialogs all flip at the same widths, rather than
 /// each widget picking its own number (which left a zone where a mobile nav bar

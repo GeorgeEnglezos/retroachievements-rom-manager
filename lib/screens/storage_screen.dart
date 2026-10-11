@@ -1,5 +1,4 @@
 import 'dart:async' show Timer;
-import 'dart:io' show FileSystemEntity;
 
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
@@ -8,6 +7,8 @@ import '../models/folder_stats.dart' show formatBytes;
 import '../models/rom_result.dart';
 import '../models/rom_row.dart';
 import '../services/file_actions.dart';
+import '../services/disc_formats.dart';
+import '../services/display_name.dart';
 import '../services/game_lookup.dart';
 import '../services/library.dart';
 import '../services/playlist_store.dart';
@@ -17,7 +18,7 @@ import '../services/scraper/scraped_store.dart';
 import '../services/storage_scanner.dart';
 import '../services/storage_treemap.dart' show TreemapItem;
 import '../theme/ui_tokens.dart';
-import '../widgets/folder_card.dart' show ConsoleLogo;
+import '../widgets/folder_card.dart' show ConsoleLogoPlate;
 import '../widgets/game_detail_dialog.dart';
 import '../widgets/ui/ui_button.dart';
 import '../widgets/ui/ui_panel.dart';
@@ -55,6 +56,8 @@ class _StorageScreenState extends State<StorageScreen> {
   final List<_Level> _stack = [];
   // Console id per root-level system path → its bundled logo (left gutter).
   Map<String, int?> _consoleIds = {};
+  // Root-level system path → its uncompressed disc images (advice only).
+  Map<String, ({int games, int bytes})> _discAdvice = {};
   // Resolved game per file path → its RA icon in the left gutter. Null value =
   // looked up, no match.
   final Map<String, RomResult?> _fileRoms = {};
@@ -67,6 +70,7 @@ class _StorageScreenState extends State<StorageScreen> {
     // Re-read after a scan writes new summaries, or a filter changes.
     _lib.addListener(_onIndexChanged);
     settingsChanged.addListener(_onFiltersChanged);
+    nameModeListenable.addListener(_onNameModeChanged);
     _load();
   }
 
@@ -74,6 +78,7 @@ class _StorageScreenState extends State<StorageScreen> {
   void dispose() {
     _lib.removeListener(_onIndexChanged);
     settingsChanged.removeListener(_onFiltersChanged);
+    nameModeListenable.removeListener(_onNameModeChanged);
     _filterDebounce?.cancel();
     super.dispose();
   }
@@ -84,6 +89,15 @@ class _StorageScreenState extends State<StorageScreen> {
     if (!mounted || _stack.length > 1) return;
     _load();
   }
+
+  // System rows show the display name, which the Settings tab can switch.
+  void _onNameModeChanged() => setState(() {});
+
+  // A system folder's label, matching its Library tile.
+  String _systemName(String path) => displayNameFor(
+      mode: nameModeListenable.value,
+      consoleId: _consoleIds[path],
+      folderPaths: [path]);
 
   Timer? _filterDebounce;
   bool _filtersDirty = false;
@@ -127,22 +141,29 @@ class _StorageScreenState extends State<StorageScreen> {
   Future<void> _load() async {
     final summaries = await _lib.summaries();
     final filter = await _filter();
+    final consoleIds = <String, int?>{
+      for (final s in summaries)
+        s.systemPath: await ScanSettings.consoleIdForFolder(s.systemPath),
+    };
     // Measure filtered on-disk size per system (off the UI isolate) so totals
     // match the drill-down, not just the matched-ROM bytes in each summary.
-    final sizes = await compute<(List<String>, StorageFilter), Map<String, int>>(
-        systemSizes, ([for (final s in summaries) s.systemPath], filter));
-    final items = <TreemapItem>[];
-    final consoleIds = <String, int?>{};
-    for (final s in summaries) {
-      items.add(TreemapItem(
-          p.basename(s.systemPath), sizes[s.systemPath] ?? 0,
-          path: s.systemPath));
-      consoleIds[s.systemPath] =
-          await ScanSettings.consoleIdForFolder(s.systemPath);
-    }
+    // The disc advisor walks in a second isolate at the same time.
+    final (sizes, advice) = await (
+      compute<(List<String>, StorageFilter), Map<String, int>>(
+          systemSizes, ([for (final s in summaries) s.systemPath], filter)),
+      compute<(Map<String, int?>, StorageFilter),
+              Map<String, ({int games, int bytes})>>(
+          uncompressedDiscs, (consoleIds, filter)),
+    ).wait;
+    final items = [
+      for (final s in summaries)
+        TreemapItem(p.basename(s.systemPath), sizes[s.systemPath] ?? 0,
+            path: s.systemPath),
+    ];
     if (!mounted) return;
     setState(() {
       _consoleIds = consoleIds;
+      _discAdvice = advice;
       _stack
         ..clear()
         ..add(_Level(StorageStrings.allSystems, items));
@@ -160,16 +181,15 @@ class _StorageScreenState extends State<StorageScreen> {
       // Resolve each file's game (cheap in-memory lookup) so its icon is ready
       // before the level appears; the drilling overlay covers the wait.
       for (final k in kids) {
-        if (k.path != null &&
-            _isFile(k.path) &&
-            !_fileRoms.containsKey(k.path)) {
+        if (k.path != null && k.isFile && !_fileRoms.containsKey(k.path)) {
           _fileRoms[k.path!] = await resolveRom(k.path!, library: _lib);
         }
       }
       if (!mounted) return;
       setState(() {
         _drilling = false;
-        _stack.add(_Level(item.label.toUpperCase(), kids));
+        final title = _stack.length == 1 ? _systemName(item.path!) : item.label;
+        _stack.add(_Level(title.toUpperCase(), kids));
       });
     } else {
       setState(() => _drilling = false);
@@ -253,8 +273,39 @@ class _StorageScreenState extends State<StorageScreen> {
     );
   }
 
-  bool _isFile(String? path) =>
-      path != null && FileSystemEntity.isFileSync(path);
+  // Per system: how many raw disc images, their size, and the rough saving if
+  // converted. Advice only; nothing is converted here.
+  Widget _compressionAdvisor() {
+    final ui = context.ui;
+    final lines = <String>[
+      for (final MapEntry(key: path, value: a) in _discAdvice.entries)
+        if (DiscFormats.compressTargetFor(_consoleIds[path]) case final t?)
+          StorageStrings.compressionRow(
+                _systemName(path),
+                a.games,
+                formatBytes(a.bytes),
+                t == DiscTarget.chd ? StorageStrings.chd : StorageStrings.rvz,
+                formatBytes(t.estimatedSaving(a.bytes)),
+              ) +
+              (_consoleIds[path] == DiscFormats.wiiConsoleId
+                  ? StorageStrings.wiiRvzNote
+                  : ''),
+    ];
+    // Scrolls inside the panel so a long list never squeezes the rows below.
+    return UiPanel(
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(StorageStrings.compressionTitle, style: ui.labelCaps),
+            const SizedBox(height: 6),
+            if (lines.isEmpty) const Text(StorageStrings.noUncompressedDiscs),
+            for (final line in lines) Text(line),
+          ],
+        ),
+      ),
+    );
+  }
 
   // The row's thumbnail: console logo for a root system folder, the matched
   // game's RA icon for a file, and a plain glyph for everything else, so every
@@ -262,10 +313,7 @@ class _StorageScreenState extends State<StorageScreen> {
   Widget _leadingFor(TreemapItem it,
       {required bool isRoot, required bool isFile}) {
     if (isRoot && it.path != null) {
-      return Padding(
-        padding: const EdgeInsets.all(4),
-        child: ConsoleLogo(consoleId: _consoleIds[it.path]),
-      );
+      return Center(child: ConsoleLogoPlate(consoleId: _consoleIds[it.path]));
     }
     if (isFile) {
       final rom = _fileRoms[it.path];
@@ -301,10 +349,11 @@ class _StorageScreenState extends State<StorageScreen> {
     final rows = <RomRow>[];
     final leadings = <Widget>[];
     for (final it in level.items) {
-      final isFile = _isFile(it.path);
+      final isFile = it.isFile;
       rows.add(RomRow.fromTreemap(it,
           fraction: it.bytes / denom,
           isFolder: !isFile,
+          title: isRoot && it.path != null ? _systemName(it.path!) : null,
           onTap: it.path == null
               ? null
               : (isFile ? () => _openFile(it.path!) : () => _drill(it))));
@@ -313,7 +362,7 @@ class _StorageScreenState extends State<StorageScreen> {
 
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(
+      child: LayoutBuilder(builder: (context, box) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
@@ -332,6 +381,14 @@ class _StorageScreenState extends State<StorageScreen> {
               ),
             ],
           ),
+          if (isRoot) ...[
+            const SizedBox(height: 12),
+            // Capped so short (landscape phone) screens keep room for the list.
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: box.maxHeight / 3),
+              child: _compressionAdvisor(),
+            ),
+          ],
           const SizedBox(height: 12),
           Expanded(
             child: Stack(
@@ -359,7 +416,7 @@ class _StorageScreenState extends State<StorageScreen> {
             ),
           ),
         ],
-      ),
+      )),
     );
   }
 }

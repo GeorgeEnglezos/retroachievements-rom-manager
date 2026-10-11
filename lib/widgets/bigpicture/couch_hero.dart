@@ -54,8 +54,8 @@ class _CouchHeroState extends State<CouchHero> {
     if (!_node.hasFocus) return;
     Scrollable.ensureVisible(context,
         alignment: 0,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut);
+        duration: UiMotion.medium,
+        curve: UiMotion.curve);
   }
 
   @override

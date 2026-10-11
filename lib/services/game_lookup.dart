@@ -1,6 +1,5 @@
 import 'package:path/path.dart' as p;
 import '../models/game_entry.dart';
-import '../models/game_metadata.dart';
 import '../models/rom_result.dart';
 import '../models/user_progress.dart';
 import 'console_map.dart';
@@ -8,7 +7,6 @@ import 'credentials.dart';
 import 'library.dart';
 import 'log_service.dart';
 import 'ra_service.dart';
-import 'rom_name.dart';
 import '../strings.dart';
 
 /// Maps a RetroAchievements [GameInfo] onto a [RomResult]. A null [info] means
@@ -49,25 +47,6 @@ void applyProgress(RomResult rom, UserProgress? progress) {
   rom.highestAward = progress?.highestAward;
   rom.highestAwardDate = progress?.highestAwardDate;
   rom.lastPlayed = progress?.lastPlayed;
-}
-
-/// Maps third-party [meta] onto a [RomResult] for a display-only console. A
-/// null [meta] means the name lookup found nothing; the row stays local-only.
-/// Shared by the live fetch loop and [romFromEntry] so the mapping lives once.
-void applyMetadata(RomResult rom, GameMetadata? meta) {
-  if (meta == null) {
-    rom.status = RomStatus.localOnly;
-    return;
-  }
-  rom.status = RomStatus.metadataOnly;
-  rom.metadata = meta;
-  rom.gameTitle = meta.title;
-  rom.publisher = meta.publisher;
-  rom.developer = meta.developer;
-  rom.genre = meta.genre;
-  rom.released = meta.released;
-  rom.imageUrl = meta.imageUrl;
-  rom.lowConfidenceMatch = meta.matchConfidence < kLowConfidenceThreshold;
 }
 
 /// Applies the offline-cache [basic] entry onto [rom] so a row populates
@@ -119,12 +98,6 @@ GameInfo gameInfoFromCache(RaGameListEntry e, {int? consoleId, GameInfo? saved})
   );
 }
 
-/// Metadata providers that were removed from the app but may have left
-/// persisted [GameEntry.metadata] behind. Their blobs are stale (raw entity
-/// ids as publishers, dead lookups) and must not gate a row out of localOnly;
-/// localOnly is what lets imported Skraper data render for it.
-const kRemovedMetadataProviders = {'wikidata'};
-
 /// Rebuilds the renderable [RomResult] for a persisted [entry]: the one
 /// mapping every screen shares. [consoleId] (when known) invalidates stale
 /// noMatch entries hashed under a different console; [consoleName] overrides
@@ -147,11 +120,6 @@ RomResult romFromEntry(GameEntry entry, {int? consoleId, String? consoleName}) {
     rom.status = RomStatus.supported;
     rom.gameTitle = RomStatusStrings.gamePlaceholder(entry.gameId);
     rom.consoleName ??= ConsoleMap.nameFor(consoleId) ?? consoleName;
-  } else if (entry.metadata != null &&
-      !kRemovedMetadataProviders.contains(entry.metadata!.providerId)) {
-    // Display-only console enriched by a third-party provider.
-    applyMetadata(rom, entry.metadata);
-    rom.consoleName = ConsoleMap.nameFor(consoleId) ?? consoleName;
   } else if (!ConsoleMap.isRaSupported(consoleId)) {
     // Console isn't on RA (or the folder is unidentified), local info only.
     rom.status = RomStatus.localOnly;

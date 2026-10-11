@@ -52,7 +52,7 @@ class _FolderCardState extends State<FolderCard>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 300),
+    duration: UiMotion.medium,
   );
 
   @override
@@ -140,6 +140,8 @@ class _FolderCardState extends State<FolderCard>
           textAlign: TextAlign.center,
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
+        const SizedBox(height: 6),
+        Center(child: ConsoleAccentBar(consoleId: widget.consoleId)),
         if (widget.subtitle != null) ...[
           const SizedBox(height: 2),
           Text(
@@ -238,6 +240,8 @@ class FolderRow extends StatelessWidget {
                               const TextStyle(fontWeight: FontWeight.w600)),
                     ),
                   ]),
+                  const SizedBox(height: 4),
+                  ConsoleAccentBar(consoleId: consoleId),
                   if (name != displayName)
                     Text(name,
                         maxLines: 1,
@@ -254,6 +258,53 @@ class FolderRow extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A short pill in the system maker's color (all Nintendo systems share one),
+/// under a system's name.
+/// Nothing for an unidentified folder.
+class ConsoleAccentBar extends StatelessWidget {
+  final int? consoleId;
+
+  const ConsoleAccentBar({super.key, required this.consoleId});
+
+  @override
+  Widget build(BuildContext context) => consoleId == null
+      ? const SizedBox.shrink()
+      : Container(
+          width: 24,
+          height: 3,
+          decoration: BoxDecoration(
+            color: Color(ConsoleMap.accentFor(consoleId)),
+            borderRadius: UiTokens.pill,
+          ),
+        );
+}
+
+/// [ConsoleLogo] on a 48px light plate, for list rows on a dark surface: most
+/// logos are dark ink, so they need the same light card the Library tiles use.
+class ConsoleLogoPlate extends StatelessWidget {
+  final int? consoleId;
+
+  const ConsoleLogoPlate({super.key, required this.consoleId});
+
+  @override
+  Widget build(BuildContext context) {
+    final ui = context.ui;
+    return SizedBox.square(
+      dimension: 48,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: ui.cardSurface,
+          borderRadius: ui.roundSm,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: lightCardInk(child: ConsoleLogo(consoleId: consoleId)),
         ),
       ),
     );

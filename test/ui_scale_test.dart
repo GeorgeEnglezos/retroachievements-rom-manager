@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:rarm/services/ui_scale.dart';
+import 'package:rarm/strings.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -47,7 +48,7 @@ void main() {
   });
 
   test('label reads as a percentage', () {
-    expect(uiScaleLabel(1.0), '100%');
-    expect(uiScaleLabel(1.25), '125%');
+    expect(ThemeStrings.uiScale(1.0), '100%');
+    expect(ThemeStrings.uiScale(1.25), '125%');
   });
 }

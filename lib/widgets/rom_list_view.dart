@@ -303,7 +303,7 @@ class _RomListViewState extends State<RomListView> {
     final column = Column(
       children: [
         AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
+          duration: UiMotion.medium,
           child: showBar
               ? BulkActionBar(
                   selectedCount: _selected.length,

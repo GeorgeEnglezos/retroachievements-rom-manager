@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:path/path.dart' as p;
 import 'package:raw_hash/disc_bytes_reader.dart';
 
+import 'rom_name.dart';
 import 'rvz_reader.dart';
 
 /// Opens a random-access reader for a compressed GC/Wii container, or null if
@@ -11,7 +11,7 @@ import 'rvz_reader.dart';
 /// or parsed. See [DiscBytesReader].
 DiscBytesReader? openDiscReader(String path) {
   try {
-    switch (p.extension(path).replaceFirst('.', '').toLowerCase()) {
+    switch (bareExtension(path)) {
       case 'ciso':
         return CisoReader.open(path);
       case 'gcz':

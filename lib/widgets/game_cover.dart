@@ -111,6 +111,7 @@ class GameCover extends StatelessWidget {
     final earned = rom.earnedAchievements ?? 0;
     final mastered = total > 0 && earned >= total;
     final inProgress = total > 0 && earned > 0 && !mastered;
+    final frac = achievementFraction(earned, total);
 
     final thumb = RomThumb(rom: rom, size: null, raArt: rom.thumbArt ?? rom.boxArt);
     final stack = Stack(
@@ -136,7 +137,7 @@ class GameCover extends StatelessWidget {
           Positioned(top: 6, right: 6, child: corner!)
         else if (mastered)
           Positioned(top: 8, right: 8, child: _trophy(ui)),
-        if (inProgress) _strip(ui, achievementFraction(earned, total)),
+        if (inProgress) _strip(ui, frac),
       ],
     );
     // A bare Home tile rounds its own corners; in the card the tile's UiCard

@@ -28,6 +28,7 @@ class ConsoleCard extends StatelessWidget {
   final VoidCallback? onTap;
   final EdgeInsetsGeometry padding;
   final Color? borderColor;
+
   final FocusFlourish flourish;
 
   /// Focus/hover zoom factor. Use > 1.0 for square grid tiles to get the

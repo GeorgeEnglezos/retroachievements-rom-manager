@@ -91,6 +91,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final excluded = await ScanSettings.excludedFilesText();
     final apiKey = await readApiKey();
 
+    if (!mounted) return;
     setState(() {
       _usernameCtrl.text = prefs.getString(PrefKeys.raUsername) ?? '';
       _apiKeyCtrl.text = apiKey;

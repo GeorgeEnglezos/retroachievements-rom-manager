@@ -9,16 +9,15 @@ import '../services/duplicate_finder.dart';
 import '../services/fetch_engine.dart';
 import '../services/fetch_pipeline.dart';
 import '../services/fetch_run.dart';
-import '../services/credentials.dart';
 import '../services/scan_run.dart';
 import '../services/game_lookup.dart';
 import '../services/log_service.dart';
-import '../services/metadata_cache.dart';
 import '../services/ra_cache.dart';
 import '../services/ra_service.dart';
 import '../services/scan_settings.dart';
 import '../services/app_mode.dart';
 import '../services/console_map.dart';
+import '../services/file_actions.dart';
 import '../services/library.dart';
 import '../services/play_view.dart';
 import '../services/playlist_store.dart';
@@ -93,9 +92,6 @@ class _FolderViewState extends State<FolderView> {
   bool _loading = true;
   // False for a single non-RA folder; hides the fetch/hash Actions button.
   bool _raSupported = true;
-  // True when a display-only folder can still fetch metadata via a configured
-  // third-party provider; keeps the Actions button available for it.
-  bool _metadataFetchable = false;
   FolderSort _folderSort = FolderSort.alphabetical;
   bool _sortAscending = true;
   bool _gridView = false;
@@ -245,6 +241,10 @@ class _FolderViewState extends State<FolderView> {
     if (mounted) setState(() {});
   }
 
+  // The system folder holding [path], or null when none of this view's do.
+  String? _systemFolderOf(String path) =>
+      widget.folderPaths.where((s) => p.isWithin(s, path)).firstOrNull;
+
   // Passed-in id (combined views) or resolved from the folder name/override.
   Future<int?> _resolveConsoleId() async =>
       widget.consoleId ??
@@ -276,26 +276,13 @@ class _FolderViewState extends State<FolderView> {
       (path) => ConsoleMap.isRaSupported(consoleIdByPath[path]),
     );
 
-    // A display-only folder is still fetchable if a third-party metadata
-    // provider is configured and supports its console.
-    if (!_raSupported) {
-      final provider = await savedMetadataProvider();
-      _metadataFetchable =
-          provider != null &&
-          widget.folderPaths.any((path) {
-            final id = consoleIdByPath[path];
-            return id != null && provider.supports(id);
-          });
-    }
 
     // Each game's stale-hash check uses its own folder's current console, so a
     // mixed-console view ("All games") doesn't judge every game by one console
     // and mislabel other systems' unsupported games as not-fetched.
     int? consoleForFile(String path) {
-      for (final sysPath in widget.folderPaths) {
-        if (p.isWithin(sysPath, path)) return consoleIdByPath[sysPath];
-      }
-      return widget.consoleId;
+      final sysPath = _systemFolderOf(path);
+      return sysPath == null ? widget.consoleId : consoleIdByPath[sysPath];
     }
 
     final roms = <RomResult>[];
@@ -340,7 +327,6 @@ class _FolderViewState extends State<FolderView> {
           noMatch: r.status == RomStatus.unsupported,
           lastScanned: DateTime.now(),
           hashConsoleId: r.hashConsoleId,
-          metadata: r.metadata,
           gameInfo: _romToGameInfo(r),
           progress: r.earnedAchievements == null
               ? null
@@ -409,6 +395,19 @@ class _FolderViewState extends State<FolderView> {
     await _runFetch(plan);
   }
 
+  // This console's game list on RetroAchievements, in the browser.
+  Future<void> _openRaSystemGames() async {
+    final consoleId = await _resolveConsoleId();
+    if (!mounted) return;
+    if (consoleId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(FolderStrings.unknownConsoleMapping)),
+      );
+      return;
+    }
+    await FileActions.openUrl(FileActions.raSupportedListUrl(consoleId));
+  }
+
   // One shared run across every folder this view covers. The runner owns
   // persistence, so nothing here calls _persistAll afterwards.
   Future<void> _runFetch(FetchPlan plan) async {
@@ -432,20 +431,15 @@ class _FolderViewState extends State<FolderView> {
     }
     if (!mounted) return;
 
-    final metadataProvider = await savedMetadataProvider();
-
     // Nothing here is fetchable. Say why, rather than starting a run that does
     // no work and ends without a word.
-    if (!ConsoleMap.isRaSupported(consoleId) &&
-        (metadataProvider == null || !metadataProvider.supports(consoleId))) {
+    if (!ConsoleMap.isRaSupported(consoleId)) {
       if (!mounted) return;
       final name = ConsoleMap.nameFor(consoleId) ?? FolderStrings.thisSystem;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            metadataProvider == null
-                ? FolderStrings.notOnRetroAchievements(name)
-                : FolderStrings.unsupportedByMetadataSource(name),
+            FolderStrings.notOnRetroAchievements(name),
           ),
         ),
       );
@@ -499,8 +493,6 @@ class _FolderViewState extends State<FolderView> {
           detailCache: detailCache,
           service: service,
           consoleId: widget.consoleId,
-          metadataProvider: metadataProvider,
-          metadataCache: MetadataCache(),
           progressByGameId: progressByGameId,
           logContext: 'FolderView/fetch',
           onTargets: run.addTotal,
@@ -596,11 +588,8 @@ class _FolderViewState extends State<FolderView> {
           );
         }
       }
-      final sysPathEarly = widget.folderPaths.firstWhere(
-        (s) => p.isWithin(s, rom.filePath),
-        orElse: () => widget.folderPaths.first,
-      );
-      await _persistSystem(sysPathEarly);
+      await _persistSystem(
+          _systemFolderOf(rom.filePath) ?? widget.folderPaths.first);
       return;
     }
 
@@ -667,11 +656,8 @@ class _FolderViewState extends State<FolderView> {
     );
 
     await engine.run([rom.filePath]);
-    final sysPath = widget.folderPaths.firstWhere(
-      (s) => p.isWithin(s, rom.filePath),
-      orElse: () => widget.folderPaths.first,
-    );
-    await _persistSystem(sysPath);
+    await _persistSystem(
+        _systemFolderOf(rom.filePath) ?? widget.folderPaths.first);
   }
 
   // Every file a listing row stands for: all discs of a group, else the one
@@ -829,6 +815,18 @@ class _FolderViewState extends State<FolderView> {
         onPressed: () => setState(() => _toolbarVisible = !_toolbarVisible),
       ),
     );
+    // Only for a single-console RA view: a non-RA folder has no RA page, and
+    // the mixed All games view (no actions) has no one console.
+    final raSystemButton = widget.showActions && _raSupported && !_loading
+        ? UiFocusZoom(
+            child: IconButton(
+              key: const Key('ra_system_games'),
+              icon: const Icon(Icons.open_in_new),
+              tooltip: FolderStrings.openRaSystemGames,
+              onPressed: _openRaSystemGames,
+            ),
+          )
+        : null;
     final content = _loading
         ? const Center(child: CircularProgressIndicator())
         : Column(
@@ -897,7 +895,7 @@ class _FolderViewState extends State<FolderView> {
                       rows: _filter.onlyDuplicates ? const [] : _listingRows(),
                       groups: _filter.onlyDuplicates ? _buildDupGroups() : null,
                       display: _filter.onlyDuplicates
-                          ? RowDisplay.roms.copyWith(showDupBadge: false)
+                          ? RowDisplay.groupedRoms
                           : RowDisplay.roms,
                       store: _playlistStore,
                       enableSelection: true,
@@ -941,7 +939,7 @@ class _FolderViewState extends State<FolderView> {
           : AppBar(
               backgroundColor: ui.surface,
               title: Text(widget.title),
-              actions: [toggle],
+              actions: [?raSystemButton, toggle],
             ),
       body: landscapePhone
           ? SafeArea(
@@ -970,6 +968,7 @@ class _FolderViewState extends State<FolderView> {
                               onPressed: () => Navigator.of(context).maybePop(),
                             ),
                           ),
+                          ?raSystemButton,
                           toggle,
                           Divider(
                             height: 8,
@@ -998,7 +997,7 @@ class _FolderViewState extends State<FolderView> {
             )
           : content,
       floatingActionButton:
-          widget.showActions && (_raSupported || _metadataFetchable)
+          widget.showActions && _raSupported
           ? FetchFab(onPressed: _showTaskDialog)
           : null,
     );

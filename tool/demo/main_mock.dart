@@ -18,7 +18,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///
 /// `--dart-define=ONLY=Nintendo` picks another manufacturer (the names are
 /// ConsoleMap's), `ONLY=` shows everything, and `DEMO_WIZARD=true` opens the
-/// first-run wizard. Profile mode, because debug wraps the app in the
+/// first-run wizard. `MASTER_ALL=true` reports every game you open as fully
+/// mastered, to preview the detail dialog's mastery pulse. Profile mode, because debug wraps the app in the
 /// DevicePreview frame.
 ///
 /// Settings are a copy held in memory, so the real settings file is never
@@ -28,6 +29,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// actions. Close the real app first; only one instance runs.
 const fakeName = 'PixelPilgrim';
 const only = String.fromEnvironment('ONLY', defaultValue: 'Sony');
+const masterAll = bool.fromEnvironment('MASTER_ALL');
 
 /// Whether a console, by RA's console name, belongs to the [only] maker.
 bool shownConsole(String? consoleName) =>
@@ -155,6 +157,8 @@ Future<http.Response> Function(http.Request) aliasedRa({
           if (shownConsole(g['ConsoleName'] as String?)) g,
       ];
       body = {...body, 'Results': results, 'Count': results.length};
+    case '/API/API_GetGameInfoAndUserProgress.php' when masterAll:
+      body = _mastered(body as Map<String, dynamic>);
     default:
       return res;
   }
@@ -164,6 +168,29 @@ Future<http.Response> Function(http.Request) aliasedRa({
     headers: {'content-type': 'application/json; charset=utf-8'},
   );
 };
+
+/// [game] with every achievement earned (casual and hardcore) and the
+/// mastery award set, as RA would report a finished set.
+Map<String, dynamic> _mastered(Map<String, dynamic> game) {
+  const when = '2026-01-01 12:00:00';
+  final achievements = game['Achievements'];
+  return {
+    ...game,
+    if (achievements is Map)
+      'Achievements': {
+        for (final e in achievements.entries)
+          e.key: {
+            ...e.value as Map,
+            'DateEarned': when,
+            'DateEarnedHardcore': when,
+          },
+      },
+    'NumAwardedToUser': game['NumAchievements'],
+    'NumAwardedToUserHardcore': game['NumAchievements'],
+    'HighestAwardKind': 'mastered',
+    'HighestAwardDate': when,
+  };
+}
 
 /// Plain initial-on-colour avatar for the fake name.
 List<int> _avatar() {

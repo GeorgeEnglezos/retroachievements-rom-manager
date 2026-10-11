@@ -25,7 +25,7 @@ enum ClearTarget {
   /// folder. Re-importable from the same folder.
   scrapedData,
 
-  /// RetroAchievements game lists and third-party metadata. Pure cache,
+  /// RetroAchievements game lists. Pure cache,
   /// re-downloaded on the next fetch.
   raData,
 
@@ -83,6 +83,7 @@ class DataWipe {
     }
     if (chosen.contains(ClearTarget.raData)) {
       await _delete(base, p.join('data', 'ra_cache'));
+      // Left behind by older versions; still cleared so a wipe leaves nothing.
       await _delete(base, p.join('data', 'metadata_cache'));
       await WantToPlayStore.clear();
     }

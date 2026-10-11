@@ -1,6 +1,5 @@
 import 'package:path/path.dart' as p;
 import '../services/ra_service.dart';
-import 'game_metadata.dart';
 import 'user_progress.dart';
 
 /// One ROM's complete persisted state: the scan result plus, when matched, the
@@ -18,10 +17,6 @@ class GameEntry {
   final GameInfo? gameInfo;
   final UserProgress? progress;
 
-  /// Third-party game metadata for RA-unsupported (display-only) systems.
-  /// Mutually exclusive in practice with [gameInfo] (RA vs third-party console).
-  final GameMetadata? metadata;
-
   /// Console id used for [md5]. A changed folder→console mapping invalidates
   /// the hash; scans re-hash on mismatch. Null (legacy) counts as stale.
   final int? hashConsoleId;
@@ -37,7 +32,6 @@ class GameEntry {
     required this.lastScanned,
     required this.gameInfo,
     required this.progress,
-    this.metadata,
     this.hashConsoleId,
   });
 
@@ -66,7 +60,6 @@ class GameEntry {
     DateTime? lastScanned,
     GameInfo? gameInfo,
     UserProgress? progress,
-    GameMetadata? metadata,
     int? hashConsoleId,
   }) =>
       GameEntry(
@@ -80,7 +73,6 @@ class GameEntry {
         lastScanned: lastScanned ?? this.lastScanned,
         gameInfo: gameInfo ?? this.gameInfo,
         progress: progress ?? this.progress,
-        metadata: metadata ?? this.metadata,
         hashConsoleId: hashConsoleId ?? this.hashConsoleId,
       );
 
@@ -99,9 +91,6 @@ class GameEntry {
         progress: j['progress'] == null
             ? null
             : UserProgress.fromJson(j['progress'] as Map<String, dynamic>),
-        metadata: j['metadata'] == null
-            ? null
-            : GameMetadata.fromJson(j['metadata'] as Map<String, dynamic>),
         hashConsoleId: (j['hashConsoleId'] as num?)?.toInt(),
       );
 
@@ -116,7 +105,6 @@ class GameEntry {
         'lastScanned': lastScanned.toIso8601String(),
         'gameInfo': gameInfo?.toJson(),
         'progress': progress?.toJson(),
-        'metadata': metadata?.toJson(),
         'hashConsoleId': hashConsoleId,
       };
 }

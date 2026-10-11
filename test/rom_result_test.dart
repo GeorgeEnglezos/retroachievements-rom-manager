@@ -8,16 +8,7 @@ void main() {
       expect(r.status, RomStatus.notFetched);
     });
 
-    test('thumbArt/boxArt prefer a third-party imageUrl over RA paths', () {
-      final r = RomResult(filePath: 'ps3/x.iso', fileName: 'x.iso')
-        ..imageIcon = '/Images/icon.png'
-        ..imageBoxArt = '/Images/box.png'
-        ..imageUrl = 'https://cdn/cover.png';
-      expect(r.thumbArt, 'https://cdn/cover.png');
-      expect(r.boxArt, 'https://cdn/cover.png');
-    });
-
-    test('thumbArt/boxArt fall back to RA paths when no imageUrl', () {
+    test('thumbArt/boxArt read the RA icon and box art', () {
       final r = RomResult(filePath: 'snes/x.sfc', fileName: 'x.sfc')
         ..imageIcon = '/Images/icon.png'
         ..imageBoxArt = '/Images/box.png';

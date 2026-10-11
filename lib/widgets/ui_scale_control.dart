@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/ui_scale.dart';
+import '../strings.dart';
 import '../theme/ui_tokens.dart';
 import 'ui/ui_button.dart';
 
@@ -28,7 +29,7 @@ class UiScaleControl extends StatelessWidget {
             SizedBox(
               width: 72,
               child: Text(
-                uiScaleLabel(scale),
+                ThemeStrings.uiScale(scale),
                 textAlign: TextAlign.center,
                 style: ui.display.copyWith(fontSize: 17),
               ),
